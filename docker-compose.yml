@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database Service
+  db:
+    image: postgres:15-alpine
+    container_name: casper_signal_db
+    restart: always
+    environment:
+      POSTGRES_USER: casper_user
+      POSTGRES_PASSWORD: casper_password
+      POSTGRES_DB: casper_analytics
+    expose:
+      - "5432"
+    ports:
+      - "5432:5432" # Allows direct SQL connections for backups/admin panels if needed
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  # 2. Node.js Backend API & Telegram Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: casper_signal_backend
+    restart: always
+    environment:
+      - PORT=5000
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://casper_user:casper_password@db:5432/casper_analytics
+      - JWT_SECRET=super_secret_casper_key_change_me_in_production
+      - JWT_EXPIRES_IN=7d
+      # Put your Telegram Token here or load from VPS environment variables
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-YOUR_TELEGRAM_BOT_TOKEN_HERE}
+    expose:
+      - "5000"
+    depends_on:
+      - db
+
+  # 3. Nginx serving Frontend React App (Access Point)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: casper_signal_frontend
+    restart: always
+    ports:
+      - "80:80" # Exposed publicly on http://<vps_ip>
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
