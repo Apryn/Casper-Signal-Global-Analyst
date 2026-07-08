@@ -3,7 +3,8 @@ import {
   getReports,
   simulateReportParsing,
   updateReport,
-  deleteReport
+  deleteReport,
+  createReport
 } from '../controllers/report.controller.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.middleware.js';
 
@@ -15,8 +16,12 @@ router.use(authenticateToken);
 // Fetch reports
 router.get('/', getReports);
 
-// Simulate report parsing (useful for copy-pasting reports manually)
+// Create report manually
+router.post('/', createReport);
+
+// Simulate / parse report (both endpoints do the same thing)
 router.post('/simulate', simulateReportParsing);
+router.post('/parse', simulateReportParsing);
 
 // Update details
 router.put('/:id', updateReport);

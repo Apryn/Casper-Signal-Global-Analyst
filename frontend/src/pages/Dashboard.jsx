@@ -52,6 +52,7 @@ const Dashboard = () => {
   const [chartData, setChartData] = useState(null);
   const [chartTab, setChartTab] = useState('daily'); // 'daily' | 'weekly' | 'monthly'
   const [comparison, setComparison] = useState(null);
+  const [aiReport, setAiReport] = useState(null);
   
   // Telegram Bot Simulator state
   const [simulatorOpen, setSimulatorOpen] = useState(false);
@@ -63,14 +64,16 @@ const Dashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const [summaryRes, chartsRes, comparisonRes] = await Promise.all([
+      const [summaryRes, chartsRes, comparisonRes, aiReportRes] = await Promise.all([
         api.get(`/dashboard/summary?range=${range}`),
         api.get('/dashboard/charts'),
-        api.get(`/dashboard/comparison?range=${range}`)
+        api.get(`/dashboard/comparison?range=${range}`),
+        api.get('/analytics/ai-report')
       ]);
       setSummary(summaryRes.data);
       setChartData(chartsRes.data);
       setComparison(comparisonRes.data);
+      setAiReport(aiReportRes.data);
     } catch (error) {
       console.error('Error fetching dashboard summary:', error);
     } finally {
@@ -425,6 +428,26 @@ const Dashboard = () => {
           </div>
         ))}
       </div>
+
+      {/* AI Business Analyst Insights Card */}
+      {aiReport && (
+        <div className="glass-panel p-6 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/10 via-slate-950/30 to-cyan-950/5 shadow-[0_0_20px_rgba(99,102,241,0.04)] animate-fade-in">
+          <div className="flex items-center gap-2 mb-4 border-b border-indigo-500/10 pb-3">
+            <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
+            <h3 className="text-sm font-bold text-white tracking-wider uppercase">AI Business Analyst Insights</h3>
+            <span className={`ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+              aiReport.isAI 
+                ? 'bg-purple-500/15 text-purple-400 border-purple-500/25 shadow-[0_0_10px_rgba(168,85,247,0.15)]' 
+                : 'bg-slate-500/15 text-slate-400 border-slate-500/25'
+            }`}>
+              {aiReport.isAI ? 'Gemini AI' : 'Rule-Based Engine'}
+            </span>
+          </div>
+          <div className="text-xs text-gray-300 whitespace-pre-line leading-relaxed font-normal">
+            {aiReport.report}
+          </div>
+        </div>
+      )}
 
       {/* Charts Section */}
       <div className="glass-panel p-6 rounded-2xl border bg-slate-950/30">

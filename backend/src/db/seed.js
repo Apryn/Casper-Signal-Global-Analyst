@@ -1,16 +1,21 @@
 import pool from '../config/db.js';
 
 async function seedData() {
-  console.log('Seeding mock streamers and daily reports data...');
+  console.log('Seeding mock streamers, daily reports, targets, content, and schedules...');
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
 
-    // 1. Clear existing reports and streamers
+    // 1. Clear existing database logs
+    await client.query('DELETE FROM notifications');
+    await client.query('DELETE FROM schedule');
+    await client.query('DELETE FROM content');
+    await client.query('DELETE FROM scores');
+    await client.query('DELETE FROM targets');
     await client.query('DELETE FROM daily_reports');
     await client.query('DELETE FROM streamers');
-    console.log('Cleared existing data.');
+    console.log('Cleared existing data tables.');
 
     // 2. Insert Streamers
     const streamersList = [
@@ -36,13 +41,11 @@ async function seedData() {
     let reportCount = 0;
 
     for (let i = 29; i >= 0; i--) {
-      // Calculate target date
       const date = new Date();
       date.setDate(today.getDate() - i);
       const dateString = date.toISOString().split('T')[0];
 
       for (const streamer of streamerIds) {
-        // Streamer Tizza & Got stream more often, Lulu is non-streaming mainly, others are mixed
         let kategori = 'Streaming';
         if (streamer.nama === 'Lulu') {
           kategori = Math.random() > 0.15 ? 'Non Streaming' : 'Streaming';
@@ -52,39 +55,33 @@ async function seedData() {
 
         const isStreaming = kategori === 'Streaming';
 
-        // Content uploads
         const tiktok = Math.floor(Math.random() * 4); // 0-3
         const youtube = Math.floor(Math.random() * 3); // 0-2
         const instagram = streamer.nama === 'Lulu' ? Math.floor(Math.random() * 4) + 1 : Math.floor(Math.random() * 3);
-        const facebook = Math.floor(Math.random() * 2); // 0-1
+        const facebook = Math.floor(Math.random() * 2);
 
-        // Live stats
         const liveDuration = isStreaming
-          ? parseFloat((Math.random() * 4 + 1.5).toFixed(1)) // 1.5 - 5.5 hours
+          ? parseFloat((Math.random() * 4 + 1.5).toFixed(1))
           : 0.0;
 
-        // User interaction metrics (chats, registrations, FTDs)
-        // Adjust performance by streamer to make the ranking interesting
         let multiplier = 1.0;
-        if (streamer.nama === 'Tizza') multiplier = 1.5; // Top performer
+        if (streamer.nama === 'Tizza') multiplier = 1.6;
         if (streamer.nama === 'Got') multiplier = 1.3;
         if (streamer.nama === 'Romi') multiplier = 0.8;
 
         const chats = isStreaming
-          ? Math.floor((Math.random() * 150 + 50) * multiplier) // 50-200 chats
-          : Math.floor((Math.random() * 40 + 10) * multiplier); // 10-50 chats
+          ? Math.floor((Math.random() * 150 + 50) * multiplier)
+          : Math.floor((Math.random() * 40 + 10) * multiplier);
 
         const registrations = isStreaming
-          ? Math.floor((Math.random() * 20 + 8) * multiplier)  // 8-28 registrations
-          : Math.floor((Math.random() * 8 + 2) * multiplier);   // 2-10 registrations
+          ? Math.floor((Math.random() * 20 + 8) * multiplier)
+          : Math.floor((Math.random() * 8 + 2) * multiplier);
 
-        // FTDs (First Time Deposits) must be less than or equal to registrations
         const ftd = Math.min(
           registrations,
-          Math.floor((registrations * (Math.random() * 0.4 + 0.2))) // 20% to 60% conversion
+          Math.floor((registrations * (Math.random() * 0.4 + 0.25)))
         );
 
-        // Raw message mockup for simulation auditing
         const rawMsg = `
 ${kategori.toUpperCase()}
 Tanggal : ${dateString}
@@ -114,39 +111,127 @@ ${ftd}
             tanggal, streamer_id, kategori, 
             tiktok_upload, youtube_upload, instagram_upload, facebook_upload, 
             live_duration, chat_count, registration_count, ftd_count, raw_message
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-          ON CONFLICT (tanggal, streamer_id) DO UPDATE SET
-            kategori = EXCLUDED.kategori,
-            tiktok_upload = EXCLUDED.tiktok_upload,
-            youtube_upload = EXCLUDED.youtube_upload,
-            instagram_upload = EXCLUDED.instagram_upload,
-            facebook_upload = EXCLUDED.facebook_upload,
-            live_duration = EXCLUDED.live_duration,
-            chat_count = EXCLUDED.chat_count,
-            registration_count = EXCLUDED.registration_count,
-            ftd_count = EXCLUDED.ftd_count,
-            raw_message = EXCLUDED.raw_message`,
-          [
-            dateString,
-            streamer.id,
-            kategori,
-            tiktok,
-            youtube,
-            instagram,
-            facebook,
-            liveDuration,
-            chats,
-            registrations,
-            ftd,
-            rawMsg
-          ]
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+          [dateString, streamer.id, kategori, tiktok, youtube, instagram, facebook, liveDuration, chats, registrations, ftd, rawMsg]
         );
         reportCount++;
       }
     }
+    console.log(`Inserted ${reportCount} daily reports.`);
+
+    // 4. Seed Targets (Daily & Monthly targets for each streamer)
+    // Metric types: 'live_duration', 'uploads', 'registrations', 'ftds'
+    console.log('Seeding targets...');
+    for (const streamer of streamerIds) {
+      let ftdTargetMonthly = 80;
+      let regTargetMonthly = 200;
+      
+      if (streamer.nama === 'Tizza') { ftdTargetMonthly = 120; regTargetMonthly = 300; }
+      else if (streamer.nama === 'Got') { ftdTargetMonthly = 100; regTargetMonthly = 250; }
+      else if (streamer.nama === 'Lulu') { ftdTargetMonthly = 30; regTargetMonthly = 70; }
+
+      const targets = [
+        // Monthly Targets
+        { type: 'ftds', value: ftdTargetMonthly, period: 'monthly' },
+        { type: 'registrations', value: regTargetMonthly, period: 'monthly' },
+        { type: 'uploads', value: 45, period: 'monthly' },
+        { type: 'live_duration', value: 60, period: 'monthly' },
+        // Daily Targets
+        { type: 'ftds', value: Math.ceil(ftdTargetMonthly / 30), period: 'daily' },
+        { type: 'registrations', value: Math.ceil(regTargetMonthly / 30), period: 'daily' },
+        { type: 'uploads', value: 2, period: 'daily' },
+        { type: 'live_duration', value: 2, period: 'daily' }
+      ];
+
+      for (const target of targets) {
+        await client.query(
+          `INSERT INTO targets (streamer_id, target_type, target_value, period)
+           VALUES ($1, $2, $3, $4)`,
+          [streamer.id, target.type, target.value, target.period]
+        );
+      }
+    }
+
+    // 5. Seed Content Library (Fitur 4)
+    console.log('Seeding content library...');
+    const mockContents = [
+      { platform: 'TikTok', title: 'Cara Jitu Analisis Sinyal Casper' },
+      { platform: 'TikTok', title: 'Tutorial Live Streaming Cuan Parah' },
+      { platform: 'YouTube', title: 'Casper Signal Global Affiliate Program' },
+      { platform: 'YouTube', title: 'Review Komisi Tembus Ratusan FTD!' },
+      { platform: 'Instagram', title: 'Peluang Affiliate 2026' },
+      { platform: 'Instagram', title: 'Tips Tampil Pede Saat Live Streaming' },
+      { platform: 'Facebook', title: 'Casper Global Community Meetup' }
+    ];
+
+    for (const streamer of streamerIds) {
+      for (let c = 0; c < 3; c++) {
+        const item = mockContents[Math.floor(Math.random() * mockContents.length)];
+        const views = Math.floor(Math.random() * 45000) + 1000;
+        const likes = Math.floor(views * (Math.random() * 0.15 + 0.05));
+        const comments = Math.floor(likes * (Math.random() * 0.1 + 0.02));
+        const shares = Math.floor(likes * (Math.random() * 0.2));
+        
+        const dateSub = new Date();
+        dateSub.setDate(today.getDate() - Math.floor(Math.random() * 20));
+
+        await client.query(
+          `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            streamer.id,
+            item.platform,
+            `[${streamer.nama}] ${item.title}`,
+            dateSub.toISOString().split('T')[0],
+            `https://www.google.com/search?q=${encodeURIComponent(item.title)}`,
+            views,
+            likes,
+            comments,
+            shares
+          ]
+        );
+      }
+    }
+
+    // 6. Seed Schedules (Fitur 5)
+    console.log('Seeding live schedules...');
+    // We want schedules for today, yesterday, and upcoming days
+    const platforms = ['TikTok', 'YouTube', 'Instagram', 'Facebook'];
+    
+    for (const streamer of streamerIds) {
+      // Past Completed Schedule (Yesterday)
+      const startTimePast = new Date();
+      startTimePast.setDate(today.getDate() - 1);
+      startTimePast.setHours(19, 0, 0, 0);
+      
+      const endTimePast = new Date();
+      endTimePast.setDate(today.getDate() - 1);
+      endTimePast.setHours(21, 0, 0, 0);
+
+      await client.query(
+        `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [streamer.id, platforms[Math.floor(Math.random() * platforms.length)], startTimePast, endTimePast, 'Completed']
+      );
+
+      // Future Scheduled Stream (Tomorrow or Day after)
+      const startTimeFuture = new Date();
+      startTimeFuture.setDate(today.getDate() + 1);
+      startTimeFuture.setHours(20, 0, 0, 0);
+      
+      const endTimeFuture = new Date();
+      endTimeFuture.setDate(today.getDate() + 1);
+      endTimeFuture.setHours(22, 0, 0, 0);
+
+      await client.query(
+        `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [streamer.id, platforms[Math.floor(Math.random() * platforms.length)], startTimeFuture, endTimeFuture, 'Scheduled']
+      );
+    }
 
     await client.query('COMMIT');
-    console.log(`Seeding completed successfully! Inserted/updated ${reportCount} daily reports.`);
+    console.log('Database seeding successfully completed with all Phase 2 logs!');
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('Error seeding database:', err);

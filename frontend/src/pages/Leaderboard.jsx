@@ -15,17 +15,18 @@ import {
 
 const Leaderboard = () => {
   const [range, setRange] = useState('30days');
-  const [sortBy, setSortBy] = useState('ftds'); // 'ftds' | 'registrations' | 'chats' | 'liveHours' | 'uploads'
+  const [sortBy, setSortBy] = useState('score'); // Default sorted by overall score points!
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const res = await api.get(`/dashboard/leaderboard?range=${range}&limit=15`);
+      // Fetch from our new weighted points analytics endpoint!
+      const res = await api.get(`/analytics/leaderboard?range=${range}`);
       setLeaderboard(res.data);
     } catch (error) {
-      console.error('Error fetching leaderboard:', error);
+      console.error('Error fetching scored leaderboard:', error);
     } finally {
       setLoading(false);
     }
@@ -35,11 +36,13 @@ const Leaderboard = () => {
     fetchLeaderboard();
   }, [range]);
 
-  // Sort local copy of data to support instantaneous metric switching without hitting DB again
+  // Sort locally based on the selected tab
   const getSortedLeaderboard = () => {
     const list = [...leaderboard];
     return list.sort((a, b) => {
       switch (sortBy) {
+        case 'score':
+          return b.score - a.score || b.ftds - a.ftds;
         case 'ftds':
           return b.ftds - a.ftds || b.registrations - a.registrations;
         case 'registrations':
@@ -51,7 +54,7 @@ const Leaderboard = () => {
         case 'uploads':
           return b.uploads - a.uploads;
         default:
-          return b.ftds - a.ftds;
+          return b.score - a.score;
       }
     }).map((item, idx) => ({
       ...item,
@@ -64,6 +67,7 @@ const Leaderboard = () => {
   const remainingList = sortedList.slice(3);
 
   const metricTabs = [
+    { id: 'score', label: 'Overall Score', icon: Award },
     { id: 'ftds', label: 'Most FTDs', icon: Coins },
     { id: 'registrations', label: 'Most Registrations', icon: UserCheck },
     { id: 'chats', label: 'Most Chats', icon: MessageSquare },
@@ -74,11 +78,11 @@ const Leaderboard = () => {
   return (
     <div className="space-y-8">
       
-      {/* Header filter row */}
+      {/* Header row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-wide">Streamer Rankings Leaderboard</h2>
-          <p className="text-sm text-gray-400">Discover and compare the highest-converting affiliate streamers.</p>
+          <h2 className="text-2xl font-bold text-white tracking-wide">Streamer Scoring Leaderboard</h2>
+          <p className="text-sm text-gray-400">Automatic evaluations weighted by: FTD (40%), Reg (25%), Content (20%), Live (15%).</p>
         </div>
 
         <div className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 rounded-xl border border-dark-border self-start sm:self-center">
@@ -88,8 +92,6 @@ const Leaderboard = () => {
             onChange={(e) => setRange(e.target.value)}
             className="bg-transparent text-sm text-gray-300 focus:outline-none border-none cursor-pointer"
           >
-            <option value="today" className="bg-slate-950">Today</option>
-            <option value="yesterday" className="bg-slate-950">Yesterday</option>
             <option value="7days" className="bg-slate-950">Last 7 Days</option>
             <option value="30days" className="bg-slate-950">Last 30 Days</option>
             <option value="thisMonth" className="bg-slate-950">This Month</option>
@@ -129,6 +131,7 @@ const Leaderboard = () => {
           {/* Podium for top 3 - Glowing glass panel setup */}
           {podiumTop3.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
               {/* Rank 2 (left on desktop, first on mobile) */}
               {podiumTop3[1] && (
                 <div className="order-2 md:order-1 glass-panel border bg-gradient-to-b from-slate-950 to-slate-900/20 p-6 rounded-2xl flex flex-col items-center justify-between text-center relative overflow-hidden h-64">
@@ -140,7 +143,7 @@ const Leaderboard = () => {
                   </div>
                   <div className="mt-3">
                     <h4 className="font-bold text-white text-base">{podiumTop3[1].nama}</h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{podiumTop3[1].platform}</p>
+                    <p className="text-xs text-indigo-300 font-extrabold mt-0.5">{podiumTop3[1].score} Points</p>
                   </div>
                   <div className="mt-4 flex gap-4 text-xs">
                     <div>
@@ -174,7 +177,7 @@ const Leaderboard = () => {
                   </div>
                   <div className="mt-3">
                     <h4 className="font-extrabold text-white text-lg tracking-wide">{podiumTop3[0].nama}</h4>
-                    <p className="text-[10px] text-indigo-400 font-semibold tracking-wider uppercase mt-0.5">{podiumTop3[0].platform}</p>
+                    <p className="text-sm text-amber-400 font-black tracking-wide uppercase mt-0.5">{podiumTop3[0].score} Points</p>
                   </div>
                   <div className="mt-4 flex gap-5 text-xs bg-indigo-950/30 px-5 py-2.5 rounded-xl border border-indigo-500/10">
                     <div>
@@ -206,7 +209,7 @@ const Leaderboard = () => {
                   </div>
                   <div className="mt-3">
                     <h4 className="font-bold text-white text-base">{podiumTop3[2].nama}</h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">{podiumTop3[2].platform}</p>
+                    <p className="text-xs text-indigo-300 font-extrabold mt-0.5">{podiumTop3[2].score} Points</p>
                   </div>
                   <div className="mt-4 flex gap-4 text-xs">
                     <div>
@@ -237,6 +240,7 @@ const Leaderboard = () => {
                   <tr className="border-b border-dark-border bg-slate-950/50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                     <th className="py-4.5 px-6 text-center w-16">Rank</th>
                     <th className="py-4.5 px-4">Nama Streamer</th>
+                    <th className="py-4.5 px-4 text-center text-amber-400 font-bold">Points Score</th>
                     <th className="py-4.5 px-4 text-center">Live Hours</th>
                     <th className="py-4.5 px-4 text-center">Uploads</th>
                     <th className="py-4.5 px-4 text-right">Chats</th>
@@ -271,6 +275,11 @@ const Leaderboard = () => {
                         <td className="py-4 px-4">
                           <strong className="text-white block">{item.nama}</strong>
                           <span className="text-[10px] text-gray-400">{item.platform}</span>
+                        </td>
+
+                        {/* Weighted Points Score */}
+                        <td className="py-4 px-4 text-center font-bold text-amber-400 text-sm bg-amber-500/[0.01]">
+                          {item.score} pts
                         </td>
 
                         {/* Live hours */}

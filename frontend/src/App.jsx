@@ -10,6 +10,13 @@ import Dashboard from './pages/Dashboard';
 import Reports from './pages/Reports';
 import Leaderboard from './pages/Leaderboard';
 import Streamers from './pages/Streamers';
+import Performance from './pages/Performance';
+import Targets from './pages/Targets';
+import Contents from './pages/Contents';
+import Schedules from './pages/Schedules';
+import ImportPage from './pages/Import';
+import Evaluations from './pages/Evaluations';
+
 
 function App() {
   return (
@@ -31,11 +38,30 @@ function App() {
             {/* Dashboard Index */}
             <Route index element={<Dashboard />} />
 
-            {/* Daily Reports Ledger (Admins & Analysts) */}
+            {/* Performance Analytics (both roles) */}
+            <Route path="performance" element={<Performance />} />
+
+            {/* Daily Reports Ledger (both roles) */}
             <Route path="reports" element={<Reports />} />
 
-            {/* Leaderboard (Admins & Analysts) */}
+            {/* Leaderboard (both roles) */}
             <Route path="leaderboard" element={<Leaderboard />} />
+
+            {/* Target Tracking (both roles) */}
+            <Route path="targets" element={<Targets />} />
+
+            {/* Content Library (both roles) */}
+            <Route path="contents" element={<Contents />} />
+
+            {/* schedules (both roles) */}
+            <Route path="schedules" element={<Schedules />} />
+
+            {/* Batch Import (both roles) */}
+            <Route path="import" element={<ImportPage />} />
+
+            {/* Weekly Evaluations (both roles) */}
+            <Route path="evaluations" element={<Evaluations />} />
+
 
             {/* Streamers Management (both roles) */}
             <Route

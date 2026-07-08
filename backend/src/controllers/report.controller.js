@@ -56,14 +56,15 @@ export const getReports = async (req, res) => {
 };
 
 export const simulateReportParsing = async (req, res) => {
-  const { rawText } = req.body;
+  const { rawText, message } = req.body;
+  const textToParse = rawText || message;
 
-  if (!rawText) {
+  if (!textToParse) {
     return res.status(400).json({ message: 'Raw message content is required' });
   }
 
   try {
-    const result = await parseMessageText(rawText);
+    const result = await parseMessageText(textToParse);
     res.status(200).json({
       message: 'Message parsed and saved successfully',
       ...result
@@ -73,6 +74,7 @@ export const simulateReportParsing = async (req, res) => {
     res.status(400).json({ message: `Parsing failed: ${error.message}` });
   }
 };
+
 
 export const updateReport = async (req, res) => {
   const { id } = req.params;
@@ -148,3 +150,60 @@ export const deleteReport = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+export const createReport = async (req, res) => {
+  const {
+    streamer_id,
+    tanggal,
+    kategori = 'Streaming',
+    tiktok_upload = 0,
+    youtube_upload = 0,
+    instagram_upload = 0,
+    facebook_upload = 0,
+    live_duration = 0.0,
+    chat_count = 0,
+    registration_count = 0,
+    ftd_count = 0
+  } = req.body;
+
+  if (!streamer_id || !tanggal) {
+    return res.status(400).json({ message: 'streamer_id and tanggal are required' });
+  }
+
+  try {
+    const result = await query(
+      `INSERT INTO daily_reports (
+         streamer_id, tanggal, kategori,
+         tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
+         live_duration, chat_count, registration_count, ftd_count, raw_message
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       RETURNING *`,
+      [
+        streamer_id,
+        tanggal,
+        kategori,
+        tiktok_upload,
+        youtube_upload,
+        instagram_upload,
+        facebook_upload,
+        live_duration,
+        chat_count,
+        registration_count,
+        ftd_count,
+        'Manually logged via Web Dashboard'
+      ]
+    );
+
+    res.status(201).json({
+      message: 'Report created successfully',
+      report: result.rows[0]
+    });
+  } catch (error) {
+    console.error('Error creating report:', error);
+    if (error.code === '23505') {
+      return res.status(400).json({ message: 'Laporan untuk streamer pada tanggal tersebut sudah ada!' });
+    }
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+

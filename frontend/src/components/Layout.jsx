@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 import { 
   LayoutDashboard, 
   FileSpreadsheet, 
@@ -10,7 +11,14 @@ import {
   Shield, 
   Sparkles,
   Menu,
-  X
+  X,
+  Target,
+  TrendingUp,
+  Video,
+  Calendar,
+  Upload,
+  FileText,
+  Bell
 } from 'lucide-react';
 
 const Layout = () => {
@@ -18,6 +26,43 @@ const Layout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState([]);
+  const [unreadCount, setUnreadCount] = React.useState(0);
+  const [showNotifDropdown, setShowNotifDropdown] = React.useState(false);
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/notifications');
+      setNotifications(res.data);
+      setUnreadCount(res.data.filter(n => !n.is_read).length);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleMarkAllRead = async () => {
+    try {
+      await api.put('/notifications/all/read');
+      fetchNotifications();
+    } catch (err) {
+      console.error('Error marking all notifications read:', err);
+    }
+  };
+
+  const handleMarkRead = async (id) => {
+    try {
+      await api.put(`/notifications/${id}/read`);
+      fetchNotifications();
+    } catch (err) {
+      console.error('Error marking notification read:', err);
+    }
+  };
 
   const handleLogout = () => {
     logout();
@@ -26,8 +71,14 @@ const Layout = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
+    { name: 'Performance', path: '/performance', icon: TrendingUp },
     { name: 'Daily Reports', path: '/reports', icon: FileSpreadsheet },
     { name: 'Leaderboard', path: '/leaderboard', icon: Trophy },
+    { name: 'Target Tracking', path: '/targets', icon: Target },
+    { name: 'Content Library', path: '/contents', icon: Video },
+    { name: 'Schedules', path: '/schedules', icon: Calendar },
+    { name: 'Import Laporan', path: '/import', icon: Upload },
+    { name: 'Rapor Mingguan', path: '/evaluations', icon: FileText },
     { name: 'Streamers', path: '/streamers', icon: Users },
   ];
 
@@ -36,7 +87,9 @@ const Layout = () => {
       case '/': return 'Analytics Dashboard';
       case '/reports': return 'Daily Recaps Ledger';
       case '/leaderboard': return 'Streamer Leaderboard';
+      case '/evaluations': return 'Weekly Evaluations';
       case '/streamers': return 'Streamer Management';
+
       default: return 'Casper Analytics';
     }
   };
@@ -207,6 +260,72 @@ const Layout = () => {
           </div>
 
           <div className="flex items-center gap-4">
+            {/* Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                className="relative p-2 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800/80 rounded-lg transition-colors flex items-center justify-center"
+              >
+                <Bell size={16} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white leading-none">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifDropdown(false)} />
+                  <div className="absolute right-0 mt-2.5 w-80 bg-slate-950/95 border border-slate-800 rounded-xl shadow-2xl p-4 z-50 animate-fade-in text-left backdrop-blur-md">
+                    <div className="flex justify-between items-center border-b border-slate-800/60 pb-2.5 mb-2.5">
+                      <strong className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🔔</span> Alarm & Peringatan
+                      </strong>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                        >
+                          Tandai semua dibaca
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {notifications.length === 0 ? (
+                        <p className="text-xs text-slate-500 text-center py-4">Tidak ada alarm/notifikasi.</p>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              handleMarkRead(n.id);
+                              setShowNotifDropdown(false);
+                            }}
+                            className={`p-2.5 rounded-lg border transition-all cursor-pointer text-xs ${
+                              n.is_read
+                                ? 'bg-slate-900/30 border-slate-900/50 text-slate-400'
+                                : 'bg-indigo-950/20 border-indigo-900/40 text-slate-200 hover:bg-indigo-950/30'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="line-clamp-2 leading-relaxed">{n.message}</span>
+                              {!n.is_read && (
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0 mt-1" />
+                              )}
+                            </div>
+                            <span className="block text-[9px] text-slate-500 mt-1.5">
+                              {new Date(n.created_at).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Role pill badge */}
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${
               isAdmin 
