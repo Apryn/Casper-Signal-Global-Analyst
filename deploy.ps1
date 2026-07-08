@@ -21,8 +21,8 @@ $NGINX_PORT  = 81      # Motodoct pakai 80, Casper pakai 81
 
 Write-Host ""
 Write-Host "  IP VPS  : $VPS_IP" -ForegroundColor Gray
-Write-Host "  User    : $VPS_USER" -ForegroundColor Gray
-Write-Host "  App Dir : $APP_DIR" -ForegroundColor Gray
+Write-Host "  Motodoct: port 3000 → Nginx 80/443 (motodoct.com)" -ForegroundColor Gray
+Write-Host "  Casper  : port 5000 → Nginx 8080 (new)" -ForegroundColor Gray
 Write-Host ""
 
 # ── MENU PILIHAN ──────────────────────────────────────────────
@@ -108,113 +108,124 @@ pm2 list
 
 } else {
 # ══ FULL SETUP ════════════════════════════════════════════════
+# VPS State (verified):
+#   - Node.js v20.20.2  ✅ sudah ada
+#   - PM2               ✅ sudah ada  
+#   - Nginx             ✅ sudah ada (Motodoct pakai port 3000 → Nginx 80/443)
+#   - /var/www/motodoct ✅ sudah ada
+#   Target Casper:
+#   - Backend  → port 5000
+#   - Nginx    → port 8080
 
     Write-Host ""
     Write-Host "====================================================" -ForegroundColor Yellow
-    Write-Host "  MODE: FULL SETUP (Setup Pertama Kali)" -ForegroundColor Yellow
+    Write-Host "  MODE: FULL SETUP (Setup Pertama Kali di VPS)    " -ForegroundColor Yellow
+    Write-Host "  VPS sudah ada: Node v20, PM2, Nginx, Motodoct   " -ForegroundColor Gray
+    Write-Host "  Casper akan ditambahkan tanpa mengganggu apapun  " -ForegroundColor Gray
     Write-Host "====================================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  ⚠️  Kamu perlu mengisi .env di VPS setelah ini." -ForegroundColor Yellow
     Write-Host ""
 
     $REMOTE_SETUP = @"
 set -e
 
-echo '▶ [1/8] Update sistem...'
-apt update -y && apt upgrade -y
-
-echo '▶ [2/8] Install Node.js 20...'
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-
-echo '▶ [3/8] Install PM2, Nginx, Git...'
-npm install -g pm2
-apt install -y nginx git
-
-echo '▶ [4/8] Clone repository...'
-if [ -d '$APP_DIR' ]; then
-  cd '$APP_DIR' && git pull origin master
+echo '▶ [1/6] Clone/update repository Casper Signal...'
+if [ -d '/var/www/casper' ]; then
+  echo '  Folder sudah ada, pull update terbaru...'
+  cd /var/www/casper && git pull origin master
 else
-  git clone https://github.com/Apryn/Casper-Signal-Global-Analyst.git '$APP_DIR'
+  git clone https://github.com/Apryn/Casper-Signal-Global-Analyst.git /var/www/casper
 fi
-chown -R root:root '$APP_DIR'
-
-echo '▶ [5/8] Install dependencies backend...'
-cd '$APP_DIR/backend'
-npm install --omit=dev
+echo '  ✅ Kode siap'
 
 echo ''
-echo '⚠️  PENTING: Sekarang buat file .env di VPS!'
-echo '    Jalankan perintah ini di VPS:'
-echo '    nano $APP_DIR/backend/.env'
+echo '▶ [2/6] Install dependencies backend...'
+cd /var/www/casper/backend
+npm install --omit=dev --silent
+echo '  ✅ Dependencies backend terinstall'
+
 echo ''
-echo '    Isi dengan:'
-echo '    DATABASE_URL=postgresql://...'
-echo '    JWT_SECRET=...'
-echo '    TELEGRAM_BOT_TOKEN=...'
-echo '    TELEGRAM_GROUP_ID=...'
-echo '    TELEGRAM_REPORT_THREAD_ID=...'
+echo '⚠️  LANGKAH PENTING: Buat file .env backend!'
+echo '    Buka terminal baru, jalankan:'
+echo '    nano /var/www/casper/backend/.env'
+echo ''
+echo '    Isi dengan nilai berikut:'
+echo '    DATABASE_URL=postgresql://neon_url_disini'
+echo '    JWT_SECRET=casper_jwt_secret_panjang_2026'
+echo '    TELEGRAM_BOT_TOKEN=token_dari_botfather'
+echo '    TELEGRAM_GROUP_ID=-100xxxxxxx'
+echo '    TELEGRAM_REPORT_THREAD_ID=xxx (opsional)'
 echo '    NODE_ENV=production'
-echo '    PORT=5001   # Casper pakai 5001 (Motodoct sudah pakai 5000)'
+echo '    PORT=5000'
 echo ''
-read -p 'Tekan Enter setelah .env dibuat dan diisi...'
+read -p 'Tekan Enter setelah file .env sudah dibuat dan diisi...'
 
-echo '▶ [6/8] Init database schema...'
-cd '$APP_DIR/backend'
+echo ''
+echo '▶ [3/6] Init database schema...'
+cd /var/www/casper/backend
 node src/db/init.js
+echo '  ✅ Database schema siap'
 
-echo '▶ [7/8] Build frontend...'
-cd '$APP_DIR/frontend'
-npm install
-echo 'VITE_API_URL=/api' > .env.production
-echo 'VITE_APP_PORT=5001' >> .env.production
+echo ''
+echo '▶ [4/6] Build frontend...'
+cd /var/www/casper/frontend
+npm install --silent
+printf 'VITE_API_URL=/api\n' > .env.production
 npm run build
+echo '  ✅ Frontend berhasil di-build'
 
-echo '▶ [8/8] Setup Nginx & PM2...'
-cat > /etc/nginx/sites-available/casper << 'NGINX'
+echo ''
+echo '▶ [5/6] Tambah config Nginx (port 8080, tidak ganggu Motodoct)...'
+cat > /etc/nginx/sites-available/casper << 'NGINXEOF'
 server {
-    listen 81;  # Casper pakai port 81 (Motodoct di port 80)
+    listen 8080;
     server_name _;
 
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
 
-    root $APP_DIR/frontend/dist;
+    root /var/www/casper/frontend/dist;
     index index.html;
 
+    # Frontend SPA routing
     location / {
         try_files \$uri \$uri/ /index.html;
     }
 
+    # Backend API proxy ke port 5000
     location /api/ {
-        proxy_pass http://localhost:5001;  # Backend Casper di port 5001
+        proxy_pass http://localhost:5000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host \$host;
         proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_cache_bypass \$http_upgrade;
+        proxy_read_timeout 60s;
     }
 }
-NGINX
+NGINXEOF
 
-# JANGAN hapus default — Motodoct masih pakai config Nginx yang ada!
-# Hanya tambahkan site baru untuk Casper
 ln -sf /etc/nginx/sites-available/casper /etc/nginx/sites-enabled/casper
 nginx -t && systemctl reload nginx
+echo '  ✅ Nginx port 8080 aktif untuk Casper'
 
-cd '$APP_DIR/backend'
+echo ''
+echo '▶ [6/6] Jalankan backend Casper dengan PM2...'
+cd /var/www/casper/backend
 pm2 delete casper-api 2>/dev/null || true
-PORT=5001 pm2 start src/index.js --name 'casper-api' --env production
+PORT=5000 pm2 start src/index.js --name 'casper-api' --env production
 pm2 save
-pm2 startup | tail -1 | bash -
+echo '  ✅ Backend berjalan di PM2 (port 5000)'
 
 echo ''
 echo '======================================================'
-echo '  ✅  FULL SETUP SELESAI!'
+echo '  ✅  CASPER SIGNAL BERHASIL DEPLOY!'
 echo '======================================================'
-echo "  Casper Dashboard : http://187.77.156.219:81"
-echo "  Motodoct         : http://187.77.156.219 (tidak berubah)"
+echo ''
+echo '  🌐 Casper Dashboard : http://187.77.156.219:8080'
+echo '  🌐 Motodoct         : https://motodoct.com (tidak berubah)'
+echo ''
 pm2 list
 "@
 
@@ -227,7 +238,7 @@ Write-Host "====================================================" -ForegroundCol
 Write-Host "  ✅  DEPLOY SELESAI!                             " -ForegroundColor Green
 Write-Host "====================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  🌐 Casper Dashboard : http://${VPS_IP}:81" -ForegroundColor Cyan
-Write-Host "  🌐 Motodoct         : http://${VPS_IP} (tidak berubah)" -ForegroundColor Gray
-Write-Host "  📋 Log Casper       : ssh ${VPS_USER}@${VPS_IP} 'pm2 logs casper-api'" -ForegroundColor Gray
+Write-Host "  🌐 Casper Dashboard : http://${VPS_IP}:8080" -ForegroundColor Cyan
+Write-Host "  🌐 Motodoct         : https://motodoct.com (tidak berubah)" -ForegroundColor Gray
+Write-Host "  📋 PM2 Casper       : ssh ${VPS_USER}@${VPS_IP} 'pm2 logs casper-api'" -ForegroundColor Gray
 Write-Host ""
