@@ -37,11 +37,11 @@ function App() {
             {/* Leaderboard (Admins & Analysts) */}
             <Route path="leaderboard" element={<Leaderboard />} />
 
-            {/* Streamers Management (Admins Only) */}
+            {/* Streamers Management (both roles) */}
             <Route
               path="streamers"
               element={
-                <ProtectedRoute allowedRoles={['Admin']}>
+                <ProtectedRoute>
                   <Streamers />
                 </ProtectedRoute>
               }

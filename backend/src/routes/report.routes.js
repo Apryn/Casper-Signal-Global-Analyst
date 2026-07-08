@@ -21,7 +21,7 @@ router.post('/simulate', simulateReportParsing);
 // Update details
 router.put('/:id', updateReport);
 
-// Delete report (Admin only)
-router.delete('/:id', authorizeRoles('Admin'), deleteReport);
+// Delete report (both roles)
+router.delete('/:id', deleteReport);
 
 export default router;

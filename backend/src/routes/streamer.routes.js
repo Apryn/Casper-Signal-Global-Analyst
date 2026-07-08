@@ -15,9 +15,9 @@ router.use(authenticateToken);
 // Read list (both roles)
 router.get('/', getAllStreamers);
 
-// Manage list (Admin only)
-router.post('/', authorizeRoles('Admin'), createStreamer);
-router.put('/:id', authorizeRoles('Admin'), updateStreamer);
-router.delete('/:id', authorizeRoles('Admin'), deleteStreamer);
+// Manage list (both roles)
+router.post('/', createStreamer);
+router.put('/:id', updateStreamer);
+router.delete('/:id', deleteStreamer);
 
 export default router;

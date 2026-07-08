@@ -28,7 +28,7 @@ const Layout = () => {
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Daily Reports', path: '/reports', icon: FileSpreadsheet },
     { name: 'Leaderboard', path: '/leaderboard', icon: Trophy },
-    { name: 'Streamers', path: '/streamers', icon: Users, adminOnly: true },
+    { name: 'Streamers', path: '/streamers', icon: Users },
   ];
 
   const getPageTitle = () => {

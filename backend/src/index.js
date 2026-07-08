@@ -9,7 +9,7 @@ import authRoutes from './routes/auth.routes.js';
 import streamerRoutes from './routes/streamer.routes.js';
 import reportRoutes from './routes/report.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
-import { startTelegramBot } from './services/telegram.service.js';
+
 
 dotenv.config();
 

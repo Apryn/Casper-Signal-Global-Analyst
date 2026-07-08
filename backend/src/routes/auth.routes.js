@@ -8,7 +8,7 @@ const router = express.Router();
 router.post('/login', login);
 
 // Admin-only route to register new accounts (or for creating additional users)
-router.post('/register', authenticateToken, authorizeRoles('Admin'), register);
+router.post('/register', authenticateToken, register);
 
 // Protected routes
 router.get('/me', authenticateToken, getMe);
