@@ -144,20 +144,21 @@ npm install --omit=dev --silent
 echo '  ✅ Dependencies backend terinstall'
 
 echo ''
-echo '⚠️  LANGKAH PENTING: Buat file .env backend!'
-echo '    Buka terminal baru, jalankan:'
-echo '    nano /var/www/casper/backend/.env'
-echo ''
-echo '    Isi dengan nilai berikut:'
-echo '    DATABASE_URL=postgresql://neon_url_disini'
-echo '    JWT_SECRET=casper_jwt_secret_panjang_2026'
-echo '    TELEGRAM_BOT_TOKEN=token_dari_botfather'
-echo '    TELEGRAM_GROUP_ID=-100xxxxxxx'
-echo '    TELEGRAM_REPORT_THREAD_ID=xxx (opsional)'
-echo '    NODE_ENV=production'
-echo '    PORT=5000'
-echo ''
-read -p 'Tekan Enter setelah file .env sudah dibuat dan diisi...'
+echo '▶ [2/6] Menulis file .env backend...'
+cat > /var/www/casper/backend/.env << 'ENVEOF'
+PORT=5000
+NODE_ENV=production
+
+DATABASE_URL=postgresql://neondb_owner:npg_ev2P0rstmxFi@ep-damp-shadow-aowj9avr-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+
+JWT_SECRET=super_secret_casper_key_change_me_in_production
+JWT_EXPIRES_IN=7d
+
+TELEGRAM_BOT_TOKEN=8406301768:AAGn7DVQDvteYDZSQXjiTYOwgs3eveB6xb8
+TELEGRAM_GROUP_CHAT_ID=-1003065667483
+TELEGRAM_REPORT_THREAD_ID=16
+ENVEOF
+echo '  ✅ File .env berhasil dibuat otomatis'
 
 echo ''
 echo '▶ [3/6] Init database schema...'
