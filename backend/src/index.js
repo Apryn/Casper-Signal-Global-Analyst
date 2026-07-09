@@ -186,20 +186,7 @@ const launchBot = () => {
           const result = await parseMessageText(messageText);
           
           const replyMsg =
-            `✅ *Laporan Berhasil Diproses!*\n\n` +
-            `👤 *Streamer:* ${result.streamerName}\n` +
-            `📅 *Tanggal:* ${result.parsedData.tanggal}\n\n` +
-            `📈 *Metrics:*\n` +
-            `• Live: ${result.parsedData.liveDuration} jam\n` +
-            `• Chat: ${result.parsedData.chatCount}\n` +
-            `• Registrasi: ${result.parsedData.registrationCount}\n` +
-            `• FTD: ${result.parsedData.ftdCount}\n\n` +
-            `📹 *Upload Konten:*\n` +
-            `• TikTok: ${result.parsedData.uploads.tiktok}\n` +
-            `• YouTube Shorts: ${result.parsedData.uploads.youtube}\n` +
-            `• Instagram Reels: ${result.parsedData.uploads.instagram}\n` +
-            `• Facebook: ${result.parsedData.uploads.facebook}\n\n` +
-            `_Data tersimpan ke dashboard_ 🚀`;
+            `✅ *Laporan ${result.streamerName} tanggal ${result.parsedData.tanggal} berhasil disimpan ke dashboard!* 🚀`;
             
           await ctx.reply(replyMsg, replyOptions);
         } catch (error) {
