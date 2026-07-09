@@ -425,9 +425,12 @@ const upsertStreamer = async (rawName, uploads) => {
   };
 
   const lowerName = name.toLowerCase().trim();
-  const NON_STREAMERS = ['admin casper', 'stevan', 'kuro trade', 'kurotrade'];
+  const NON_STREAMERS = [
+    'admin casper', 'stevan', 'kuro trade', 'kurotrade',
+    'alwi komar', 'apriyan', 'casperbot', 'casper bot'
+  ];
   if (NON_STREAMERS.includes(lowerName)) {
-    throw new Error(`Nama "${name}" terdaftar sebagai Admin/Owner, bukan streamer.`);
+    throw new Error(`Nama "${name}" terdaftar sebagai Admin/Owner/Bot, bukan streamer.`);
   }
 
   if (ALIAS_MAP[lowerName]) {
