@@ -323,9 +323,30 @@ const extractField = (text, ...patterns) => {
 // STEP 7: Kategori
 // ============================================================
 const extractKategori = (text) => {
-  const up = text.toUpperCase();
-  if (up.includes('NON STREAMING') || up.includes('NONSTREAM')) return 'Non Streaming';
-  if (up.includes('STREAMING')) return 'Streaming';
+  // Get first part before any divider lines
+  const parts = text.split(/^\s*[-_]+\s*$/m);
+  let firstPart = parts[0].trim();
+
+  // Remove the joint placeholder "STREAMING NON STREAMING" or "STREAMING NONSTREAMING"
+  firstPart = firstPart.replace(/STREAMING\s+NON\s*STREAMING/i, '');
+  firstPart = firstPart.replace(/STREAMING\s+NON\s*STREAM/i, '');
+
+  const up = firstPart.toUpperCase();
+
+  // If there's any live duration parsed in the first part, it must be Streaming
+  const liveHours = extractLive(firstPart);
+  if (liveHours > 0) {
+    return 'Streaming';
+  }
+
+  if (up.includes('NON STREAMING') || up.includes('NONSTREAM')) {
+    return 'Non Streaming';
+  }
+
+  if (up.includes('STREAMING')) {
+    return 'Streaming';
+  }
+
   return 'Streaming';
 };
 
@@ -492,11 +513,12 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
 // ============================================================
 export const parseMessageText = async (rawText) => {
   const { fallbackDate, body } = stripTelegramHeader(rawText);
+  const cleanBody = body.replace(/\r/g, '');
 
   // ── BULK FORMAT (Rival Suhanda) ──
-  if (isBulkFormat(body)) {
-    const date = parseDate(body, fallbackDate);
-    const blocks = parseBulkBlocks(body, date);
+  if (isBulkFormat(cleanBody)) {
+    const date = parseDate(cleanBody, fallbackDate);
+    const blocks = parseBulkBlocks(cleanBody, date);
     if (blocks.length === 0) throw new Error('Format bulk terdeteksi tapi tidak ada data streamer.');
 
     const results = [];
@@ -531,17 +553,20 @@ export const parseMessageText = async (rawText) => {
   }
 
   // ── SINGLE FORMAT ──
-  const tanggal   = parseDate(body, fallbackDate);
-  const kategori  = extractKategori(body);
-  const rawName   = extractName(body);
+  const parts = cleanBody.split(/^\s*[-_]+\s*$/m);
+  const todayReportText = parts[0].trim();
+
+  const tanggal   = parseDate(todayReportText, fallbackDate);
+  const kategori  = extractKategori(todayReportText);
+  const rawName   = extractName(todayReportText);
 
   if (!rawName) throw new Error('Nama streamer tidak ditemukan. Pastikan ada nama setelah header laporan.');
 
-  const uploads           = extractUploads(body);
-  const liveDuration      = extractLive(body);
-  const chatCount         = extractField(body, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat');
-  const registrationCount = extractField(body, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi');
-  const ftdCount          = extractField(body, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)');
+  const uploads           = extractUploads(todayReportText);
+  const liveDuration      = extractLive(todayReportText);
+  const chatCount         = extractField(todayReportText, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat');
+  const registrationCount = extractField(todayReportText, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi');
+  const ftdCount          = extractField(todayReportText, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)');
 
   const streamerId = await upsertStreamer(rawName, uploads);
   const report     = await upsertReport(

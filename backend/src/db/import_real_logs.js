@@ -68,8 +68,8 @@ async function runImport() {
       streamerStats[name] = (streamerStats[name] || 0) + 1;
     } catch (err) {
       failCount++;
-      // Log parsing errors for debugging if needed, but don't stop the loop
-      // console.log(`❌ Gagal parse pesan #${i + 1}: ${err.message}`);
+      // Log parsing errors for debugging
+      console.log(`❌ Gagal parse pesan #${i + 1}: ${err.message}`);
     }
   }
 
