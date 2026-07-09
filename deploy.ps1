@@ -19,6 +19,23 @@ $BACKEND_PORT = 5001   # Motodoct pakai 5000, Casper pakai 5001
 $NGINX_PORT  = 81      # Motodoct pakai 80, Casper pakai 81
 # ──────────────────────────────────────────────────────────────
 
+# Load .env variables to prevent exposing credentials on GitHub
+$ENV_PATH = Join-Path $PSScriptRoot "backend\.env"
+if (Test-Path $ENV_PATH) {
+    Get-Content $ENV_PATH | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -and -not $line.StartsWith("#") -and $line.Contains("=")) {
+            $key, $value = $line.Split("=", 2)
+            $key = $key.Trim()
+            $value = $value.Trim()
+            Set-Variable -Name "ENV_$key" -Value $value -Scope Script
+        }
+    }
+} else {
+    Write-Host "❌ ERROR: File backend\.env tidak ditemukan! Inisialisasi dibatalkan." -ForegroundColor Red
+    Exit 1
+}
+
 Write-Host ""
 Write-Host "  IP VPS  : $VPS_IP" -ForegroundColor Gray
 Write-Host "  Motodoct: backend port 5000 → Nginx 80/443 (motodoct.com)" -ForegroundColor Gray
@@ -125,14 +142,14 @@ cat > /var/www/casper/backend/.env << 'ENVEOF'
 PORT=$BACKEND_PORT
 NODE_ENV=production
 
-DATABASE_URL=postgresql://neondb_owner:npg_ev2P0rstmxFi@ep-damp-shadow-aowj9avr-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+DATABASE_URL=$ENV_DATABASE_URL
 
-JWT_SECRET=super_secret_casper_key_change_me_in_production
-JWT_EXPIRES_IN=7d
+JWT_SECRET=$ENV_JWT_SECRET
+JWT_EXPIRES_IN=$ENV_JWT_EXPIRES_IN
 
-TELEGRAM_BOT_TOKEN=8406301768:AAGn7DVQDvteYDZSQXjiTYOwgs3eveB6xb8
-TELEGRAM_GROUP_CHAT_ID=-1003065667483
-TELEGRAM_REPORT_THREAD_ID=16
+TELEGRAM_BOT_TOKEN=$ENV_TELEGRAM_BOT_TOKEN
+TELEGRAM_GROUP_CHAT_ID=$ENV_TELEGRAM_GROUP_CHAT_ID
+TELEGRAM_REPORT_THREAD_ID=$ENV_TELEGRAM_REPORT_THREAD_ID
 ENVEOF
 echo '  ✅ File .env berhasil dibuat otomatis'
 
