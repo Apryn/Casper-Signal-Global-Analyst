@@ -413,20 +413,6 @@ const Reports = () => {
           </div>
         </div>
 
-        {/* Category */}
-        <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">Category</label>
-          <select
-            value={kategori}
-            onChange={(e) => setKategori(e.target.value)}
-            className="block w-full px-3 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
-          >
-            <option value="">All Categories</option>
-            <option value="Streaming">Streaming</option>
-            <option value="Non Streaming">Non Streaming</option>
-          </select>
-        </div>
-
         {/* Reset button */}
         <button
           onClick={handleResetFilters}
@@ -445,7 +431,6 @@ const Reports = () => {
               <tr className="border-b border-dark-border bg-slate-950/50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
                 <th className="py-4.5 px-6">Tanggal</th>
                 <th className="py-4.5 px-4">Nama</th>
-                <th className="py-4.5 px-4">Kategori</th>
                 <th className="py-4.5 px-4 text-center">TikTok</th>
                 <th className="py-4.5 px-4 text-center">Youtube</th>
                 <th className="py-4.5 px-4 text-center">Instagram</th>
@@ -460,7 +445,7 @@ const Reports = () => {
             <tbody className="divide-y divide-dark-border/40 text-sm text-gray-300">
               {loading ? (
                 <tr>
-                  <td colSpan="12" className="py-12 text-center text-indigo-400">
+                  <td colSpan="11" className="py-12 text-center text-indigo-400">
                     <div className="flex justify-center items-center gap-2">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
                       <span>Updating reports ledger...</span>
@@ -469,7 +454,7 @@ const Reports = () => {
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan="12" className="py-12 text-center text-gray-500">
+                  <td colSpan="11" className="py-12 text-center text-gray-500">
                     No reports match selected filters.
                   </td>
                 </tr>
@@ -485,17 +470,6 @@ const Reports = () => {
                     <td className="py-4 px-4 font-semibold text-white">
                       {report.streamer_name}
                       <span className="block text-[10px] text-gray-400 font-normal">{report.streamer_platform}</span>
-                    </td>
-                    
-                    {/* Category */}
-                    <td className="py-4 px-4">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                        report.kategori === 'Streaming' 
-                          ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' 
-                          : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                      }`}>
-                        {report.kategori}
-                      </span>
                     </td>
 
                     {/* Uploads Breakdown */}
@@ -578,19 +552,6 @@ const Reports = () => {
 
             <form onSubmit={handleEditSubmit} className="space-y-4">
               
-              {/* Category selector */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Category</label>
-                <select
-                  value={editingReport.kategori}
-                  onChange={(e) => setEditingReport({ ...editingReport, kategori: e.target.value })}
-                  className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                  <option value="Streaming">Streaming</option>
-                  <option value="Non Streaming">Non Streaming</option>
-                </select>
-              </div>
-
               {/* Uploads Breakdown */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Content Uploads</label>
@@ -642,7 +603,6 @@ const Reports = () => {
                     type="number"
                     step="0.1"
                     value={editingReport.live_duration}
-                    disabled={editingReport.kategori === 'Non Streaming'}
                     onChange={(e) => setEditingReport({ ...editingReport, live_duration: parseFloat(e.target.value) || 0.0 })}
                     className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                   />
@@ -746,19 +706,6 @@ const Reports = () => {
                 </div>
               </div>
 
-              {/* Category selector */}
-              <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Category</label>
-                <select
-                  value={newReport.kategori}
-                  onChange={(e) => setNewReport({ ...newReport, kategori: e.target.value })}
-                  className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                >
-                  <option value="Streaming">Streaming</option>
-                  <option value="Non Streaming">Non Streaming</option>
-                </select>
-              </div>
-
               {/* Uploads Breakdown */}
               <div>
                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Content Uploads</label>
@@ -810,7 +757,6 @@ const Reports = () => {
                     type="number"
                     step="0.1"
                     value={newReport.live_duration}
-                    disabled={newReport.kategori === 'Non Streaming'}
                     onChange={(e) => setNewReport({ ...newReport, live_duration: parseFloat(e.target.value) || 0.0 })}
                     className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                   />

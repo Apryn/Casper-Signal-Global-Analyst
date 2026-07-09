@@ -370,8 +370,7 @@ const Dashboard = () => {
                   <div className="grid grid-cols-2 gap-2 text-gray-300">
                     <div>Streamer: <strong className="text-white">{simResult.streamerName}</strong></div>
                     <div>Date: <strong className="text-white">{simResult.parsedData.tanggal}</strong></div>
-                    <div>Category: <strong className="text-white">{simResult.parsedData.kategori}</strong></div>
-                    <div>Live Duration: <strong className="text-white">{simResult.parsedData.liveDuration} hours</strong></div>
+                    <div className="col-span-2">Live Duration: <strong className="text-white">{simResult.parsedData.liveDuration} hours</strong></div>
                   </div>
 
                   <div className="p-2.5 rounded bg-slate-900 border border-dark-border">

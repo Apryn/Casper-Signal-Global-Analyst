@@ -188,8 +188,7 @@ const launchBot = () => {
           const replyMsg =
             `✅ *Laporan Berhasil Diproses!*\n\n` +
             `👤 *Streamer:* ${result.streamerName}\n` +
-            `📅 *Tanggal:* ${result.parsedData.tanggal}\n` +
-            `🏷️ *Kategori:* ${result.parsedData.kategori}\n\n` +
+            `📅 *Tanggal:* ${result.parsedData.tanggal}\n\n` +
             `📈 *Metrics:*\n` +
             `• Live: ${result.parsedData.liveDuration} jam\n` +
             `• Chat: ${result.parsedData.chatCount}\n` +
