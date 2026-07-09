@@ -1,14 +1,16 @@
 -- Initialize schema for Casper Signal Analytics Dashboard
 
 -- Drop tables if they exist
-DROP TABLE IF EXISTS notifications;
-DROP TABLE IF EXISTS schedule;
-DROP TABLE IF EXISTS content;
-DROP TABLE IF EXISTS scores;
-DROP TABLE IF EXISTS targets;
-DROP TABLE IF EXISTS daily_reports;
-DROP TABLE IF EXISTS streamers;
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS schedule CASCADE;
+DROP TABLE IF EXISTS content CASCADE;
+DROP TABLE IF EXISTS scores CASCADE;
+DROP TABLE IF EXISTS targets CASCADE;
+DROP TABLE IF EXISTS daily_reports CASCADE;
+DROP TABLE IF EXISTS weekly_evaluations CASCADE;
+DROP TABLE IF EXISTS streamer_accounts CASCADE;
+DROP TABLE IF EXISTS streamers CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
 
 -- 1. Users table (for dashboard access)
 CREATE TABLE users (
@@ -68,7 +70,18 @@ CREATE TABLE scores (
     CONSTRAINT unique_streamer_score_date UNIQUE (streamer_id, date)
 );
 
--- 6. Social media contents catalog
+-- 6. Streamer Accounts table
+CREATE TABLE streamer_accounts (
+    id SERIAL PRIMARY KEY,
+    streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
+    platform VARCHAR(100) NOT NULL CHECK (platform IN ('TikTok', 'YouTube', 'Instagram', 'Facebook')),
+    username VARCHAR(255) NOT NULL,
+    link VARCHAR(500),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_platform_username UNIQUE (platform, username)
+);
+
+-- 7. Social media contents catalog
 CREATE TABLE content (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
@@ -80,10 +93,11 @@ CREATE TABLE content (
     likes INTEGER NOT NULL DEFAULT 0,
     comments INTEGER NOT NULL DEFAULT 0,
     shares INTEGER NOT NULL DEFAULT 0,
+    account_id INTEGER REFERENCES streamer_accounts(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 7. Streaming timetables (Live Scheduler)
+-- 8. Streaming timetables (Live Scheduler)
 CREATE TABLE schedule (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
@@ -94,13 +108,30 @@ CREATE TABLE schedule (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- 8. Bot notifications audit logs
+-- 9. Weekly Evaluations table
+CREATE TABLE weekly_evaluations (
+    id SERIAL PRIMARY KEY,
+    streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    stats JSONB NOT NULL,
+    targets JSONB NOT NULL,
+    peak_hour VARCHAR(50),
+    kelebihan TEXT,
+    kekurangan TEXT,
+    rekomendasi TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_streamer_weekly_eval UNIQUE (streamer_id, start_date)
+);
+
+-- 10. Bot notifications audit logs
 CREATE TABLE notifications (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER REFERENCES streamers(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'Unsent' CHECK (status IN ('Unsent', 'Sent', 'Failed')),
     type VARCHAR(50) NOT NULL CHECK (type IN ('Report Reminder', 'Achievement', 'Alert')),
+    is_read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -111,3 +142,4 @@ CREATE INDEX idx_targets_streamer ON targets(streamer_id);
 CREATE INDEX idx_content_streamer ON content(streamer_id);
 CREATE INDEX idx_schedule_streamer ON schedule(streamer_id);
 CREATE INDEX idx_schedule_times ON schedule(start_time, end_time);
+

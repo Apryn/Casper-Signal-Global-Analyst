@@ -7,8 +7,8 @@
 
 Clear-Host
 Write-Host "====================================================" -ForegroundColor Cyan
-Write-Host "  CASPER SIGNAL ANALYTICS — DEPLOYMENT TO VPS     " -ForegroundColor Cyan
-Write-Host "  VPS: 187.77.156.219 (shared dengan Motodoct)    " -ForegroundColor Cyan
+Write-Host "  CASPER SIGNAL ANALYTICS - DEPLOYMENT TO VPS     " -ForegroundColor Cyan
+Write-Host "  VPS: 187.77.156.219 shared dengan Motodoct       " -ForegroundColor Cyan
 Write-Host "====================================================" -ForegroundColor Cyan
 
 # ── KONFIGURASI ───────────────────────────────────────────────
@@ -21,8 +21,8 @@ $NGINX_PORT  = 81      # Motodoct pakai 80, Casper pakai 81
 
 Write-Host ""
 Write-Host "  IP VPS  : $VPS_IP" -ForegroundColor Gray
-Write-Host "  Motodoct: port 3000 → Nginx 80/443 (motodoct.com)" -ForegroundColor Gray
-Write-Host "  Casper  : port 5000 → Nginx 8080 (new)" -ForegroundColor Gray
+Write-Host "  Motodoct: backend port 5000 → Nginx 80/443 (motodoct.com)" -ForegroundColor Gray
+Write-Host "  Casper  : backend port $BACKEND_PORT → Nginx $NGINX_PORT (new)" -ForegroundColor Gray
 Write-Host ""
 
 # ── MENU PILIHAN ──────────────────────────────────────────────
@@ -42,33 +42,9 @@ Write-Host ""
 $pilihan = Read-Host "Masukkan pilihan (1 atau 2, default: 1)"
 if ($pilihan -ne "2") { $pilihan = "1" }
 
-# ── COMMON: Commit & Push ke GitHub dulu ─────────────────────
-Write-Host ""
-Write-Host "▶ [Git] Memeriksa perubahan kode..." -ForegroundColor Yellow
-
+# Set Project Directory
 $PROJECT_DIR = $PSScriptRoot
 Set-Location $PROJECT_DIR
-
-$STATUS = git status --porcelain
-if ($STATUS) {
-    Write-Host "  Ada perubahan yang belum di-commit:" -ForegroundColor White
-    git status --short
-    Write-Host ""
-    $COMMIT_MSG = Read-Host "  Masukkan pesan commit (Enter untuk default)"
-    if ([string]::IsNullOrWhiteSpace($COMMIT_MSG)) {
-        $COMMIT_MSG = "deploy: update $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
-    }
-    git add -A
-    git commit -m $COMMIT_MSG
-    Write-Host "  ✅ Commit berhasil" -ForegroundColor Green
-} else {
-    Write-Host "  ✅ Tidak ada perubahan baru, skip commit" -ForegroundColor Green
-}
-
-Write-Host ""
-Write-Host "▶ [Git] Push ke GitHub..." -ForegroundColor Yellow
-git push origin master
-Write-Host "  ✅ Push ke GitHub berhasil" -ForegroundColor Green
 
 # ══════════════════════════════════════════════════════════════
 if ($pilihan -eq "1") {
@@ -146,7 +122,7 @@ echo '  ✅ Dependencies backend terinstall'
 echo ''
 echo '▶ [2/6] Menulis file .env backend...'
 cat > /var/www/casper/backend/.env << 'ENVEOF'
-PORT=5000
+PORT=$BACKEND_PORT
 NODE_ENV=production
 
 DATABASE_URL=postgresql://neondb_owner:npg_ev2P0rstmxFi@ep-damp-shadow-aowj9avr-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
@@ -175,10 +151,10 @@ npm run build
 echo '  ✅ Frontend berhasil di-build'
 
 echo ''
-echo '▶ [5/6] Tambah config Nginx (port 8080, tidak ganggu Motodoct)...'
+echo '▶ [5/6] Tambah config Nginx (port $NGINX_PORT, tidak ganggu Motodoct)...'
 cat > /etc/nginx/sites-available/casper << 'NGINXEOF'
 server {
-    listen 8080;
+    listen $NGINX_PORT;
     server_name _;
 
     gzip on;
@@ -192,9 +168,9 @@ server {
         try_files \$uri \$uri/ /index.html;
     }
 
-    # Backend API proxy ke port 5000
+    # Backend API proxy ke port $BACKEND_PORT
     location /api/ {
-        proxy_pass http://localhost:5000;
+        proxy_pass http://localhost:$BACKEND_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -209,22 +185,22 @@ NGINXEOF
 
 ln -sf /etc/nginx/sites-available/casper /etc/nginx/sites-enabled/casper
 nginx -t && systemctl reload nginx
-echo '  ✅ Nginx port 8080 aktif untuk Casper'
+echo '  ✅ Nginx port $NGINX_PORT aktif untuk Casper'
 
 echo ''
 echo '▶ [6/6] Jalankan backend Casper dengan PM2...'
 cd /var/www/casper/backend
 pm2 delete casper-api 2>/dev/null || true
-PORT=5000 pm2 start src/index.js --name 'casper-api' --env production
+PORT=$BACKEND_PORT pm2 start src/index.js --name 'casper-api' --env production
 pm2 save
-echo '  ✅ Backend berjalan di PM2 (port 5000)'
+echo '  ✅ Backend berjalan di PM2 (port $BACKEND_PORT)'
 
 echo ''
 echo '======================================================'
 echo '  ✅  CASPER SIGNAL BERHASIL DEPLOY!'
 echo '======================================================'
 echo ''
-echo '  🌐 Casper Dashboard : http://187.77.156.219:8080'
+echo "  🌐 Casper Dashboard : http://${VPS_IP}:${NGINX_PORT}"
 echo '  🌐 Motodoct         : https://motodoct.com (tidak berubah)'
 echo ''
 pm2 list
@@ -236,10 +212,10 @@ pm2 list
 # ── SELESAI ───────────────────────────────────────────────────
 Write-Host ""
 Write-Host "====================================================" -ForegroundColor Green
-Write-Host "  ✅  DEPLOY SELESAI!                             " -ForegroundColor Green
+Write-Host "  SUCCESS: DEPLOY SELESAI!                        " -ForegroundColor Green
 Write-Host "====================================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  🌐 Casper Dashboard : http://${VPS_IP}:8080" -ForegroundColor Cyan
-Write-Host "  🌐 Motodoct         : https://motodoct.com (tidak berubah)" -ForegroundColor Gray
-Write-Host "  📋 PM2 Casper       : ssh ${VPS_USER}@${VPS_IP} 'pm2 logs casper-api'" -ForegroundColor Gray
+Write-Host "  Casper Dashboard    : http://$($VPS_IP):$($NGINX_PORT)" -ForegroundColor Cyan
+Write-Host "  Motodoct            : https://motodoct.com (tidak berubah)" -ForegroundColor Gray
+Write-Host "  PM2 Casper Logs     : ssh $VPS_USER@$VPS_IP 'pm2 logs casper-api'" -ForegroundColor Gray
 Write-Host ""

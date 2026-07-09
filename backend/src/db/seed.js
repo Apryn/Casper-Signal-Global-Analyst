@@ -14,6 +14,8 @@ async function seedData() {
     await client.query('DELETE FROM scores');
     await client.query('DELETE FROM targets');
     await client.query('DELETE FROM daily_reports');
+    await client.query('DELETE FROM weekly_evaluations');
+    await client.query('DELETE FROM streamer_accounts');
     await client.query('DELETE FROM streamers');
     console.log('Cleared existing data tables.');
 
@@ -35,6 +37,46 @@ async function seedData() {
       streamerIds.push(res.rows[0]);
     }
     console.log(`Inserted ${streamerIds.length} streamers.`);
+
+    // 2.5 Seed Streamer Accounts
+    console.log('Seeding streamer accounts...');
+    const accountsMap = {}; // Maps streamerId_platform -> accountId
+    for (const streamer of streamerIds) {
+      const nameClean = streamer.nama.replace(/[^\w\s]/g, '').trim().toLowerCase().replace(/\s+/g, '_');
+      
+      // TikTok
+      const ttRes = await client.query(
+        `INSERT INTO streamer_accounts (streamer_id, platform, username, link)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [streamer.id, 'TikTok', `@${nameClean}_official`, `https://tiktok.com/@${nameClean}_official`]
+      );
+      accountsMap[`${streamer.id}_TikTok`] = ttRes.rows[0].id;
+
+      // YouTube
+      const ytRes = await client.query(
+        `INSERT INTO streamer_accounts (streamer_id, platform, username, link)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [streamer.id, 'YouTube', `${streamer.nama} Channel`, `https://youtube.com/@${nameClean}`]
+      );
+      accountsMap[`${streamer.id}_YouTube`] = ytRes.rows[0].id;
+
+      // Instagram
+      const igRes = await client.query(
+        `INSERT INTO streamer_accounts (streamer_id, platform, username, link)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [streamer.id, 'Instagram', `@${nameClean}_insta`, `https://instagram.com/${nameClean}_insta`]
+      );
+      accountsMap[`${streamer.id}_Instagram`] = igRes.rows[0].id;
+
+      // Facebook
+      const fbRes = await client.query(
+        `INSERT INTO streamer_accounts (streamer_id, platform, username, link)
+         VALUES ($1, $2, $3, $4) RETURNING id`,
+        [streamer.id, 'Facebook', `${streamer.nama} FB Page`, `https://facebook.com/${nameClean}_page`]
+      );
+      accountsMap[`${streamer.id}_Facebook`] = fbRes.rows[0].id;
+    }
+    console.log('Seeded streamer accounts.');
 
     // 3. Generate 30 days of daily reports
     const today = new Date();
@@ -175,9 +217,12 @@ ${ftd}
         const dateSub = new Date();
         dateSub.setDate(today.getDate() - Math.floor(Math.random() * 20));
 
+        // Get matching account_id from accountsMap
+        const accountId = accountsMap[`${streamer.id}_${item.platform}`] || null;
+
         await client.query(
-          `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             streamer.id,
             item.platform,
@@ -187,7 +232,8 @@ ${ftd}
             views,
             likes,
             comments,
-            shares
+            shares,
+            accountId
           ]
         );
       }
