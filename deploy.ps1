@@ -103,7 +103,7 @@ echo ''
 echo '✅ Update selesai!'
 pm2 list
 "@
-
+    $REMOTE_COMMANDS = $REMOTE_COMMANDS -replace "`r`n", "`n"
     ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_IP}" $REMOTE_COMMANDS
 
 } else {
@@ -231,7 +231,7 @@ echo '  🌐 Motodoct         : https://motodoct.com (tidak berubah)'
 echo ''
 pm2 list
 "@
-
+    $REMOTE_SETUP = $REMOTE_SETUP -replace "`r`n", "`n"
     ssh -o StrictHostKeyChecking=no -t "${VPS_USER}@${VPS_IP}" $REMOTE_SETUP
 }
 
