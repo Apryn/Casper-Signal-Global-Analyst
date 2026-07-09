@@ -80,6 +80,13 @@ echo '▶ Pull kode terbaru...'
 cd $APP_DIR
 git pull origin master
 
+echo '▶ Update .env config...'
+if grep -q "ACTIVATION_CODE" $APP_DIR/backend/.env; then
+  sed -i 's/^ACTIVATION_CODE=.*/ACTIVATION_CODE=$ENV_ACTIVATION_CODE/' $APP_DIR/backend/.env
+else
+  echo "ACTIVATION_CODE=$ENV_ACTIVATION_CODE" >> $APP_DIR/backend/.env
+fi
+
 echo '▶ Update dependencies backend...'
 cd $APP_DIR/backend
 npm install --omit=dev --silent
