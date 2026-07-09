@@ -403,6 +403,7 @@ const upsertStreamer = async (rawName, uploads) => {
     // Brayy
     'brayy candle'    : 'Brayy',
     'brayy'           : 'Brayy',
+    'arief lutfi'     : 'Brayy',
     // Laflanca = Qamil Alvaro
     'laflanca'        : 'Laflanca',
     'qamil alvaro'    : 'Laflanca',
@@ -414,6 +415,7 @@ const upsertStreamer = async (rawName, uploads) => {
     // Katrineely
     'katrineely'      : 'Katrineely',
     'katrine'         : 'Katrineely',
+    'dara'            : 'Katrineely',
     // Keylaa
     'keylaa'          : 'Keylaa',
     'keyla'           : 'Keylaa',
