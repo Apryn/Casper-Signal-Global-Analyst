@@ -38,9 +38,9 @@ const toInt = (str) => {
   return Math.round(parseFloat(nums[0].replace(',', '.')));
 };
 
-/** Strip leading emoji characters */
+/** Strip all emoji characters (leading, trailing, and components) globally while keeping numbers intact */
 const stripEmoji = (str) =>
-  str.replace(/^[\p{Emoji}\p{Emoji_Modifier}\p{Emoji_Component}\s]+/u, '').trim();
+  str.replace(/(?![0-9#*])[\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Modifier}]/gu, '').trim();
 
 /** Build ISO date from day/month/year parts */
 const buildDate = (day, monthStr, year) => {
