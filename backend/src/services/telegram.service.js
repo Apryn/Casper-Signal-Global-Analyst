@@ -450,21 +450,8 @@ const upsertStreamer = async (rawName, uploads) => {
     if (res.rows.length > 0) return res.rows[0].id;
   }
 
-  // Determine main platform
-  let platform = 'TikTok';
-  if (uploads.youtube > uploads.tiktok) platform = 'YouTube';
-  else if (uploads.instagram > uploads.tiktok) platform = 'Instagram';
-
-  const ins = await query(
-    `INSERT INTO streamers (nama, platform)
-     VALUES ($1, $2)
-     ON CONFLICT (nama) DO UPDATE SET platform = EXCLUDED.platform
-     RETURNING id`,
-    [name, platform]
-  );
-
-  console.log(`[Parser] Auto-created streamer: ${name}`);
-  return ins.rows[0].id;
+  // Instead of auto-creating, throw an error to keep database clean
+  throw new Error(`Streamer "${name}" tidak terdaftar di database.`);
 };
 
 const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration, chatCount, registrationCount, ftdCount, rawMessage) => {
