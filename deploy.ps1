@@ -165,19 +165,19 @@ server {
 
     # Frontend SPA routing
     location / {
-        try_files \$uri \$uri/ /index.html;
+        try_files `$uri `$uri/ /index.html;
     }
 
     # Backend API proxy ke port $BACKEND_PORT
     location /api/ {
         proxy_pass http://localhost:$BACKEND_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade `$http_upgrade;
         proxy_set_header Connection 'upgrade';
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_cache_bypass \$http_upgrade;
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_cache_bypass `$http_upgrade;
         proxy_read_timeout 60s;
     }
 }
