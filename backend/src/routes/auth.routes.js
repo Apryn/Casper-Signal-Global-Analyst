@@ -1,16 +1,13 @@
 import express from 'express';
-import { login, register, getMe } from '../controllers/auth.controller.js';
-import { authenticateToken, authorizeRoles } from '../middleware/auth.middleware.js';
+import { login, getMe } from '../controllers/auth.controller.js';
+import { authenticateToken } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
 
-// Public routes
+// Public: login with activation code
 router.post('/login', login);
 
-// Admin-only route to register new accounts (or for creating additional users)
-router.post('/register', authenticateToken, register);
-
-// Protected routes
+// Protected: get current user info
 router.get('/me', authenticateToken, getMe);
 
 export default router;
