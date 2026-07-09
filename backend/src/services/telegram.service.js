@@ -424,6 +424,7 @@ const upsertStreamer = async (rawName, uploads) => {
     'bg chen'         : 'BG Chenn',
     'bgchenn'         : 'BG Chenn',
     'bgchen'          : 'BG Chenn',
+    'anandarioo'      : 'BG Chenn',
   };
 
   const lowerName = name.toLowerCase().trim();
