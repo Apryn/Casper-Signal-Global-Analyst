@@ -272,7 +272,7 @@ const normalizeName = (raw) => {
 
   // Reject group admins/hosts who are not streamers
   const excludedStreamers = [
-    'apriyan', 'admin casper', 'stevan', 'kuro trade', 'alwi komar', 'casperbot', 'casper bot'
+    'apriyan', 'stevan', 'kuro trade', 'alwi komar', 'casperbot', 'casper bot'
   ];
   if (excludedStreamers.includes(name.toLowerCase().trim())) {
     return null;
@@ -533,7 +533,7 @@ const upsertStreamer = async (rawName, uploads) => {
 
   const lowerName = name.toLowerCase().trim();
   const NON_STREAMERS = [
-    'admin casper', 'stevan', 'kuro trade', 'kurotrade',
+    'stevan', 'kuro trade', 'kurotrade',
     'alwi komar', 'apriyan', 'casperbot', 'casper bot'
   ];
   if (NON_STREAMERS.includes(lowerName)) {
