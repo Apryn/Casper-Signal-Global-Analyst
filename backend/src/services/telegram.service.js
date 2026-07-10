@@ -273,8 +273,8 @@ const extractUploads = (text) => {
     // Skip if this is a SESI LIVE line
     if (/^JAM\s*(?:ONTIME)?/i.test(up)) continue;
 
-    // Extract number from end: "TIKTOK : 3 Video ✅" → 3, "TIKTOK : ✅" → 1
-    const afterColon = (line.split(':').slice(1).join(':')).trim();
+    // Extract number: handle both with and without colons (e.g. "TIKTOK : 3 Video" or "TIKTOK 3 Video")
+    const afterColon = line.includes(':') ? (line.split(':').slice(1).join(':')).trim() : line.trim();
     const numMatch = afterColon.match(/\d+/);
     // If there's a checkmark but no number → count as 1 video
     const hasCheck = /[✅☑️]/.test(afterColon);
