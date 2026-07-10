@@ -350,10 +350,32 @@ const extractLive = (text) => {
 // STEP 6: Extract chat / registrasi / FTD
 // ============================================================
 const extractField = (text, ...patterns) => {
+  const lines = text.split('\n').map(l => l.trim());
   for (const pattern of patterns) {
-    const re = new RegExp(`(?:${pattern})\\s*[:\\.]+[ \\t]*([^\\n\\r]+)`, 'i');
-    const m = text.match(re);
-    if (m) return toInt(m[1]);
+    const re = new RegExp(pattern, 'i');
+    for (let i = 0; i < lines.length; i++) {
+      if (re.test(lines[i])) {
+        // 1. Check same line after pattern (stripping leading colons, spaces, dashes)
+        const rest = lines[i].replace(re, '').replace(/^[:\.\-\s]+/, '').trim();
+        const numMatch = rest.match(/\d+/);
+        if (numMatch) {
+          return toInt(numMatch[0]);
+        }
+        
+        // 2. If same line has no number, look at the next lines (skipping empty lines, max 2 lines ahead)
+        for (let offset = 1; offset <= 2; offset++) {
+          if (i + offset < lines.length) {
+            const targetLine = lines[i + offset].trim();
+            if (targetLine === '') continue; // skip empty line
+            const numMatch = targetLine.match(/\d+/);
+            if (numMatch) {
+              return toInt(numMatch[0]);
+            }
+            break; // Stop if we hit a non-empty line without a number
+          }
+        }
+      }
+    }
   }
   return 0;
 };
@@ -604,9 +626,9 @@ export const parseMessageText = async (rawText) => {
 
   const uploads           = extractUploads(todayReportText);
   const liveDuration      = extractLive(todayReportText);
-  const chatCount         = extractField(todayReportText, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat');
-  const registrationCount = extractField(todayReportText, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi');
-  const ftdCount          = extractField(todayReportText, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)');
+  const chatCount         = extractField(todayReportText, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat', '^CHAT\\b');
+  const registrationCount = extractField(todayReportText, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi', '^REGISTRASI\\b');
+  const ftdCount          = extractField(todayReportText, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)', '^FTD\\b');
 
   const streamerId = await upsertStreamer(rawName, uploads);
   const report     = await upsertReport(
