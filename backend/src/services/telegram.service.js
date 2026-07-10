@@ -133,6 +133,16 @@ const parseDateString = (raw) => {
     }
   }
 
+  // Numeric dates: "10/07/2026", "10-07-2026", or "10.07.2026"
+  let numDateMatch = cleanRaw.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
+  if (numDateMatch) {
+    let day = numDateMatch[1].padStart(2, '0');
+    let month = numDateMatch[2].padStart(2, '0');
+    let year = numDateMatch[3];
+    if (year.length === 2) year = '20' + year;
+    return `${year}-${month}-${day}`;
+  }
+
   // Multi-date with comma: "18,19,20, sep 2025"
   let m = cleanRaw.match(/(\d{1,2})[,\/\s][\d,\/\s]*([A-Za-z]+)\s*(\d{4})/);
   if (m) return buildDate(m[1], m[2], m[3]);
@@ -216,6 +226,8 @@ const normalizeName = (raw) => {
   let name = raw.trim();
   // Strip leading "Streamer:" prefix
   name = name.replace(/^streamer\s*:\s*/i, '').trim();
+  // Strip leading "@" sign from Telegram username formats
+  name = name.replace(/^@+/, '').trim();
   // Strip leading/trailing emoji
   name = stripEmoji(name);
   // Remove special chars that aren't part of a name
@@ -402,7 +414,7 @@ const extractKategori = (text) => {
     return 'Streaming';
   }
 
-  if (up.includes('NON STREAMING') || up.includes('NONSTREAM')) {
+  if (up.includes('NON STREAMING') || up.includes('NONSTREAM') || up.includes('LIBUR') || up.includes('OFF') || up.includes('TIDAK LIVE')) {
     return 'Non Streaming';
   }
 
