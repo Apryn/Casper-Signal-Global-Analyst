@@ -51,17 +51,34 @@ const buildDate = (day, monthStr, year) => {
   return `${yr}-${month}-${String(day).padStart(2, '0')}`;
 };
 
+// Parse header date string into YYYY-MM-DD
+const parseHeaderDate = (dateStr) => {
+  if (!dateStr) return null;
+  const parts = dateStr.split(/[\/\.-]/);
+  if (parts.length === 3) {
+    let day = parts[0].padStart(2, '0');
+    let month = parts[1].padStart(2, '0');
+    let year = parts[2];
+    if (year.length === 2) {
+      year = '20' + year;
+    }
+    return `${year}-${month}-${day}`;
+  }
+  return null;
+};
+
 // ============================================================
 // STEP 1: Strip Telegram export message header
-// "[DD/MM/YYYY HH.MM] SenderName: ..."
+// "[DD/MM/YYYY HH.MM] SenderName: ..." (supports various separators)
 // ============================================================
 const stripTelegramHeader = (rawText) => {
-  const match = rawText.match(/^\[(\d{2})\/(\d{2})\/(\d{4})\s+[\d.:]+\]\s+[^:]+:\s*/);
+  const match = rawText.match(/^\[([\d/\.-]+)\s+([\d.:\s\w]+)\]\s+([^:]+):\s*/i);
   if (match) {
-    const fallbackDate = `${match[3]}-${match[2]}-${match[1]}`;
-    return { fallbackDate, body: rawText.slice(match[0].length).trim() };
+    const fallbackDate = parseHeaderDate(match[1]);
+    const fallbackSender = match[3].trim();
+    return { fallbackDate, fallbackSender, body: rawText.slice(match[0].length).trim() };
   }
-  return { fallbackDate: null, body: rawText.trim() };
+  return { fallbackDate: null, fallbackSender: null, body: rawText.trim() };
 };
 
 // ============================================================
@@ -135,6 +152,13 @@ const parseDateString = (raw) => {
 // STEP 3: Extract streamer name
 // ============================================================
 const extractName = (text) => {
+  // A0: Explicit "Nama : VALUE" or "NAMA: VALUE" field (highest priority)
+  const namaFieldMatch = text.match(/^NAMA\s*:\s*([^\n\r]+)/im);
+  if (namaFieldMatch) {
+    const candidate = normalizeName(namaFieldMatch[1]);
+    if (candidate) return candidate;
+  }
+
   // A: Lines with person emoji before name, allow optional leading whitespace
   // e.g. "👱🏻‍♀️ : Dara / katrinee_09"  "😎: laflanca/ Qamil"  "🙋🏼 : Anandarioo" "🤩:Ratu"
   const personEmojiRE = /^\s*[👱🙋😎👤👩👨🧑🤩✈]\S*?\s*:?\s*([^\n\r]+)/mu;
@@ -209,6 +233,8 @@ const normalizeName = (raw) => {
   const isDateOrNumber = /^[\d\s.,\/\-()]+$/;
   const containsYear = /\b\d{4}\b/;
   const containsMonth = /\b(?:jan|feb|mar|apr|mei|may|jun|jul|aug|agt|sep|okt|oct|nov|dec|des)[a-z]*\b/i;
+  // Reject strings that contain time/duration keywords like "2 jam", "3 sesi"
+  const containsDurationWord = /\b(?:jam|sesi|menit|detik|video|vidio)\b/i;
   
   if (
     dayNames.test(name) ||
@@ -216,6 +242,7 @@ const normalizeName = (raw) => {
     isDateOrNumber.test(name) ||
     containsYear.test(name) ||
     containsMonth.test(name) ||
+    containsDurationWord.test(name) ||
     name.length < 2
   ) {
     return null;
@@ -278,9 +305,21 @@ const extractLive = (text) => {
     return Math.round(total);
   }
 
-  // B: "LIVE : 5 JAM" or "LIVE: 5 JAM"
+  // B: "LIVE : 5 JAM" or "LIVE: 5 JAM" (same line)
   const liveJam = text.match(/\bLIVE\s*[:\s]+(\d+(?:[.,]\d+)?)\s*JAM/i);
   if (liveJam) return Math.round(parseFloat(liveJam[1].replace(',', '.')));
+
+  // B2: Multi-line LIVE block: "LIVE:\n2 jam\n2 jam" → sum all bare "X jam" lines after LIVE:
+  const liveBlockMatch = text.match(/\bLIVE\s*:\s*\n([\s\S]*?)(?=\n[A-Z]{2,}\s*:|$)/i);
+  if (liveBlockMatch) {
+    const blockLines = liveBlockMatch[1].split('\n');
+    let total = 0;
+    for (const bl of blockLines) {
+      const m = bl.trim().match(/^(\d+(?:[.,]\d+)?)\s*jam/i);
+      if (m) total += parseFloat(m[1].replace(',', '.'));
+    }
+    if (total > 0) return Math.round(total);
+  }
 
 
   // B: "YouTube : 6 jam" or "YouTube : 5 jam" inside SESI LIVE block
@@ -553,12 +592,13 @@ export const parseMessageText = async (rawText) => {
   }
 
   // ── SINGLE FORMAT ──
+  const { fallbackSender } = stripTelegramHeader(rawText);
   const parts = cleanBody.split(/^\s*[-_]+\s*$/m);
   const todayReportText = parts[0].trim();
 
   const tanggal   = parseDate(todayReportText, fallbackDate);
   const kategori  = extractKategori(todayReportText);
-  const rawName   = extractName(todayReportText);
+  const rawName   = extractName(todayReportText) || fallbackSender;
 
   if (!rawName) throw new Error('Nama streamer tidak ditemukan. Pastikan ada nama setelah header laporan.');
 
