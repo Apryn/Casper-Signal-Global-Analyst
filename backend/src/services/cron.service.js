@@ -2,6 +2,19 @@ import { query } from '../config/db.js';
 
 let bot = null;
 
+// Helper to get time and date in WIB (UTC+7) regardless of VPS local timezone
+const getWibHourAndDate = () => {
+  const now = new Date();
+  const wibTime = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
+  const wibDate = new Date(wibTime);
+  const hour = wibDate.getHours();
+  const year = wibDate.getFullYear();
+  const month = String(wibDate.getMonth() + 1).padStart(2, '0');
+  const day = String(wibDate.getDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+  return { hour, dateStr };
+};
+
 // Helper to push Telegram message if bot is active
 const sendTelegramNotification = async (message) => {
   console.log(`[Notification Engine]: ${message}`);
@@ -24,8 +37,8 @@ const sendTelegramNotification = async (message) => {
 /**
  * Checks for missing daily reports (runs at 22:00 local time)
  */
-export const checkMissingReports = async () => {
-  const todayStr = new Date().toISOString().split('T')[0];
+export const checkMissingReports = async (wibDateStr) => {
+  const todayStr = wibDateStr || getWibHourAndDate().dateStr;
   
   try {
     // Get all streamers
@@ -40,6 +53,17 @@ export const checkMissingReports = async () => {
       );
 
       if (reportCheck.rows.length === 0) {
+        // Double check if report reminder was already sent today to prevent duplicate spamming
+        const doubleCheck = await query(
+          `SELECT id FROM notifications 
+           WHERE streamer_id = $1 
+             AND type = 'Report Reminder' 
+             AND created_at::date = $2`,
+          [streamer.id, todayStr]
+        );
+
+        if (doubleCheck.rows.length > 0) continue;
+
         const message = `⚠️ Laporan Belum Dikirim: Streamer ${streamer.nama} belum mengirim laporan hari ini (${todayStr}).`;
         
         // Log to database
@@ -181,8 +205,8 @@ export const checkTargetAchievements = async () => {
 /**
  * Checks for daily live duration violations (runs at 23:00 local time)
  */
-export const checkMinLiveViolations = async () => {
-  const todayStr = new Date().toISOString().split('T')[0];
+export const checkMinLiveViolations = async (wibDateStr) => {
+  const todayStr = wibDateStr || getWibHourAndDate().dateStr;
   
   try {
     const result = await query(
@@ -198,13 +222,13 @@ export const checkMinLiveViolations = async () => {
     for (const row of result.rows) {
       const message = `⚠️ Pelanggaran Target: Streamer ${row.nama} melakukan live hanya ${row.live_duration} jam hari ini (di bawah standar minimal 4 jam).`;
       
-      // Verify duplicate check to prevent double writes
+      // Verify duplicate check to prevent double writes on the same day
       const doubleCheck = await query(
         `SELECT id FROM notifications 
          WHERE streamer_id = $1 
            AND message = $2 
-           AND created_at >= NOW() - INTERVAL '1 day'`,
-        [row.streamer_id, message]
+           AND created_at::date = $3`,
+        [row.streamer_id, message, todayStr]
       );
 
       if (doubleCheck.rows.length === 0) {
@@ -226,7 +250,7 @@ export const checkMinLiveViolations = async () => {
  */
 export const startCronJobs = (botInstance) => {
   bot = botInstance;
-  console.log('Cron Service Engine started (Interval checking enabled).');
+  console.log('Cron Service Engine started (WIB Timezone loop enabled).');
 
   // Run initial checks for target achievements & performance drops on boot
   setTimeout(() => {
@@ -234,28 +258,27 @@ export const startCronJobs = (botInstance) => {
     checkTargetAchievements();
   }, 5000);
 
-  // Run checking loop every hour
-  const ONE_HOUR = 60 * 60 * 1000;
+  // Run checking loop every 5 minutes (more robust to restarts and ticks)
+  const FIVE_MINUTES = 5 * 60 * 1000;
   setInterval(() => {
-    const now = new Date();
-    const hours = now.getHours();
+    const { hour, dateStr } = getWibHourAndDate();
     
-    console.log(`[Cron Engine Check] Hour: ${hours}:00`);
+    console.log(`[Cron Engine Check] Hour (WIB): ${hour}:00, Date (WIB): ${dateStr}`);
 
     // Check report submissions at 22:00 (10:00 PM) Indonesian time
-    if (hours === 22) {
-      checkMissingReports();
+    if (hour === 22) {
+      checkMissingReports(dateStr);
     }
 
     // Check minimum daily live hours standard at 23:00 (11:00 PM)
-    if (hours === 23) {
-      checkMinLiveViolations();
+    if (hour === 23) {
+      checkMinLiveViolations(dateStr);
     }
 
     // Run performance drop and milestone checks once daily at 09:00 AM
-    if (hours === 9) {
+    if (hour === 9) {
       checkPerformanceDrops();
       checkTargetAchievements();
     }
-  }, ONE_HOUR);
+  }, FIVE_MINUTES);
 };
