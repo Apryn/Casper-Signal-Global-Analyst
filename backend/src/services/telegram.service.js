@@ -214,6 +214,8 @@ const extractName = (text) => {
 const normalizeName = (raw) => {
   if (!raw) return null;
   let name = raw.trim();
+  // Strip leading "Streamer:" prefix
+  name = name.replace(/^streamer\s*:\s*/i, '').trim();
   // Strip leading/trailing emoji
   name = stripEmoji(name);
   // Remove special chars that aren't part of a name
@@ -575,6 +577,17 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
 export const parseMessageText = async (rawText) => {
   const { fallbackDate, body } = stripTelegramHeader(rawText);
   const cleanBody = body.replace(/\r/g, '');
+
+  // Reject bot confirmation logs cleanly
+  if (
+    cleanBody.includes('Laporan Berhasil Diproses') ||
+    cleanBody.includes('Laporan Gagal Diproses') ||
+    cleanBody.includes('tidak terdaftar di database') ||
+    cleanBody.includes('Format laporan salah') ||
+    cleanBody.includes('Pastikan format laporan sesuai template')
+  ) {
+    throw new Error('Pesan ini adalah konfirmasi/log bot, bukan laporan streamer.');
+  }
 
   // ── BULK FORMAT (Rival Suhanda) ──
   if (isBulkFormat(cleanBody)) {
