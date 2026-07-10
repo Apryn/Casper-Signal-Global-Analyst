@@ -133,6 +133,14 @@ const parseDateString = (raw) => {
     }
   }
 
+  // Handle slash ranges: "8/9 Juli 2025" or "8 / 9 Juli 2025"
+  const slashRange = cleanRaw.match(/^(\d{1,2})\s*[\/]\s*(\d{1,2})\s+([A-Za-z]+.*)$/);
+  if (slashRange) {
+    const secondPart = `${slashRange[2]} ${slashRange[3]}`.trim();
+    const d = parseDateString(secondPart);
+    if (d) return d;
+  }
+
   // Numeric dates: "10/07/2026", "10-07-2026", or "10.07.2026"
   let numDateMatch = cleanRaw.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
   if (numDateMatch) {
@@ -292,13 +300,13 @@ const extractUploads = (text) => {
     const hasCheck = /[✅☑️]/.test(afterColon);
     const count = numMatch ? parseInt(numMatch[0]) : (hasCheck ? 1 : 0);
 
-    if (/^TIK?\s*TOK/i.test(up)) {
+    if (/^(?:TIK?\s*TOK|TT)\b/i.test(up)) {
       tiktok += count;
-    } else if (/^YOUTUBE|^YT\b/i.test(up)) {
+    } else if (/^(?:YOUTUBE|YT|YUTUB|UTUBE|YOTUBE|YOUTUB)\b/i.test(up)) {
       youtube += count;
-    } else if (/^INSTAGRAM|^INSTAGRAM\s+REELS|^INSTAGRAM\s+FEELS/i.test(up)) {
+    } else if (/^(?:INSTAGRAM|IG|INSTA|REELS|REEL|FEELS)\b/i.test(up)) {
       instagram += count;
-    } else if (/^FACEBOOK/i.test(up)) {
+    } else if (/^(?:FACEBOOK|FB)\b/i.test(up)) {
       facebook += count;
     }
   }
