@@ -428,6 +428,49 @@ const Dashboard = () => {
         ))}
       </div>
 
+      {/* Today's Streamer Submission Status */}
+      <div className="glass-panel p-6 rounded-2xl border bg-slate-950/30">
+        <div className="flex items-center gap-2 mb-4 border-b border-dark-border pb-3">
+          <Users className="h-5 w-5 text-indigo-400" />
+          <h3 className="text-lg font-bold text-white tracking-wide">Status Setoran Laporan Streamer Hari Ini</h3>
+          <span className="ml-auto text-xs text-indigo-400 font-semibold uppercase bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+            WIB (Jakarta)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {summary?.todayReportsStatus?.map((item) => (
+            <div 
+              key={item.streamerId}
+              className={`p-3.5 rounded-xl border transition-all duration-200 ${
+                item.hasSubmitted 
+                  ? 'bg-emerald-950/10 border-emerald-500/20 shadow-[0_2px_10px_rgba(16,185,129,0.02)]' 
+                  : 'bg-rose-950/10 border-rose-500/20 shadow-[0_2px_10px_rgba(244,63,94,0.02)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-white">{item.nama}</span>
+                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${
+                  item.hasSubmitted 
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' 
+                    : 'bg-rose-500/15 text-rose-400 border-rose-500/25'
+                }`}>
+                  {item.hasSubmitted ? 'Sudah' : 'Belum'}
+                </span>
+              </div>
+              <div className="mt-2.5 text-[10px] text-gray-400 flex items-center justify-between">
+                <span>Platform: <strong className="text-gray-300">{item.platform}</strong></span>
+                {item.hasSubmitted && (
+                  <span className="font-semibold text-gray-300">
+                    Live: {item.liveDuration}h &bull; FTD: {item.ftdCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* AI Business Analyst Insights Card */}
       {aiReport && (
         <div className="glass-panel p-6 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/10 via-slate-950/30 to-cyan-950/5 shadow-[0_0_20px_rgba(99,102,241,0.04)] animate-fade-in">
