@@ -73,7 +73,10 @@ if ($pilihan -eq "1") {
     Write-Host "====================================================" -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "-> [VPS] Menghubungkan ke VPS dan menjalankan update..." -ForegroundColor Yellow
+    Write-Host "▶ [VPS] Mengupload file .env terbaru ke VPS..." -ForegroundColor Yellow
+    scp -o StrictHostKeyChecking=no (Join-Path $PSScriptRoot "backend\.env") "${VPS_USER}@${VPS_IP}:${APP_DIR}/backend/.env"
+
+    Write-Host "▶ [VPS] Menghubungkan ke VPS dan menjalankan update..." -ForegroundColor Yellow
 
     $REMOTE_COMMANDS = @"
 echo '-> Pull kode terbaru...'
