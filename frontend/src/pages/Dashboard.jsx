@@ -45,6 +45,138 @@ ChartJS.register(
   Filler
 );
 
+// Helper to parse bold (**) and italic (*)
+const parseBoldItalic = (text) => {
+  if (!text) return '';
+  const parts = [];
+  const regex = /(\*\*.*?\*\*|\*.*?\*)/g;
+  let match;
+  let lastIndex = 0;
+  
+  while ((match = regex.exec(text)) !== null) {
+    const matchIndex = match.index;
+    const matchStr = match[0];
+    
+    if (matchIndex > lastIndex) {
+      parts.push(text.substring(lastIndex, matchIndex));
+    }
+    
+    if (matchStr.startsWith('**') && matchStr.endsWith('**')) {
+      parts.push(
+        <strong key={matchIndex} className="font-semibold text-indigo-300">
+          {matchStr.slice(2, -2)}
+        </strong>
+      );
+    } else if (matchStr.startsWith('*') && matchStr.endsWith('*')) {
+      parts.push(
+        <em key={matchIndex} className="italic text-slate-300">
+          {matchStr.slice(1, -1)}
+        </em>
+      );
+    }
+    
+    lastIndex = regex.lastIndex;
+  }
+  
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+  
+  return parts.length > 0 ? parts : text;
+};
+
+// Helper to convert Markdown structure to styled React elements
+const renderMarkdown = (text) => {
+  if (!text) return null;
+  
+  const lines = text.split('\n');
+  const elements = [];
+  let currentList = [];
+  let listType = null; // 'bullet' | 'number' | null
+  
+  const flushList = (key) => {
+    if (currentList.length === 0) return;
+    if (listType === 'bullet') {
+      elements.push(<ul key={key} className="space-y-1.5 mb-4 list-disc pl-5 text-slate-300">{...currentList}</ul>);
+    } else if (listType === 'number') {
+      elements.push(<ol key={key} className="space-y-2 mb-4 list-decimal pl-5 text-slate-300">{...currentList}</ol>);
+    }
+    currentList = [];
+    listType = null;
+  };
+
+  lines.forEach((line, idx) => {
+    const cleanLine = line.trim();
+    if (cleanLine === '') return;
+    
+    const isBullet = cleanLine.startsWith('-') || (cleanLine.startsWith('*') && !cleanLine.startsWith('**'));
+    const numberedMatch = cleanLine.match(/^(\d+)\.\s*(.*)/);
+
+    if (isBullet) {
+      if (listType !== 'bullet') {
+        flushList(`flush-pre-${idx}`);
+        listType = 'bullet';
+      }
+      const content = cleanLine.replace(/^[-\*]\s*/, '');
+      currentList.push(
+        <li key={`li-${idx}`} className="text-xs leading-relaxed text-slate-300 pl-1">
+          {parseBoldItalic(content)}
+        </li>
+      );
+    } else if (numberedMatch) {
+      if (listType !== 'number') {
+        flushList(`flush-pre-${idx}`);
+        listType = 'number';
+      }
+      const content = numberedMatch[2];
+      currentList.push(
+        <li key={`li-${idx}`} className="text-xs leading-relaxed text-slate-300 pl-1">
+          {parseBoldItalic(content)}
+        </li>
+      );
+    } else {
+      if (listType) {
+        flushList(`flush-end-${idx}`);
+      }
+      
+      if (cleanLine.startsWith('###')) {
+        const content = cleanLine.replace(/^###\s*/, '');
+        elements.push(
+          <h4 key={idx} className="text-sm font-bold text-white mt-5 mb-2 first:mt-0 glow-text-primary border-b border-indigo-500/10 pb-1.5">
+            {parseBoldItalic(content)}
+          </h4>
+        );
+      } else if (cleanLine.startsWith('##')) {
+        const content = cleanLine.replace(/^##\s*/, '');
+        elements.push(
+          <h3 key={idx} className="text-base font-bold text-white mt-6 mb-3 first:mt-0 glow-text-primary">
+            {parseBoldItalic(content)}
+          </h3>
+        );
+      } else if (cleanLine.startsWith('#')) {
+        const content = cleanLine.replace(/^#\s*/, '');
+        elements.push(
+          <h2 key={idx} className="text-lg font-extrabold text-white mt-7 mb-4 first:mt-0 glow-text-primary">
+            {parseBoldItalic(content)}
+          </h2>
+        );
+      } else {
+        elements.push(
+          <p key={idx} className="text-xs text-slate-300 mb-3 leading-relaxed">
+            {parseBoldItalic(cleanLine)}
+          </p>
+        );
+      }
+    }
+  });
+  
+  if (listType) {
+    flushList(`flush-final`);
+  }
+  
+  return elements;
+};
+
 const Dashboard = () => {
   const [range, setRange] = useState('30days');
   const [loading, setLoading] = useState(true);
@@ -485,8 +617,8 @@ const Dashboard = () => {
               {aiReport.isAI ? 'Gemini AI' : 'Rule-Based Engine'}
             </span>
           </div>
-          <div className="text-xs text-gray-300 whitespace-pre-line leading-relaxed font-normal">
-            {aiReport.report}
+          <div className="text-xs text-slate-300 leading-relaxed font-normal space-y-1">
+            {renderMarkdown(aiReport.report)}
           </div>
         </div>
       )}
