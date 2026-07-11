@@ -8,44 +8,41 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for saved token and user on startup
+    // Check for saved token on startup
     const token = localStorage.getItem('casper_token');
     const storedUser = localStorage.getItem('casper_user');
-    
+
     if (token && storedUser) {
       try {
         setUser(JSON.parse(storedUser));
-        
-        // Optionally verify token with /auth/me
+
+        // Verify token is still valid
         api.get('/auth/me')
           .then((res) => {
             setUser(res.data);
             localStorage.setItem('casper_user', JSON.stringify(res.data));
           })
-          .catch((err) => {
-            console.error('Failed to verify token on boot:', err);
+          .catch(() => {
             logout();
           });
       } catch (e) {
-        console.error('Error parsing stored user:', e);
         logout();
       }
     }
     setLoading(false);
   }, []);
 
-  const login = async (username, password) => {
+  const login = async (activationCode) => {
     try {
-      const res = await api.post('/auth/login', { username, password });
+      const res = await api.post('/auth/login', { activationCode });
       const { token, user: userData } = res.data;
-      
+
       localStorage.setItem('casper_token', token);
       localStorage.setItem('casper_user', JSON.stringify(userData));
       setUser(userData);
       return { success: true };
     } catch (err) {
-      console.error('Login error in AuthContext:', err);
-      const errMsg = err.response?.data?.message || 'Login failed. Please check credentials.';
+      const errMsg = err.response?.data?.message || 'Kode aktivasi salah.';
       return { success: false, error: errMsg };
     }
   };

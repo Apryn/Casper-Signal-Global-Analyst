@@ -428,6 +428,49 @@ const Dashboard = () => {
         ))}
       </div>
 
+      {/* Today's Streamer Submission Status */}
+      <div className="glass-panel p-6 rounded-2xl border bg-slate-950/30">
+        <div className="flex items-center gap-2 mb-4 border-b border-dark-border pb-3">
+          <Users className="h-5 w-5 text-indigo-400" />
+          <h3 className="text-lg font-bold text-white tracking-wide">Status Setoran Laporan Streamer Hari Ini</h3>
+          <span className="ml-auto text-xs text-indigo-400 font-semibold uppercase bg-indigo-500/10 px-3 py-1 rounded-full border border-indigo-500/20">
+            {new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {summary?.todayReportsStatus?.map((item) => (
+            <div 
+              key={item.streamerId}
+              className={`p-3.5 rounded-xl border transition-all duration-200 ${
+                item.hasSubmitted 
+                  ? 'bg-emerald-950/10 border-emerald-500/20 shadow-[0_2px_10px_rgba(16,185,129,0.02)]' 
+                  : 'bg-rose-950/10 border-rose-500/20 shadow-[0_2px_10px_rgba(244,63,94,0.02)]'
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-white">{item.nama}</span>
+                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider border ${
+                  item.hasSubmitted 
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25' 
+                    : 'bg-rose-500/15 text-rose-400 border-rose-500/25'
+                }`}>
+                  {item.hasSubmitted ? 'Sudah' : 'Belum'}
+                </span>
+              </div>
+              <div className="mt-2.5 text-[10px] text-gray-400 flex items-center justify-between">
+                <span>Platform: <strong className="text-gray-300">{item.platform}</strong></span>
+                {item.hasSubmitted && (
+                  <span className="font-semibold text-gray-300">
+                    Live: {item.liveDuration}h &bull; FTD: {item.ftdCount}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* AI Business Analyst Insights Card */}
       {aiReport && (
         <div className="glass-panel p-6 rounded-2xl border border-indigo-500/20 bg-gradient-to-br from-indigo-950/10 via-slate-950/30 to-cyan-950/5 shadow-[0_0_20px_rgba(99,102,241,0.04)] animate-fade-in">
@@ -484,194 +527,6 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Streaming vs Non Streaming comparison */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Comparison Header Card */}
-        <div className="glass-panel p-6 rounded-2xl flex flex-col justify-between bg-slate-950/30">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Layers className="h-5 w-5 text-indigo-400" />
-              <h3 className="text-lg font-bold text-white">Streaming vs. Non-Streaming</h3>
-            </div>
-            <p className="text-sm text-gray-400">
-              Analyze performance differences between active livestreams and generic offline uploads.
-            </p>
-          </div>
-          
-          <div className="mt-6 space-y-4">
-            <div className="flex justify-between border-b border-dark-border pb-2">
-              <span className="text-xs text-gray-400">Active Streamers (Streaming)</span>
-              <strong className="text-indigo-400 text-sm">{comparison?.streaming?.streamers || 0}</strong>
-            </div>
-            <div className="flex justify-between border-b border-dark-border pb-2">
-              <span className="text-xs text-gray-400">Active Creators (Non-Streaming)</span>
-              <strong className="text-cyan-400 text-sm">{comparison?.nonStreaming?.streamers || 0}</strong>
-            </div>
-            <div className="flex justify-between pb-2">
-              <span className="text-xs text-gray-400">Date Range Covered</span>
-              <strong className="text-white text-xs uppercase tracking-wider">{range}</strong>
-            </div>
-          </div>
-        </div>
-
-        {/* Details Breakdowns */}
-        <div className="lg:col-span-2 glass-panel p-6 rounded-2xl grid grid-cols-1 sm:grid-cols-2 gap-6 bg-slate-950/30">
-          
-          {/* FTDs Conversion Ratio */}
-          <div className="space-y-4 p-4 rounded-xl border border-dark-border bg-slate-900/20">
-            <h4 className="text-sm font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
-              <Coins className="h-4 w-4" />
-              FTD Acquisitions
-            </h4>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Streaming</span>
-                  <span className="font-bold text-indigo-400">{comparison?.streaming?.ftds || 0} FTDs</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.streaming?.ftds || 0) / Math.max(1, (comparison?.streaming?.ftds || 0) + (comparison?.nonStreaming?.ftds || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Non-Streaming</span>
-                  <span className="font-bold text-cyan-400">{comparison?.nonStreaming?.ftds || 0} FTDs</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-cyan-400 to-cyan-500 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.nonStreaming?.ftds || 0) / Math.max(1, (comparison?.streaming?.ftds || 0) + (comparison?.nonStreaming?.ftds || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Registrations Comparison */}
-          <div className="space-y-4 p-4 rounded-xl border border-dark-border bg-slate-900/20">
-            <h4 className="text-sm font-bold text-amber-400 uppercase tracking-wide flex items-center gap-1.5">
-              <UserCheck className="h-4 w-4" />
-              Registrations
-            </h4>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Streaming</span>
-                  <span className="font-bold text-indigo-400">{comparison?.streaming?.registrations || 0} Regs</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.streaming?.registrations || 0) / Math.max(1, (comparison?.streaming?.registrations || 0) + (comparison?.nonStreaming?.registrations || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Non-Streaming</span>
-                  <span className="font-bold text-cyan-400">{comparison?.nonStreaming?.registrations || 0} Regs</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-cyan-400 to-cyan-500 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.nonStreaming?.registrations || 0) / Math.max(1, (comparison?.streaming?.registrations || 0) + (comparison?.nonStreaming?.registrations || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Chat count comparison */}
-          <div className="space-y-4 p-4 rounded-xl border border-dark-border bg-slate-900/20">
-            <h4 className="text-sm font-bold text-cyan-400 uppercase tracking-wide flex items-center gap-1.5">
-              <MessageSquare className="h-4 w-4" />
-              Chat Engagement
-            </h4>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Streaming</span>
-                  <span className="font-bold text-indigo-400">{comparison?.streaming?.chats.toLocaleString()}</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.streaming?.chats || 0) / Math.max(1, (comparison?.streaming?.chats || 0) + (comparison?.nonStreaming?.chats || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Non-Streaming</span>
-                  <span className="font-bold text-cyan-400">{comparison?.nonStreaming?.chats.toLocaleString()}</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-cyan-400 to-cyan-500 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.nonStreaming?.chats || 0) / Math.max(1, (comparison?.streaming?.chats || 0) + (comparison?.nonStreaming?.chats || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Content uploads comparison */}
-          <div className="space-y-4 p-4 rounded-xl border border-dark-border bg-slate-900/20">
-            <h4 className="text-sm font-bold text-pink-400 uppercase tracking-wide flex items-center gap-1.5">
-              <Video className="h-4 w-4" />
-              Content Uploads
-            </h4>
-            <div className="space-y-3">
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Streaming</span>
-                  <span className="font-bold text-indigo-400">{comparison?.streaming?.uploads} uploads</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-indigo-500 to-indigo-600 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.streaming?.uploads || 0) / Math.max(1, (comparison?.streaming?.uploads || 0) + (comparison?.nonStreaming?.uploads || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-xs text-gray-300 mb-1">
-                  <span>Non-Streaming</span>
-                  <span className="font-bold text-cyan-400">{comparison?.nonStreaming?.uploads} uploads</span>
-                </div>
-                <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-cyan-400 to-cyan-500 h-full rounded-full transition-all duration-500" 
-                    style={{ 
-                      width: `${Math.min(100, ((comparison?.nonStreaming?.uploads || 0) / Math.max(1, (comparison?.streaming?.uploads || 0) + (comparison?.nonStreaming?.uploads || 0))) * 100)}%` 
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
 
     </div>
   );

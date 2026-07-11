@@ -71,17 +71,34 @@ const buildDate = (day, monthStr, year) => {
   return `${yr}-${month}-${String(day).padStart(2, '0')}`;
 };
 
+// Parse header date string into YYYY-MM-DD
+const parseHeaderDate = (dateStr) => {
+  if (!dateStr) return null;
+  const parts = dateStr.split(/[\/\.-]/);
+  if (parts.length === 3) {
+    let day = parts[0].padStart(2, '0');
+    let month = parts[1].padStart(2, '0');
+    let year = parts[2];
+    if (year.length === 2) {
+      year = '20' + year;
+    }
+    return `${year}-${month}-${day}`;
+  }
+  return null;
+};
+
 // ============================================================
 // STEP 1: Strip Telegram export message header
-// "[DD/MM/YYYY HH.MM] SenderName: ..."
+// "[DD/MM/YYYY HH.MM] SenderName: ..." (supports various separators)
 // ============================================================
 const stripTelegramHeader = (rawText) => {
-  const match = rawText.match(/^\[(\d{2})\/(\d{2})\/(\d{4})\s+[\d.:]+\]\s+[^:]+:\s*/);
+  const match = rawText.match(/^\[([\d/\.-]+)\s+([\d.:\s\w]+)\]\s+([^:]+):\s*/i);
   if (match) {
-    const fallbackDate = `${match[3]}-${match[2]}-${match[1]}`;
-    return { fallbackDate, body: rawText.slice(match[0].length).trim() };
+    const fallbackDate = parseHeaderDate(match[1]);
+    const fallbackSender = match[3].trim();
+    return { fallbackDate, fallbackSender, body: rawText.slice(match[0].length).trim() };
   }
-  return { fallbackDate: null, body: rawText.trim() };
+  return { fallbackDate: null, fallbackSender: null, body: rawText.trim() };
 };
 
 // ============================================================
@@ -136,6 +153,24 @@ const parseDateString = (raw) => {
     }
   }
 
+  // Handle slash ranges: "8/9 Juli 2025" or "8 / 9 Juli 2025"
+  const slashRange = cleanRaw.match(/^(\d{1,2})\s*[\/]\s*(\d{1,2})\s+([A-Za-z]+.*)$/);
+  if (slashRange) {
+    const secondPart = `${slashRange[2]} ${slashRange[3]}`.trim();
+    const d = parseDateString(secondPart);
+    if (d) return d;
+  }
+
+  // Numeric dates: "10/07/2026", "10-07-2026", or "10.07.2026"
+  let numDateMatch = cleanRaw.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/);
+  if (numDateMatch) {
+    let day = numDateMatch[1].padStart(2, '0');
+    let month = numDateMatch[2].padStart(2, '0');
+    let year = numDateMatch[3];
+    if (year.length === 2) year = '20' + year;
+    return `${year}-${month}-${day}`;
+  }
+
   // Multi-date with comma: "18,19,20, sep 2025"
   let m = cleanRaw.match(/(\d{1,2})[,\/\s][\d,\/\s]*([A-Za-z]+)\s*(\d{4})/);
   if (m) return buildDate(m[1], m[2], m[3]);
@@ -152,9 +187,8 @@ const parseDateString = (raw) => {
 };
 
 // ============================================================
-// STEP 3: Extract streamer name
 const extractName = (text) => {
-  // A0: Explicit "Nama : [Name]" line check
+  // A0: Explicit "Nama : VALUE" or "NAMA: VALUE" field check (highest priority)
   const explicitNameMatch = text.match(/^\s*Nama\s*:\s*([^\n\r]+)/mi);
   if (explicitNameMatch) {
     const candidate = normalizeName(explicitNameMatch[1]);
@@ -216,6 +250,10 @@ const extractName = (text) => {
 const normalizeName = (raw) => {
   if (!raw) return null;
   let name = raw.trim();
+  // Strip leading "Streamer:" prefix
+  name = name.replace(/^streamer\s*:\s*/i, '').trim();
+  // Strip leading "@" sign from Telegram username formats
+  name = name.replace(/^@+/, '').trim();
   // Strip leading/trailing emoji
   name = stripEmoji(name);
   // Remove special chars that aren't part of a name
@@ -235,6 +273,8 @@ const normalizeName = (raw) => {
   const isDateOrNumber = /^[\d\s.,\/\-()]+$/;
   const containsYear = /\b\d{4}\b/;
   const containsMonth = /\b(?:jan|feb|mar|apr|mei|may|jun|jul|aug|agt|sep|okt|oct|nov|dec|des)[a-z]*\b/i;
+  // Reject strings that contain time/duration keywords like "2 jam", "3 sesi"
+  const containsDurationWord = /\b(?:jam|sesi|menit|detik|video|vidio)\b/i;
   
   if (
     dayNames.test(name) ||
@@ -242,6 +282,7 @@ const normalizeName = (raw) => {
     isDateOrNumber.test(name) ||
     containsYear.test(name) ||
     containsMonth.test(name) ||
+    containsDurationWord.test(name) ||
     name.length < 2
   ) {
     return null;
@@ -249,7 +290,7 @@ const normalizeName = (raw) => {
 
   // Reject group admins/hosts who are not streamers
   const excludedStreamers = [
-    'apriyan', 'admin casper', 'stevan', 'kuro trade', 'alwi komar', 'casperbot', 'casper bot'
+    'apriyan', 'stevan', 'kuro trade', 'alwi komar', 'casperbot', 'casper bot'
   ];
   if (excludedStreamers.includes(name.toLowerCase().trim())) {
     return null;
@@ -270,20 +311,20 @@ const extractUploads = (text) => {
     // Skip if this is a SESI LIVE line
     if (/^JAM\s*(?:ONTIME)?/i.test(up)) continue;
 
-    // Extract number from end: "TIKTOK : 3 Video ✅" → 3, "TIKTOK : ✅" → 1
-    const afterColon = (line.split(':').slice(1).join(':')).trim();
+    // Extract number: handle both with and without colons (e.g. "TIKTOK : 3 Video" or "TIKTOK 3 Video")
+    const afterColon = line.includes(':') ? (line.split(':').slice(1).join(':')).trim() : line.trim();
     const numMatch = afterColon.match(/\d+/);
     // If there's a checkmark but no number → count as 1 video
     const hasCheck = /[✅☑️]/.test(afterColon);
     const count = numMatch ? parseInt(numMatch[0]) : (hasCheck ? 1 : 0);
 
-    if (/^TIK?\s*TOK/i.test(up)) {
+    if (/^(?:TIK?\s*TOK|TT)\b/i.test(up)) {
       tiktok += count;
-    } else if (/^YOUTUBE|^YT\b/i.test(up)) {
+    } else if (/^(?:YOUTUBE|YT|YUTUB|UTUBE|YOTUBE|YOUTUB)\b/i.test(up)) {
       youtube += count;
-    } else if (/^INSTAGRAM|^INSTAGRAM\s+REELS|^INSTAGRAM\s+FEELS/i.test(up)) {
+    } else if (/^(?:INSTAGRAM|IG|INSTA|REELS|REEL|FEELS)\b/i.test(up)) {
       instagram += count;
-    } else if (/^FACEBOOK/i.test(up)) {
+    } else if (/^(?:FACEBOOK|FB)\b/i.test(up)) {
       facebook += count;
     }
   }
@@ -304,9 +345,21 @@ const extractLive = (text) => {
     return Math.round(total);
   }
 
-  // B: "LIVE : 5 JAM" or "LIVE: 5 JAM"
+  // B: "LIVE : 5 JAM" or "LIVE: 5 JAM" (same line)
   const liveJam = text.match(/\bLIVE\s*[:\s]+(\d+(?:[.,]\d+)?)\s*JAM/i);
   if (liveJam) return Math.round(parseFloat(liveJam[1].replace(',', '.')));
+
+  // B2: Multi-line LIVE block: "LIVE:\n2 jam\n2 jam" → sum all bare "X jam" lines after LIVE:
+  const liveBlockMatch = text.match(/\bLIVE\s*:\s*\n([\s\S]*?)(?=\n[A-Z]{2,}\s*:|$)/i);
+  if (liveBlockMatch) {
+    const blockLines = liveBlockMatch[1].split('\n');
+    let total = 0;
+    for (const bl of blockLines) {
+      const m = bl.trim().match(/^(\d+(?:[.,]\d+)?)\s*jam/i);
+      if (m) total += parseFloat(m[1].replace(',', '.'));
+    }
+    if (total > 0) return Math.round(total);
+  }
 
 
   // B: "YouTube : 6 jam" or "YouTube : 5 jam" inside SESI LIVE block
@@ -337,10 +390,32 @@ const extractLive = (text) => {
 // STEP 6: Extract chat / registrasi / FTD
 // ============================================================
 const extractField = (text, ...patterns) => {
+  const lines = text.split('\n').map(l => l.trim());
   for (const pattern of patterns) {
-    const re = new RegExp(`(?:${pattern})\\s*[:\\.]+[ \\t]*([^\\n\\r]+)`, 'i');
-    const m = text.match(re);
-    if (m) return toInt(m[1]);
+    const re = new RegExp(pattern, 'i');
+    for (let i = 0; i < lines.length; i++) {
+      if (re.test(lines[i])) {
+        // 1. Check same line after pattern (stripping leading colons, spaces, dashes)
+        const rest = lines[i].replace(re, '').replace(/^[:\.\-\s]+/, '').trim();
+        const numMatch = rest.match(/\d+/);
+        if (numMatch) {
+          return toInt(numMatch[0]);
+        }
+        
+        // 2. If same line has no number, look at the next lines (skipping empty lines, max 2 lines ahead)
+        for (let offset = 1; offset <= 2; offset++) {
+          if (i + offset < lines.length) {
+            const targetLine = lines[i + offset].trim();
+            if (targetLine === '') continue; // skip empty line
+            const numMatch = targetLine.match(/\d+/);
+            if (numMatch) {
+              return toInt(numMatch[0]);
+            }
+            break; // Stop if we hit a non-empty line without a number
+          }
+        }
+      }
+    }
   }
   return 0;
 };
@@ -349,9 +424,30 @@ const extractField = (text, ...patterns) => {
 // STEP 7: Kategori
 // ============================================================
 const extractKategori = (text) => {
-  const up = text.toUpperCase();
-  if (up.includes('NON STREAMING') || up.includes('NONSTREAM')) return 'Non Streaming';
-  if (up.includes('STREAMING')) return 'Streaming';
+  // Get first part before any divider lines
+  const parts = text.split(/^\s*[-_]+\s*$/m);
+  let firstPart = parts[0].trim();
+
+  // Remove the joint placeholder "STREAMING NON STREAMING" or "STREAMING NONSTREAMING"
+  firstPart = firstPart.replace(/STREAMING\s+NON\s*STREAMING/i, '');
+  firstPart = firstPart.replace(/STREAMING\s+NON\s*STREAM/i, '');
+
+  const up = firstPart.toUpperCase();
+
+  // If there's any live duration parsed in the first part, it must be Streaming
+  const liveHours = extractLive(firstPart);
+  if (liveHours > 0) {
+    return 'Streaming';
+  }
+
+  if (up.includes('NON STREAMING') || up.includes('NONSTREAM') || up.includes('LIBUR') || up.includes('OFF') || up.includes('TIDAK LIVE')) {
+    return 'Non Streaming';
+  }
+
+  if (up.includes('STREAMING')) {
+    return 'Streaming';
+  }
+
   return 'Streaming';
 };
 
@@ -429,6 +525,7 @@ const upsertStreamer = async (rawName, uploads) => {
     // Brayy
     'brayy candle'    : 'Brayy',
     'brayy'           : 'Brayy',
+    'arief lutfi'     : 'Brayy',
     // Laflanca = Qamil Alvaro
     'laflanca'        : 'Laflanca',
     'qamil alvaro'    : 'Laflanca',
@@ -440,6 +537,7 @@ const upsertStreamer = async (rawName, uploads) => {
     // Katrineely
     'katrineely'      : 'Katrineely',
     'katrine'         : 'Katrineely',
+    'dara'            : 'Katrineely',
     // Keylaa
     'keylaa'          : 'Keylaa',
     'keyla'           : 'Keylaa',
@@ -448,11 +546,12 @@ const upsertStreamer = async (rawName, uploads) => {
     'bg chen'         : 'BG Chenn',
     'bgchenn'         : 'BG Chenn',
     'bgchen'          : 'BG Chenn',
+    'anandarioo'      : 'BG Chenn',
   };
 
   const lowerName = name.toLowerCase().trim();
   const NON_STREAMERS = [
-    'admin casper', 'stevan', 'kuro trade', 'kurotrade',
+    'stevan', 'kuro trade', 'kurotrade',
     'alwi komar', 'apriyan', 'casperbot', 'casper bot'
   ];
   if (NON_STREAMERS.includes(lowerName)) {
@@ -473,21 +572,8 @@ const upsertStreamer = async (rawName, uploads) => {
     if (res.rows.length > 0) return res.rows[0].id;
   }
 
-  // Determine main platform
-  let platform = 'TikTok';
-  if (uploads.youtube > uploads.tiktok) platform = 'YouTube';
-  else if (uploads.instagram > uploads.tiktok) platform = 'Instagram';
-
-  const ins = await query(
-    `INSERT INTO streamers (nama, platform)
-     VALUES ($1, $2)
-     ON CONFLICT (nama) DO UPDATE SET platform = EXCLUDED.platform
-     RETURNING id`,
-    [name, platform]
-  );
-
-  console.log(`[Parser] Auto-created streamer: ${name}`);
-  return ins.rows[0].id;
+  // Instead of auto-creating, throw an error to keep database clean
+  throw new Error(`Streamer "${name}" tidak terdaftar di database.`);
 };
 
 const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration, chatCount, registrationCount, ftdCount, rawMessage) => {
@@ -528,11 +614,23 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
 // ============================================================
 export const parseMessageText = async (rawText) => {
   const { fallbackDate, body } = stripTelegramHeader(rawText);
+  const cleanBody = body.replace(/\r/g, '');
+
+  // Reject bot confirmation logs cleanly
+  if (
+    cleanBody.includes('Laporan Berhasil Diproses') ||
+    cleanBody.includes('Laporan Gagal Diproses') ||
+    cleanBody.includes('tidak terdaftar di database') ||
+    cleanBody.includes('Format laporan salah') ||
+    cleanBody.includes('Pastikan format laporan sesuai template')
+  ) {
+    throw new Error('Pesan ini adalah konfirmasi/log bot, bukan laporan streamer.');
+  }
 
   // ── BULK FORMAT (Rival Suhanda) ──
-  if (isBulkFormat(body)) {
-    const date = parseDate(body, fallbackDate);
-    const blocks = parseBulkBlocks(body, date);
+  if (isBulkFormat(cleanBody)) {
+    const date = parseDate(cleanBody, fallbackDate);
+    const blocks = parseBulkBlocks(cleanBody, date);
     if (blocks.length === 0) throw new Error('Format bulk terdeteksi tapi tidak ada data streamer.');
 
     const results = [];
@@ -567,17 +665,21 @@ export const parseMessageText = async (rawText) => {
   }
 
   // ── SINGLE FORMAT ──
-  const tanggal   = parseDate(body, fallbackDate);
-  const kategori  = extractKategori(body);
-  const rawName   = extractName(body);
+  const { fallbackSender } = stripTelegramHeader(rawText);
+  const parts = cleanBody.split(/^\s*[-_]+\s*$/m);
+  const todayReportText = parts[0].trim();
+
+  const tanggal   = parseDate(todayReportText, fallbackDate);
+  const kategori  = extractKategori(todayReportText);
+  const rawName   = extractName(todayReportText) || fallbackSender;
 
   if (!rawName) throw new Error('Nama streamer tidak ditemukan. Pastikan ada nama setelah header laporan.');
 
-  const uploads           = extractUploads(body);
-  const liveDuration      = extractLive(body);
-  const chatCount         = extractField(body, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat');
-  const registrationCount = extractField(body, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi');
-  const ftdCount          = extractField(body, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)');
+  const uploads           = extractUploads(todayReportText);
+  const liveDuration      = extractLive(todayReportText);
+  const chatCount         = extractField(todayReportText, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat', '^CHAT\\b');
+  const registrationCount = extractField(todayReportText, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi', '^REGISTRASI\\b');
+  const ftdCount          = extractField(todayReportText, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)', '^FTD\\b');
 
   const streamerId = await upsertStreamer(rawName, uploads);
   const report     = await upsertReport(

@@ -62,7 +62,13 @@ export const getDashboardSummary = async (req, res) => {
     const rangeMetrics = rangeMetricsRes.rows[0];
 
     // 4. Metrics for TODAY specifically (as requested by layout)
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayTimeStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
+    const wibDate = new Date(todayTimeStr);
+    const year = wibDate.getFullYear();
+    const month = String(wibDate.getMonth() + 1).padStart(2, '0');
+    const day = String(wibDate.getDate()).padStart(2, '0');
+    const todayStr = `${year}-${month}-${day}`;
+
     const todayMetricsRes = await query(
       `SELECT 
         COALESCE(SUM(live_duration), 0) as live_duration,
@@ -75,6 +81,29 @@ export const getDashboardSummary = async (req, res) => {
       [todayStr]
     );
     const todayMetrics = todayMetricsRes.rows[0];
+
+    // 5. Today's report submission status per streamer (WIB)
+    const todayReportsStatusRes = await query(
+      `SELECT 
+        s.id,
+        s.nama,
+        s.platform,
+        CASE WHEN r.id IS NOT NULL THEN TRUE ELSE FALSE END as has_submitted,
+        r.live_duration,
+        r.ftd_count
+       FROM streamers s
+       LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal = $1
+       ORDER BY s.nama ASC`,
+      [todayStr]
+    );
+    const todayReportsStatus = todayReportsStatusRes.rows.map(row => ({
+      streamerId: row.id,
+      nama: row.nama,
+      platform: row.platform,
+      hasSubmitted: row.has_submitted,
+      liveDuration: row.live_duration ? parseFloat(row.live_duration) : 0,
+      ftdCount: row.ftd_count ? parseInt(row.ftd_count, 10) : 0
+    }));
 
     res.json({
       range,
@@ -95,7 +124,8 @@ export const getDashboardSummary = async (req, res) => {
         chats: parseInt(todayMetrics.chats, 10),
         registrations: parseInt(todayMetrics.registrations, 10),
         ftds: parseInt(todayMetrics.ftds, 10)
-      }
+      },
+      todayReportsStatus
     });
   } catch (error) {
     console.error('Error fetching dashboard summary:', error);

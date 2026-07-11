@@ -332,6 +332,15 @@ const Reports = () => {
     setKategori('');
   };
 
+  const totalTiktok = reports.reduce((sum, r) => sum + (r.tiktok_upload || 0), 0);
+  const totalYoutube = reports.reduce((sum, r) => sum + (r.youtube_upload || 0), 0);
+  const totalInstagram = reports.reduce((sum, r) => sum + (r.instagram_upload || 0), 0);
+  const totalFacebook = reports.reduce((sum, r) => sum + (r.facebook_upload || 0), 0);
+  const totalLive = reports.reduce((sum, r) => sum + parseFloat(r.live_duration || 0), 0);
+  const totalChats = reports.reduce((sum, r) => sum + (r.chat_count || 0), 0);
+  const totalRegs = reports.reduce((sum, r) => sum + (r.registration_count || 0), 0);
+  const totalFtds = reports.reduce((sum, r) => sum + (r.ftd_count || 0), 0);
+
   return (
     <div className="space-y-6">
       
@@ -515,6 +524,23 @@ const Reports = () => {
                 ))
               )}
             </tbody>
+            {reports.length > 0 && !loading && (
+              <tfoot className="border-t-2 border-dark-border bg-slate-950/80 text-xs font-bold text-white uppercase">
+                <tr className="bg-slate-950/60">
+                  <td className="py-4 px-6 text-gray-400">Total</td>
+                  <td className="py-4 px-4 text-gray-400">({reports.length} Laporan)</td>
+                  <td className="py-4 px-4 text-center">{totalTiktok}</td>
+                  <td className="py-4 px-4 text-center">{totalYoutube}</td>
+                  <td className="py-4 px-4 text-center">{totalInstagram}</td>
+                  <td className="py-4 px-4 text-center">{totalFacebook}</td>
+                  <td className="py-4 px-4 text-center text-indigo-400 font-mono">{totalLive.toFixed(1)}h</td>
+                  <td className="py-4 px-4 text-right font-mono">{totalChats.toLocaleString()}</td>
+                  <td className="py-4 px-4 text-right font-mono text-amber-500">{totalRegs}</td>
+                  <td className="py-4 px-4 text-right font-mono text-emerald-400">{totalFtds}</td>
+                  <td className="py-4 px-6 text-center"></td>
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

@@ -11,9 +11,9 @@ const ImportPage = () => {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  // Split by Telegram export prefix: [DD/MM/YYYY HH.MM] SenderName:
+  // Split by Telegram export prefix: [DD/MM/YYYY HH.MM] SenderName: (supports dots, dashes, slashes, and variable digits)
   const splitMessages = (text) => {
-    const prefixRE = /(?=\[\d{2}\/\d{2}\/\d{4}\s+[\d.]+\]\s+[^:]+:)/g;
+    const prefixRE = /(?=\[\d{1,2}[\/\.-]\d{1,2}[\/\.-]\d{2,4}\s+[\d.:\s\w]+\]\s+[^:]+:)/gi;
     const parts = text.split(prefixRE).map(s => s.trim()).filter(s => s.length > 15);
     // If no prefix found, treat entire input as one message
     return parts.length > 0 ? parts : [text.trim()];
@@ -47,7 +47,7 @@ const ImportPage = () => {
       } catch (err) {
         batchResults.push({
           status: 'error',
-          error: err.response?.data?.error || err.message,
+          error: err.response?.data?.message || err.response?.data?.error || err.message,
           snippet: msg.substring(0, 80) + '...',
         });
       }
