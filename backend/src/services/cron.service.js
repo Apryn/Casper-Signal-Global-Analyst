@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import cron from 'node-cron';
 
 let bot = null;
 
@@ -8,8 +9,8 @@ const sendTelegramNotification = async (message) => {
   
   if (!bot) return;
 
-  const chatRulesRes = await query("SELECT value FROM config WHERE key = 'telegram_group_id'");
-  const chatId = process.env.TELEGRAM_GROUP_CHAT_ID || chatRulesRes.rows[0]?.value;
+  // Use env var only (config table removed to avoid schema dependency)
+  const chatId = process.env.TELEGRAM_GROUP_CHAT_ID;
 
   if (chatId) {
     try {
@@ -22,10 +23,13 @@ const sendTelegramNotification = async (message) => {
 };
 
 /**
- * Checks for missing daily reports (runs at 22:00 local time)
+ * Checks for missing daily reports (runs at 22:00 WIB)
  */
 export const checkMissingReports = async () => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Use WIB (UTC+7) date
+  const now = new Date();
+  const wibDate = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const todayStr = wibDate.toISOString().split('T')[0];
   
   try {
     // Get all streamers
@@ -179,10 +183,13 @@ export const checkTargetAchievements = async () => {
 };
 
 /**
- * Checks for daily live duration violations (runs at 23:00 local time)
+ * Checks for daily live duration violations (runs at 23:00 WIB)
  */
 export const checkMinLiveViolations = async () => {
-  const todayStr = new Date().toISOString().split('T')[0];
+  // Use WIB (UTC+7) date
+  const now = new Date();
+  const wibDate = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const todayStr = wibDate.toISOString().split('T')[0];
   
   try {
     const result = await query(
@@ -222,11 +229,11 @@ export const checkMinLiveViolations = async () => {
 };
 
 /**
- * Master scheduler loop
+ * Master scheduler using node-cron with Asia/Jakarta (WIB UTC+7) timezone
  */
 export const startCronJobs = (botInstance) => {
   bot = botInstance;
-  console.log('Cron Service Engine started (Interval checking enabled).');
+  console.log('Cron Service Engine started (node-cron with Asia/Jakarta timezone).');
 
   // Run initial checks for target achievements & performance drops on boot
   setTimeout(() => {
@@ -234,28 +241,22 @@ export const startCronJobs = (botInstance) => {
     checkTargetAchievements();
   }, 5000);
 
-  // Run checking loop every hour
-  const ONE_HOUR = 60 * 60 * 1000;
-  setInterval(() => {
-    const now = new Date();
-    const hours = now.getHours();
-    
-    console.log(`[Cron Engine Check] Hour: ${hours}:00`);
+  // ⏰ Check missing daily reports at 22:00 WIB every day
+  cron.schedule('0 22 * * *', () => {
+    console.log('[Cron] Running checkMissingReports at 22:00 WIB');
+    checkMissingReports();
+  }, { timezone: 'Asia/Jakarta' });
 
-    // Check report submissions at 22:00 (10:00 PM) Indonesian time
-    if (hours === 22) {
-      checkMissingReports();
-    }
+  // ⏰ Check minimum live hour violations at 23:00 WIB every day
+  cron.schedule('0 23 * * *', () => {
+    console.log('[Cron] Running checkMinLiveViolations at 23:00 WIB');
+    checkMinLiveViolations();
+  }, { timezone: 'Asia/Jakarta' });
 
-    // Check minimum daily live hours standard at 23:00 (11:00 PM)
-    if (hours === 23) {
-      checkMinLiveViolations();
-    }
-
-    // Run performance drop and milestone checks once daily at 09:00 AM
-    if (hours === 9) {
-      checkPerformanceDrops();
-      checkTargetAchievements();
-    }
-  }, ONE_HOUR);
+  // ⏰ Run performance drop and milestone checks at 09:00 WIB every day
+  cron.schedule('0 9 * * *', () => {
+    console.log('[Cron] Running checkPerformanceDrops & checkTargetAchievements at 09:00 WIB');
+    checkPerformanceDrops();
+    checkTargetAchievements();
+  }, { timezone: 'Asia/Jakarta' });
 };

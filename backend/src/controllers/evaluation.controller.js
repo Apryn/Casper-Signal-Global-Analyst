@@ -30,7 +30,7 @@ Do not wrap it in markdown code blocks like \`\`\`json. Return only the raw JSON
   if (apiKey && apiKey !== 'YOUR_GEMINI_API_KEY_HERE' && apiKey.trim() !== '') {
     try {
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -186,20 +186,21 @@ export const getWeeklyEvaluation = async (req, res) => {
 
 
     // 4. Schedule Adherence (Planned hours vs actual)
+    // Uses correct column names from schema: start_time (TIMESTAMP) and end_time (TIMESTAMP)
     const schedulesRes = await query(
-      `SELECT jam_mulai, jam_selesai 
+      `SELECT start_time, end_time 
        FROM schedule 
-       WHERE streamer_id = $1 AND tanggal BETWEEN $2 AND $3`,
+       WHERE streamer_id = $1 
+         AND DATE(start_time) BETWEEN $2 AND $3`,
       [streamerId, startDate, endDateStr]
     );
 
     let totalPlannedMinutes = 0;
     schedulesRes.rows.forEach(s => {
-      const [sh, sm] = s.jam_mulai.split(':').map(Number);
-      const [eh, em] = s.jam_selesai.split(':').map(Number);
-      
-      let diff = (eh * 60 + em) - (sh * 60 + sm);
-      if (diff < 0) diff += 24 * 60; // handle overnight schedule crossings
+      const start = new Date(s.start_time);
+      const end = new Date(s.end_time);
+      let diff = (end - start) / (1000 * 60); // diff in minutes
+      if (diff < 0) diff = 0;
       totalPlannedMinutes += diff;
     });
 
@@ -226,7 +227,13 @@ export const getWeeklyEvaluation = async (req, res) => {
     });
 
     const sortedHours = Object.entries(hoursTally).sort((a, b) => b[1] - a[1]);
-    const peakHour = sortedHours.length > 0 ? `${sortedHours[0][0]} - ${parseInt(sortedHours[0][0]) + 2}:00` : '20:00 - 22:00';
+    // Safely format peak hour range, capping at 23:00
+    let peakHour = '20:00 - 22:00';
+    if (sortedHours.length > 0) {
+      const peakHourNum = parseInt(sortedHours[0][0], 10);
+      const peakEnd = Math.min(peakHourNum + 2, 23);
+      peakHour = `${String(peakHourNum).padStart(2, '0')}:00 - ${String(peakEnd).padStart(2, '0')}:00`;
+    }
 
     // 6. Generate AI Evaluation
     const statsObj = {

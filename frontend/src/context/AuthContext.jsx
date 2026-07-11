@@ -56,8 +56,8 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  const isAdmin = !!user;
-  const isAnalyst = !!user;
+  const isAdmin = user?.role === 'Admin';
+  const isAnalyst = user?.role === 'Global Analyst';
 
   const value = {
     user,
