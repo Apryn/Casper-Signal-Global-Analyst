@@ -266,7 +266,7 @@ Rekomendasi Strategis:
       console.log('Gemini API key detected, generating enhanced AI insights...');
       try {
         const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
           {
             method: 'POST',
             headers: {
@@ -290,7 +290,8 @@ Raw Statistics:
 - Best stream time: 19:00-22:00 (malam) based on user interaction density.`
                 }]
               }]
-            })
+            }),
+            signal: AbortSignal.timeout(5000)
           }
         );
 
