@@ -9,7 +9,7 @@ import { dirname, join } from 'path';
 // Load .env from backend root BEFORE any other imports use process.env
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-dotenv.config({ path: join(__dirname, '../../.env') });
+dotenv.config({ path: join(__dirname, '../.env') });
 
 // ============================================================
 // ENVIRONMENT VALIDATION — fail fast with clear messages
@@ -179,6 +179,11 @@ const launchBot = () => {
   import('telegraf').then(({ Telegraf }) => {
     try {
       const bot = new Telegraf(token);
+
+      // Handle Telegraf runtime errors (e.g. polling conflict, network timeouts) gracefully without crashing
+      bot.catch((err, ctx) => {
+        console.error(`[Telegram Bot Error] Error for update type "${ctx.updateType || 'unknown'}":`, err);
+      });
 
       const REPORT_THREAD_ID = process.env.TELEGRAM_REPORT_THREAD_ID
         ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)

@@ -6,12 +6,12 @@ let bot = null;
 // Helper to get time and date in WIB (UTC+7) regardless of VPS local timezone
 const getWibHourAndDate = () => {
   const now = new Date();
-  const wibTime = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
-  const wibDate = new Date(wibTime);
-  const hour = wibDate.getHours();
-  const year = wibDate.getFullYear();
-  const month = String(wibDate.getMonth() + 1).padStart(2, '0');
-  const day = String(wibDate.getDate()).padStart(2, '0');
+  // Math offset of +7 hours (7 * 60 * 60 * 1000 ms) to get WIB time components directly via UTC methods
+  const wibTime = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const hour = wibTime.getUTCHours();
+  const year = wibTime.getUTCFullYear();
+  const month = String(wibTime.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(wibTime.getUTCDate()).padStart(2, '0');
   const dateStr = `${year}-${month}-${day}`;
   return { hour, dateStr };
 };
