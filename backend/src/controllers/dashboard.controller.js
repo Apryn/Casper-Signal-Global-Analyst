@@ -62,12 +62,15 @@ export const getDashboardSummary = async (req, res) => {
     const rangeMetrics = rangeMetricsRes.rows[0];
 
     // 4. Metrics for TODAY specifically (as requested by layout)
-    const todayTimeStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
-    const wibDate = new Date(todayTimeStr);
-    const year = wibDate.getFullYear();
-    const month = String(wibDate.getMonth() + 1).padStart(2, '0');
-    const day = String(wibDate.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(new Date());
+    const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    const todayStr = `${partMap.year}-${partMap.month}-${partMap.day}`;
 
     const todayMetricsRes = await query(
       `SELECT 

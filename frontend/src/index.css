@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&family=Share+Tech+Mono&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,73 +6,283 @@
 
 body {
   margin: 0;
-  font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: 'Space Grotesk', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #080b11;
-  color: #f3f4f6;
+  background-color: #090a10;
+  color: #f1f5f9;
   overflow-x: hidden;
+  /* Dotted background overlay */
+  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+  position: relative;
 }
 
-/* Custom Scrollbar for sleek UI */
+/* Mechanical Scrollbar */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 12px;
+  height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(11, 15, 25, 0.5);
+  background: #0f111a;
+  border-left: 2px solid #1e2132;
+  border-top: 2px solid #1e2132;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.3);
-  border-radius: 4px;
+  background: #ff6b35; /* Tactile orange */
+  border: 3px solid #0f111a;
+  box-shadow: inset 1px 1px 0px rgba(255, 255, 255, 0.2);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.6);
+  background: #ffca3a; /* Tactile yellow */
 }
 
-/* Glassmorphism utility card */
-.glass-panel {
-  background: rgba(17, 24, 39, 0.6);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+::-webkit-scrollbar-thumb:active {
+  background: #2ec4b6; /* Tactile teal */
+}
+
+/* Grid & Texture Overlays */
+.tactile-dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1.5px, transparent 1.5px);
+  background-size: 16px 16px;
+}
+
+.tactile-grid-lines {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.noise-overlay {
+  position: relative;
+}
+.noise-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.025;
+  pointer-events: none;
+  z-index: 999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* Tactile Cards */
+.glass-panel, .tactile-card {
+  background: #141622;
+  border: 2px solid #2c314c;
+  box-shadow: 4px 4px 0px 0px #000000;
+  border-radius: 14px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.glass-panel::before, .tactile-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
 }
 
-.glass-panel-hover {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.glass-panel-hover:hover, .tactile-card-hover:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px 0px #000000;
+  border-color: #6366f1;
 }
 
-.glass-panel-hover:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.15), 
-              0 8px 10px -6px rgba(99, 102, 241, 0.15);
-  border-color: rgba(99, 102, 241, 0.25);
+.glass-panel-hover:active, .tactile-card-hover:active {
+  transform: translate(1px, 1px);
+  box-shadow: 2px 2px 0px 0px #000000;
 }
 
-/* Glowing text and boxes */
+/* Pressed/inset details */
+.tactile-inset {
+  background: #090a10;
+  border: 2px solid #1e2132;
+  box-shadow: inset 2px 2px 5px rgba(0, 0, 0, 0.5), inset -1px -1px 2px rgba(255, 255, 255, 0.03);
+}
+
+/* Pressable Tactile Buttons */
+.tactile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0.625rem 1.25rem;
+  font-weight: 700;
+  font-size: 0.850rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #1e2132;
+  color: #f1f5f9;
+  border: 2px solid #000000;
+  border-radius: 10px;
+  box-shadow: 3px 3px 0px 0px #000000;
+  transition: all 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+  position: relative;
+}
+
+.tactile-btn:hover {
+  transform: translate(-1.5px, -1.5px);
+  box-shadow: 4.5px 4.5px 0px 0px #000000;
+  border-color: #000000;
+}
+
+.tactile-btn:active {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0px 0px #000000;
+}
+
+.tactile-btn-primary {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.tactile-btn-orange {
+  background: #ff6b35;
+  color: #000000;
+}
+
+.tactile-btn-yellow {
+  background: #ffca3a;
+  color: #000000;
+}
+
+.tactile-btn-teal {
+  background: #2ec4b6;
+  color: #000000;
+}
+
+.tactile-btn-pink {
+  background: #ff006e;
+  color: #ffffff;
+}
+
+.tactile-btn-red {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* Tactile Form Inputs */
+.tactile-input, select, textarea {
+  background: #090a10;
+  border: 2px solid #2c314c;
+  color: #f1f5f9;
+  border-radius: 10px;
+  padding: 0.625rem 1rem;
+  font-family: inherit;
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.4);
+  transition: all 0.2s ease;
+}
+
+.tactile-input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: #6366f1;
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.4), 0 0 0 2.5px rgba(99, 102, 241, 0.25);
+}
+
+/* CRT Terminal Simulator Style */
+.crt-screen {
+  background: #05080e;
+  border: 3px solid #2c314c;
+  border-radius: 14px;
+  box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.95), 4px 4px 0px 0px #000000;
+  font-family: 'Share Tech Mono', monospace;
+  position: relative;
+  overflow: hidden;
+}
+
+.crt-screen::before {
+  content: " ";
+  display: block;
+  position: absolute;
+  top: 0; left: 0; bottom: 0; right: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
+  z-index: 10;
+  background-size: 100% 3px, 3px 100%;
+  pointer-events: none;
+}
+
+/* Glowing text & details */
 .glow-text-primary {
-  text-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+  text-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
 }
 
 .glow-text-secondary {
-  text-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
+  text-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
+}
+
+.glow-text-amber {
+  text-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
+}
+
+.glow-text-emerald {
+  text-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
 }
 
 .glow-border-primary {
-  box-shadow: 0 0 15px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+}
+
+/* Stamped Label / Stickers */
+.tactile-sticker {
+  transform: rotate(-1deg);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #ffca3a;
+  color: #000000;
+  border: 2px dashed #000000;
+  box-shadow: 2px 2px 0px 0px rgba(0, 0, 0, 1);
+  border-radius: 4px;
+}
+
+.tactile-sticker-orange {
+  background: #ff6b35;
+  color: #ffffff;
+}
+
+.tactile-sticker-lime {
+  background: #8ac926;
+  color: #000000;
+}
+
+.tactile-sticker-cyan {
+  background: #22d3ee;
+  color: #000000;
 }
 
 /* Custom animations */
 @keyframes pulse-slow {
-  0%, 100% { opacity: 0.2; }
-  50% { opacity: 0.4; }
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 0.5; }
 }
 
 .animate-pulse-slow {
   animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+@keyframes crt-flicker {
+  0% { opacity: 0.985; }
+  50% { opacity: 0.999; }
+  100% { opacity: 0.985; }
+}
+
+.animate-crt-flicker {
+  animation: crt-flicker 0.15s infinite;
+}
+

@@ -2,16 +2,39 @@ import { query } from '../config/db.js';
 
 let bot = null;
 
+export const setBotInstance = (botInstance) => {
+  bot = botInstance;
+  if (botInstance) {
+    console.log('[Cron Service]: Telegram Bot instance linked successfully.');
+  } else {
+    console.log('[Cron Service]: Telegram Bot instance unlinked.');
+  }
+};
+
+// Helper to format Date to YYYY-MM-DD in WIB (UTC+7)
+const formatWibDate = (dateInput) => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  });
+  const parts = formatter.formatToParts(new Date(dateInput));
+  const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  return `${partMap.year}-${partMap.month}-${partMap.day}`;
+};
+
 // Helper to get time and date in WIB (UTC+7) regardless of VPS local timezone
 const getWibHourAndDate = () => {
-  const now = new Date();
-  const wibTime = now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' });
-  const wibDate = new Date(wibTime);
-  const hour = wibDate.getHours();
-  const year = wibDate.getFullYear();
-  const month = String(wibDate.getMonth() + 1).padStart(2, '0');
-  const day = String(wibDate.getDate()).padStart(2, '0');
-  const dateStr = `${year}-${month}-${day}`;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Jakarta',
+    hour: 'numeric',
+    hour12: false
+  });
+  const parts = formatter.formatToParts(new Date());
+  const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+  const hour = parseInt(partMap.hour, 10);
+  const dateStr = formatWibDate(new Date());
   return { hour, dateStr };
 };
 
@@ -73,18 +96,17 @@ export const checkMissingReports = async (wibDateStr) => {
         );
 
         if (reportCheck.rows.length === 0) {
+          const message = `⚠️ Laporan Belum Dikirim: Streamer ${streamer.nama} belum mengirim laporan hari ini (${todayStr}).`;
+          
           // Double check if report reminder was already sent today to prevent duplicate spamming
           const doubleCheck = await query(
             `SELECT id FROM notifications 
              WHERE streamer_id = $1 
-               AND type = 'Report Reminder' 
-               AND created_at::date = $2`,
-            [streamer.id, todayStr]
+               AND message = $2`,
+            [streamer.id, message]
           );
 
           if (doubleCheck.rows.length > 0) continue;
-
-          const message = `⚠️ Laporan Belum Dikirim: Streamer ${streamer.nama} belum mengirim laporan hari ini (${todayStr}).`;
           
           // Log to database
           await query(
@@ -234,33 +256,41 @@ export const checkTargetAchievements = async () => {
 };
 
 /**
- * Checks for daily live duration violations (runs at 23:00 local time)
+ * Checks for daily live duration violations (runs at 23:00 local time, checks today and yesterday)
  */
 export const checkMinLiveViolations = async (wibDateStr) => {
   const todayStr = wibDateStr || getWibHourAndDate().dateStr;
+  
+  // Calculate yesterday's date in WIB to capture late reports
+  const todayDate = new Date();
+  const yesterdayDate = new Date(todayDate);
+  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+  const yesterdayStr = formatWibDate(yesterdayDate);
+
+  const targetDates = [yesterdayStr, todayStr];
   
   try {
     const result = await query(
       `SELECT r.*, s.nama 
        FROM daily_reports r
        JOIN streamers s ON r.streamer_id = s.id
-       WHERE r.tanggal = $1 
+       WHERE r.tanggal IN ($1, $2) 
          AND r.kategori = 'Streaming' 
          AND r.live_duration < 4.0`,
-      [todayStr]
+      [targetDates[0], targetDates[1]]
     );
 
     for (const row of result.rows) {
       try {
-        const message = `⚠️ Pelanggaran Target: Streamer ${row.nama} melakukan live hanya ${row.live_duration} jam hari ini (di bawah standar minimal 4 jam).`;
+        const reportDateStr = formatWibDate(row.tanggal);
+        const message = `⚠️ Pelanggaran Target: Streamer ${row.nama} melakukan live hanya ${row.live_duration} jam pada tanggal ${reportDateStr} (di bawah standar minimal 4 jam).`;
         
-        // Verify duplicate check to prevent double writes on the same day
+        // Verify duplicate check to prevent double writes on the same report date
         const doubleCheck = await query(
           `SELECT id FROM notifications 
            WHERE streamer_id = $1 
-             AND message = $2 
-             AND created_at::date = $3`,
-          [row.streamer_id, message, todayStr]
+             AND message = $2`,
+          [row.streamer_id, message]
         );
 
         if (doubleCheck.rows.length === 0) {
@@ -284,7 +314,9 @@ export const checkMinLiveViolations = async (wibDateStr) => {
  * Master scheduler loop
  */
 export const startCronJobs = (botInstance) => {
-  bot = botInstance;
+  if (botInstance) {
+    bot = botInstance;
+  }
   console.log('Cron Service Engine started (WIB Timezone loop enabled).');
 
   // Run initial checks for target achievements & performance drops on boot

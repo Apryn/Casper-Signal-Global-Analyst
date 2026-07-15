@@ -264,6 +264,10 @@ Rekomendasi Strategis:
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey && apiKey !== 'YOUR_GEMINI_API_KEY' && apiKey.trim() !== '') {
       console.log('Gemini API key detected, generating enhanced AI insights...');
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+
       try {
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -290,9 +294,11 @@ Raw Statistics:
 - Best stream time: 19:00-22:00 (malam) based on user interaction density.`
                 }]
               }]
-            })
+            }),
+            signal: controller.signal
           }
         );
+        clearTimeout(timeoutId);
 
         const data = await response.json();
         const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;

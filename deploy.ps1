@@ -87,6 +87,12 @@ else
   echo "ACTIVATION_CODE=$ENV_ACTIVATION_CODE" >> $APP_DIR/backend/.env
 fi
 
+if grep -q "GEMINI_API_KEY" $APP_DIR/backend/.env; then
+  sed -i 's/^GEMINI_API_KEY=.*/GEMINI_API_KEY=$ENV_GEMINI_API_KEY/' $APP_DIR/backend/.env
+else
+  echo "GEMINI_API_KEY=$ENV_GEMINI_API_KEY" >> $APP_DIR/backend/.env
+fi
+
 echo '-> Update dependencies backend...'
 cd $APP_DIR/backend
 npm install --omit=dev --silent
@@ -159,6 +165,7 @@ TELEGRAM_GROUP_CHAT_ID=$ENV_TELEGRAM_GROUP_CHAT_ID
 TELEGRAM_REPORT_THREAD_ID=$ENV_TELEGRAM_REPORT_THREAD_ID
 
 ACTIVATION_CODE=$ENV_ACTIVATION_CODE
+GEMINI_API_KEY=$ENV_GEMINI_API_KEY
 ENVEOF
 echo '  [OK] File .env berhasil dibuat otomatis'
 

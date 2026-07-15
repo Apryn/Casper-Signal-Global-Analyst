@@ -324,12 +324,12 @@ const extractLive = (text) => {
     const total = parenthesizedJams.reduce((sum, match) => {
       return sum + parseFloat(match[1].replace(',', '.'));
     }, 0);
-    return Math.round(total);
+    return parseFloat(total.toFixed(2));
   }
 
   // B: "LIVE : 5 JAM" or "LIVE: 5 JAM" (same line)
   const liveJam = text.match(/\bLIVE\s*[:\s]+(\d+(?:[.,]\d+)?)\s*JAM/i);
-  if (liveJam) return Math.round(parseFloat(liveJam[1].replace(',', '.')));
+  if (liveJam) return parseFloat(parseFloat(liveJam[1].replace(',', '.')).toFixed(2));
 
   // B2: Multi-line LIVE block: "LIVE:\n2 jam\n2 jam" → sum all bare "X jam" lines after LIVE:
   const liveBlockMatch = text.match(/\bLIVE\s*:\s*\n([\s\S]*?)(?=\n[A-Z]{2,}\s*:|$)/i);
@@ -340,17 +340,17 @@ const extractLive = (text) => {
       const m = bl.trim().match(/^(\d+(?:[.,]\d+)?)\s*jam/i);
       if (m) total += parseFloat(m[1].replace(',', '.'));
     }
-    if (total > 0) return Math.round(total);
+    if (total > 0) return parseFloat(total.toFixed(2));
   }
 
 
   // B: "YouTube : 6 jam" or "YouTube : 5 jam" inside SESI LIVE block
   const ytJam = text.match(/YouTube\s*:\s*(\d+(?:[.,]\d+)?)\s*jam/i);
-  if (ytJam) return Math.round(parseFloat(ytJam[1].replace(',', '.')));
+  if (ytJam) return parseFloat(parseFloat(ytJam[1].replace(',', '.')).toFixed(2));
 
   // C: "Total live : 3 jam"
   const totalJam = text.match(/Total\s+live\s*:\s*(\d+(?:[.,]\d+)?)\s*(?:jam)/i);
-  if (totalJam) return Math.round(parseFloat(totalJam[1].replace(',', '.')));
+  if (totalJam) return parseFloat(parseFloat(totalJam[1].replace(',', '.')).toFixed(2));
 
   // D: "Total live : 3 sesi" → treat as 3 hours (1 session ≈ 1 hour)
   const totalSesi = text.match(/Total\s+live\s*:\s*(\d+)\s*sesi/i);
@@ -358,7 +358,7 @@ const extractLive = (text) => {
 
   // E: "SESI LIVE: 4jam"  or  "Sesi live: 3 jam"
   const sesiJam = text.match(/SESI\s+LIVE\s*[:\s]+(\d+(?:[.,]\d+)?)\s*jam/i);
-  if (sesiJam) return Math.round(parseFloat(sesiJam[1].replace(',', '.')));
+  if (sesiJam) return parseFloat(parseFloat(sesiJam[1].replace(',', '.')).toFixed(2));
 
   // F: Count "JAM : HH:MM" or "JAM ONTIME : HH:MM" lines (numeric time only)
   const jamLines = (text.match(/^JAM\s*(?:ONTIME)?\s*:\s*[\d.:]+/gim) || [])

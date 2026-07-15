@@ -43,44 +43,44 @@ const Login = () => {
   };
 
   return (
-    <div className="relative flex h-screen w-screen items-center justify-center bg-dark-bg overflow-hidden p-4">
+    <div className="relative flex h-screen w-screen items-center justify-center bg-dark-bg noise-overlay tactile-grid-lines overflow-hidden p-4">
 
       {/* Background Glow effects */}
-      <div className="absolute top-1/4 left-1/4 h-[35rem] w-[35rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/10 blur-[120px] animate-pulse-slow pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 h-[30rem] w-[30rem] translate-x-1/2 translate-y-1/2 rounded-full bg-cyan-500/10 blur-[100px] animate-pulse-slow pointer-events-none" />
+      <div className="absolute top-1/4 left-1/4 h-[35rem] w-[35rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo-500/5 blur-[120px] animate-pulse-slow pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 h-[30rem] w-[30rem] translate-x-1/2 translate-y-1/2 rounded-full bg-cyan-500/5 blur-[100px] animate-pulse-slow pointer-events-none" />
 
       {/* Login Card */}
-      <div className="relative w-full max-w-sm p-8 rounded-2xl border border-dark-border bg-slate-950/65 shadow-2xl shadow-black/80 backdrop-blur-md">
+      <div className="relative w-full max-w-sm p-8 rounded-xl border-3 border-black bg-dark-card shadow-tactile-lg z-10">
 
         {/* Logo and Brand Title */}
         <div className="flex flex-col items-center mb-8">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-600 to-cyan-500 shadow-lg shadow-indigo-600/30">
+          <div className="flex h-14 w-14 items-center justify-center rounded-lg bg-indigo-600 border-2 border-black shadow-tactile-sm">
             <Sparkles className="h-7 w-7 text-white" />
           </div>
-          <h2 className="mt-4 text-2xl font-bold tracking-wider text-white bg-gradient-to-r from-white via-slate-100 to-indigo-300 bg-clip-text text-transparent">
+          <h2 className="mt-4 text-2xl font-black tracking-wide text-white uppercase">
             CASPER ANALYTICS
           </h2>
-          <p className="text-xs font-semibold text-indigo-400 tracking-widest uppercase mt-1">
+          <span className="tactile-sticker font-extrabold tactile-sticker-orange text-white mt-2">
             Dashboard Portal
-          </p>
+          </span>
         </div>
 
         {/* Error Alert */}
         {error && (
-          <div className="flex items-center gap-2 p-3.5 mb-6 text-sm rounded-xl bg-red-500/10 text-red-400 border border-red-500/25 animate-shake">
+          <div className="flex items-center gap-2 p-3.5 mb-6 text-sm rounded-lg bg-red-950/20 text-red-400 border-2 border-red-800 shadow-tactile-sm animate-shake">
             <AlertCircle className="h-5 w-5 shrink-0" />
-            <span>{error}</span>
+            <span className="font-bold">{error}</span>
           </div>
         )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs font-bold text-gray-400 uppercase tracking-widest mb-2" htmlFor="activationCode">
+            <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2" htmlFor="activationCode">
               Kode Aktivasi
             </label>
             <div className="relative">
-              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-gray-400">
+              <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-500">
                 <KeyRound className="h-4 w-4" />
               </div>
               <input
@@ -90,13 +90,13 @@ const Login = () => {
                 onChange={(e) => setActivationCode(e.target.value)}
                 placeholder="Masukkan kode aktivasi"
                 autoComplete="off"
-                className="block w-full pl-10 pr-10 py-3 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all duration-200"
+                className="block w-full pl-10 pr-10 py-3 text-sm rounded-lg border-2 border-black bg-slate-950 text-white placeholder-slate-650 focus:outline-none focus:border-indigo-500 shadow-inset-screen transition-all"
               />
               <button
                 type="button"
                 tabIndex={-1}
                 onClick={() => setShowCode((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 hover:text-gray-200 transition-colors"
+                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-slate-500 hover:text-slate-200 transition-colors"
               >
                 {showCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
@@ -106,7 +106,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full mt-2 py-3 rounded-xl font-semibold bg-gradient-to-r from-indigo-600 to-indigo-800 hover:from-indigo-500 hover:to-indigo-700 text-white shadow-lg shadow-indigo-600/20 active:translate-y-px transition-all duration-200 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
+            className="w-full mt-2 py-3 rounded-lg font-black uppercase text-sm bg-indigo-600 text-white border-2 border-black shadow-tactile-sm hover:bg-indigo-500 hover:shadow-tactile-md active:translate-y-0.5 active:shadow-tactile-pressed transition-all duration-100 flex items-center justify-center gap-2 disabled:opacity-50"
           >
             {submitting ? (
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -116,7 +116,7 @@ const Login = () => {
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-gray-600">
+        <p className="mt-6 text-center text-[10px] font-bold text-slate-500 tracking-wider">
           Casper Signal Global Analyst © {new Date().getFullYear()}
         </p>
       </div>

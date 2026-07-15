@@ -106,24 +106,24 @@ const Layout = () => {
     <div className="flex h-screen overflow-hidden bg-dark-bg text-gray-200">
       
       {/* Sidebar - Desktop */}
-      <aside className="hidden md:flex md:w-64 md:flex-col bg-slate-950/70 border-r border-dark-border backdrop-blur-md">
+      <aside className="hidden md:flex md:w-64 md:flex-col bg-dark-card border-r-3 border-black relative z-30">
         {/* Brand Logo */}
-        <div className="flex h-20 items-center gap-3 px-6 border-b border-dark-border">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-cyan-500 shadow-md shadow-indigo-600/30">
+        <div className="flex h-20 items-center gap-3 px-6 border-b-2 border-black bg-dark-panel">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 border-2 border-black shadow-tactile-sm">
             <Sparkles className="h-5.5 w-5.5 text-white" />
           </div>
           <div>
-            <span className="text-lg font-bold text-white tracking-wider bg-gradient-to-r from-white via-slate-200 to-indigo-300 bg-clip-text text-transparent">
+            <span className="text-base font-extrabold text-white tracking-wider uppercase block">
               CASPER SIGNAL
             </span>
-            <span className="block text-[10px] text-indigo-400 font-semibold tracking-widest uppercase">
+            <span className="block text-[9px] text-indigo-400 font-extrabold tracking-widest uppercase">
               Global Analytics
             </span>
           </div>
         </div>
 
         {/* Sidebar Menu */}
-        <nav className="flex-1 space-y-1.5 px-4 py-6 overflow-y-auto">
+        <nav className="flex-1 space-y-2 px-4 py-6 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
             
@@ -134,16 +134,19 @@ const Layout = () => {
               <Link
                 key={item.name}
                 to={item.path}
-                className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl font-medium text-sm transition-all duration-200 group ${
+                className={`flex items-center gap-3.5 px-4 py-3 rounded-lg font-bold text-sm transition-all duration-150 border-2 group relative ${
                   isActive 
-                    ? 'bg-gradient-to-r from-indigo-600/20 to-indigo-900/10 text-indigo-300 border-l-4 border-indigo-500 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)] shadow-indigo-500/5' 
-                    : 'text-gray-400 hover:bg-slate-900/50 hover:text-white hover:translate-x-1'
+                    ? 'bg-dark-panel text-indigo-400 border-black shadow-inset-screen' 
+                    : 'text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-white hover:border-black hover:shadow-tactile-sm hover:-translate-y-0.5'
                 }`}
               >
+                {isActive && (
+                  <span className="absolute left-1.5 w-1 h-4 rounded bg-indigo-400 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                )}
                 <item.icon className={`h-5 w-5 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-indigo-400' : 'text-gray-400 group-hover:text-white'}`} />
                 <span>{item.name}</span>
                 {item.adminOnly && (
-                  <span className="ml-auto text-[9px] font-bold px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  <span className="ml-auto text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-500 uppercase tracking-wide">
                     Admin
                   </span>
                 )}
@@ -153,22 +156,22 @@ const Layout = () => {
         </nav>
 
         {/* User Info & Logout Footer */}
-        <div className="p-4 border-t border-dark-border bg-slate-950/40">
+        <div className="p-4 border-t-2 border-black bg-dark-panel">
           <div className="flex items-center gap-3 mb-3.5 px-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-950/80 border border-indigo-500/20 text-indigo-400 font-semibold">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-950 border-2 border-black text-indigo-400 font-bold shadow-tactile-sm">
               {user?.nama?.charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="overflow-hidden">
-              <span className="block text-sm font-semibold text-white truncate">{user?.nama}</span>
-              <span className="flex items-center gap-1 text-[10px] font-medium text-gray-400 uppercase tracking-wider">
-                <Shield className="h-3 w-3 text-indigo-400" />
+              <span className="block text-sm font-bold text-white truncate">{user?.nama}</span>
+              <span className="flex items-center gap-1 text-[9px] font-extrabold text-indigo-400 uppercase tracking-wider">
+                <Shield className="h-3 w-3" />
                 {user?.role}
               </span>
             </div>
           </div>
           <button
             onClick={handleLogout}
-            className="flex w-full items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium text-red-400/90 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+            className="flex w-full items-center justify-center gap-3 px-4 py-2.5 rounded-lg text-sm font-bold text-red-400 bg-red-950/15 border-2 border-black shadow-tactile-sm hover:bg-red-500 hover:text-black hover:-translate-y-0.5 hover:shadow-tactile-md active:translate-y-0.5 active:shadow-tactile-pressed transition-all duration-100"
           >
             <LogOut className="h-4 w-4" />
             Logout
@@ -179,16 +182,16 @@ const Layout = () => {
       {/* Mobile Header and Sidebar Menu */}
       <div className="md:hidden flex flex-col w-full h-screen overflow-hidden">
         {/* Mobile top bar */}
-        <header className="flex h-16 items-center justify-between px-6 bg-slate-950 border-b border-dark-border">
+        <header className="flex h-16 items-center justify-between px-6 bg-dark-card border-b-3 border-black shadow-tactile-sm relative z-20">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-tr from-indigo-600 to-cyan-500">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 border-2 border-black shadow-tactile-sm">
               <Sparkles className="h-4.5 w-4.5 text-white" />
             </div>
-            <span className="text-base font-bold text-white tracking-wide">CASPER SIGNAL</span>
+            <span className="text-base font-extrabold text-white tracking-wide uppercase">CASPER SIGNAL</span>
           </div>
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1 rounded-lg text-gray-400 hover:text-white hover:bg-slate-900 border border-dark-border"
+            className="p-1.5 rounded-lg text-gray-200 hover:text-black hover:bg-tactile-yellow border-2 border-black shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed transition-all"
           >
             {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </button>
@@ -199,16 +202,16 @@ const Layout = () => {
           <div className="fixed inset-0 z-40 flex">
             {/* Backdrop */}
             <div 
-              className="fixed inset-0 bg-black/60 backdrop-blur-xs" 
+              className="fixed inset-0 bg-black/75 backdrop-blur-xs" 
               onClick={() => setMobileMenuOpen(false)}
             />
             {/* Drawer Content */}
-            <div className="relative flex flex-col w-64 bg-slate-950 border-r border-dark-border h-full p-4 animate-fade-in shadow-2xl z-50">
-              <div className="flex h-14 items-center gap-2.5 px-2 mb-6 border-b border-dark-border">
+            <div className="relative flex flex-col w-64 bg-dark-card border-r-3 border-black h-full p-4 animate-fade-in shadow-2xl z-50">
+              <div className="flex h-14 items-center gap-2.5 px-2 mb-6 border-b-2 border-black">
                 <Sparkles className="h-5 w-5 text-indigo-400" />
                 <span className="text-base font-bold text-white">Global Menu</span>
               </div>
-              <nav className="flex-1 space-y-1.5">
+              <nav className="flex-1 space-y-2 overflow-y-auto">
                 {navItems.map((item) => {
                   const isActive = location.pathname === item.path;
                   if (item.adminOnly && !isAdmin) return null;
@@ -217,8 +220,10 @@ const Layout = () => {
                       key={item.name}
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center gap-3.5 px-4 py-3 rounded-xl font-medium text-sm transition-colors ${
-                        isActive ? 'bg-indigo-600/20 text-indigo-300 border-l-4 border-indigo-500' : 'text-gray-400 hover:bg-slate-900'
+                      className={`flex items-center gap-3.5 px-4 py-3 rounded-lg font-bold text-sm transition-all border-2 ${
+                        isActive 
+                          ? 'bg-dark-panel text-indigo-300 border-black shadow-inset-screen' 
+                          : 'text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-white hover:border-black hover:shadow-tactile-sm'
                       }`}
                     >
                       <item.icon className="h-5 w-5 text-gray-400" />
@@ -227,19 +232,19 @@ const Layout = () => {
                   );
                 })}
               </nav>
-              <div className="pt-4 border-t border-dark-border">
+              <div className="pt-4 border-t-2 border-black">
                 <div className="flex items-center gap-3 mb-4 px-2">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-950 text-indigo-400 font-semibold text-sm">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-950 border-2 border-black text-indigo-400 font-bold text-sm">
                     {user?.nama?.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <span className="block text-sm font-semibold text-white truncate">{user?.nama}</span>
+                    <span className="block text-sm font-bold text-white truncate">{user?.nama}</span>
                     <span className="block text-[9px] text-gray-400 uppercase tracking-widest">{user?.role}</span>
                   </div>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="flex w-full items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                  className="flex w-full items-center justify-center gap-3 px-4 py-2 rounded-lg text-sm font-bold text-red-400 bg-red-950/15 border-2 border-black shadow-tactile-sm hover:bg-red-500 hover:text-black transition-all"
                 >
                   <LogOut className="h-4 w-4" />
                   Logout
@@ -253,10 +258,10 @@ const Layout = () => {
       {/* Main Content Area - Desktop & Mobile */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Top Header - Desktop only */}
-        <header className="hidden md:flex h-20 items-center justify-between px-8 bg-slate-950/20 border-b border-dark-border/40 backdrop-blur-xs">
+        <header className="hidden md:flex h-20 items-center justify-between px-8 bg-dark-card border-b-3 border-black shadow-tactile-sm relative z-20">
           <div>
-            <h1 className="text-xl font-bold text-white tracking-wide">{getPageTitle()}</h1>
-            <p className="text-xs text-indigo-400 font-medium tracking-wide">{currentDate}</p>
+            <h1 className="text-xl font-extrabold text-white tracking-wide uppercase">{getPageTitle()}</h1>
+            <p className="text-xs text-indigo-400 font-bold tracking-wide">{currentDate}</p>
           </div>
 
           <div className="flex items-center gap-4">
@@ -264,11 +269,11 @@ const Layout = () => {
             <div className="relative">
               <button
                 onClick={() => setShowNotifDropdown(!showNotifDropdown)}
-                className="relative p-2 text-slate-400 hover:text-slate-200 bg-slate-900 border border-slate-800/80 rounded-lg transition-colors flex items-center justify-center"
+                className="relative p-2.5 text-slate-200 hover:text-black bg-slate-800 hover:bg-tactile-yellow border-2 border-black rounded-lg shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed transition-all flex items-center justify-center"
               >
                 <Bell size={16} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white leading-none">
+                  <span className="absolute -top-1 -right-1 flex h-5.5 w-5.5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-extrabold text-white leading-none border-2 border-black">
                     {unreadCount}
                   </span>
                 )}
@@ -277,15 +282,15 @@ const Layout = () => {
               {showNotifDropdown && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowNotifDropdown(false)} />
-                  <div className="absolute right-0 mt-2.5 w-80 bg-slate-950/95 border border-slate-800 rounded-xl shadow-2xl p-4 z-50 animate-fade-in text-left backdrop-blur-md">
-                    <div className="flex justify-between items-center border-b border-slate-800/60 pb-2.5 mb-2.5">
-                      <strong className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <div className="absolute right-0 mt-3 w-80 bg-dark-panel border-2 border-black rounded-xl shadow-tactile-lg p-4 z-50 animate-fade-in text-left">
+                    <div className="flex justify-between items-center border-b-2 border-slate-800 pb-2.5 mb-2.5">
+                      <strong className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                         <span>🔔</span> Alarm & Peringatan
                       </strong>
                       {unreadCount > 0 && (
                         <button
                           onClick={handleMarkAllRead}
-                          className="text-[10px] text-indigo-400 hover:text-indigo-300 font-semibold"
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold"
                         >
                           Tandai semua dibaca
                         </button>
@@ -302,19 +307,19 @@ const Layout = () => {
                               handleMarkRead(n.id);
                               setShowNotifDropdown(false);
                             }}
-                            className={`p-2.5 rounded-lg border transition-all cursor-pointer text-xs ${
+                            className={`p-2.5 rounded-lg border-2 transition-all cursor-pointer text-xs ${
                               n.is_read
-                                ? 'bg-slate-900/30 border-slate-900/50 text-slate-400'
-                                : 'bg-indigo-950/20 border-indigo-900/40 text-slate-200 hover:bg-indigo-950/30'
+                                ? 'bg-slate-900/45 border-slate-850 text-slate-400'
+                                : 'bg-indigo-950/40 border-black text-slate-200 hover:-translate-y-0.5 hover:shadow-tactile-sm'
                             }`}
                           >
                             <div className="flex justify-between items-start gap-1">
-                              <span className="line-clamp-2 leading-relaxed">{n.message}</span>
+                              <span className="line-clamp-2 leading-relaxed font-medium">{n.message}</span>
                               {!n.is_read && (
-                                <span className="h-1.5 w-1.5 rounded-full bg-rose-500 shrink-0 mt-1" />
+                                <span className="h-2 w-2 rounded-full bg-rose-500 border border-black shrink-0 mt-1" />
                               )}
                             </div>
-                            <span className="block text-[9px] text-slate-500 mt-1.5">
+                            <span className="block text-[9px] text-slate-500 mt-1.5 font-bold">
                               {new Date(n.created_at).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
                             </span>
                           </div>
@@ -327,24 +332,22 @@ const Layout = () => {
             </div>
 
             {/* Role pill badge */}
-            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide border ${
-              isAdmin 
-                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]' 
-                : 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]'
+            <div className={`tactile-sticker font-extrabold ${
+              isAdmin ? 'tactile-sticker-orange text-white' : 'tactile-sticker-cyan text-black'
             }`}>
-              <div className={`h-1.5 w-1.5 rounded-full ${isAdmin ? 'bg-amber-400 animate-pulse' : 'bg-indigo-400 animate-pulse'}`} />
+              <div className={`h-1.5 w-1.5 rounded-full border border-black ${isAdmin ? 'bg-amber-300 animate-pulse' : 'bg-indigo-300 animate-pulse'}`} />
               <span>{user?.role}</span>
             </div>
             
             {/* Simple profile card */}
-            <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-lg border border-dark-border/50 bg-slate-950/30">
-              <span className="text-sm font-medium text-slate-300">Welcome, <strong className="text-white font-semibold">{user?.nama.split(' ')[0]}</strong></span>
+            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg border-2 border-black bg-dark-panel shadow-tactile-sm">
+              <span className="text-sm font-bold text-slate-300">Welcome, <strong className="text-tactile-yellow font-extrabold">{user?.nama.split(' ')[0]}</strong></span>
             </div>
           </div>
         </header>
 
         {/* Dynamic Route Content */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-gradient-to-b from-dark-bg via-[#0c0e17] to-dark-bg">
+        <main className="flex-1 overflow-y-auto p-6 md:p-8 bg-dark-bg noise-overlay tactile-grid-lines">
           <Outlet />
         </main>
       </div>
@@ -354,3 +357,4 @@ const Layout = () => {
 };
 
 export default Layout;
+

@@ -28,6 +28,9 @@ Do not wrap it in markdown code blocks like \`\`\`json. Return only the raw JSON
 `;
 
   if (apiKey && apiKey !== 'YOUR_GEMINI_API_KEY_HERE' && apiKey.trim() !== '') {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
+
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
@@ -36,9 +39,11 @@ Do not wrap it in markdown code blocks like \`\`\`json. Return only the raw JSON
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: [{ parts: [{ text: textPrompt }] }]
-          })
+          }),
+          signal: controller.signal
         }
       );
+      clearTimeout(timeoutId);
       
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();

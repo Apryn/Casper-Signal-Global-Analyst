@@ -23,7 +23,7 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import evaluationRoutes from './routes/evaluation.routes.js';
 import accountRoutes from './routes/account.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
-import { startCronJobs } from './services/cron.service.js';
+import { startCronJobs, setBotInstance } from './services/cron.service.js';
 import telegramService from './services/telegram.service.js';
 const { parseMessageText } = telegramService;
 
@@ -200,25 +200,43 @@ const launchBot = () => {
         }
       });
 
+      const tryLaunch = () => {
+        bot.launch()
+          .then(() => {
+            console.log('Telegram Bot successfully launched in polling mode.');
+            setBotInstance(bot);
+          })
+          .catch(err => {
+            console.error('Failed to launch Telegraf bot:', err.message);
+            setBotInstance(null);
+            if (err.message && err.message.includes('409')) {
+              console.error('⚠️ WARNING: Telegram Bot Token Conflict (409). The bot token is likely being used by your local development machine or another server instance. Retrying in 15 seconds...');
+            } else {
+              console.error('Retrying bot launch in 15 seconds...');
+            }
+            setTimeout(tryLaunch, 15000);
+          });
+      };
 
-      bot.launch()
-        .then(() => {
-          console.log('Telegram Bot successfully launched in polling mode.');
-          startCronJobs(bot);
-        })
-        .catch(err => {
-          console.error('Failed to launch Telegraf bot:', err);
-          startCronJobs(null);
-        });
+      tryLaunch();
+      
+      // Start cron jobs immediately
+      startCronJobs(null);
         
       // Enable graceful stop
-      process.once('SIGINT', () => bot.stop('SIGINT'));
-      process.once('SIGTERM', () => bot.stop('SIGTERM'));
+      process.once('SIGINT', () => {
+        if (bot) bot.stop('SIGINT');
+      });
+      process.once('SIGTERM', () => {
+        if (bot) bot.stop('SIGTERM');
+      });
 
     } catch (e) {
       console.error('Error setting up Telegram Bot:', e);
+      startCronJobs(null);
     }
   }).catch(e => {
     console.error('Could not import Telegraf:', e);
+    startCronJobs(null);
   });
 };
