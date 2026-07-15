@@ -98,7 +98,7 @@ export const checkMissingReports = async (wibDateStr) => {
 
         if (reportCheck.rows.length === 0) {
           const mention = streamer.telegram_username
-            ? `@${streamer.telegram_username.trim()}`
+            ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
             : streamer.nama;
           const message = `⚠️ Laporan Belum Dikirim: Streamer ${mention} belum mengirim laporan hari ini (${todayStr}).`;
           
