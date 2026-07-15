@@ -53,11 +53,16 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const isAdmin = user?.role === 'Admin';
+  const isAnalyst = user?.role === 'Global Analyst';
+
   const value = {
     user,
     loading,
     login,
     logout,
+    isAdmin,
+    isAnalyst,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

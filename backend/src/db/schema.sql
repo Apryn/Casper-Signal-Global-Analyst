@@ -11,6 +11,8 @@ DROP TABLE IF EXISTS weekly_evaluations CASCADE;
 DROP TABLE IF EXISTS streamer_accounts CASCADE;
 DROP TABLE IF EXISTS streamers CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS config CASCADE;
+
 
 -- 1. Users table (for dashboard access)
 CREATE TABLE users (
@@ -132,6 +134,14 @@ CREATE TABLE notifications (
     status VARCHAR(50) NOT NULL DEFAULT 'Unsent' CHECK (status IN ('Unsent', 'Sent', 'Failed')),
     type VARCHAR(50) NOT NULL CHECK (type IN ('Report Reminder', 'Achievement', 'Alert')),
     is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 11. Configuration key-values
+CREATE TABLE config (
+    id SERIAL PRIMARY KEY,
+    key VARCHAR(100) UNIQUE NOT NULL,
+    value TEXT NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -42,12 +42,32 @@ const toInt = (str) => {
 const stripEmoji = (str) =>
   str.replace(/(?![0-9#*])[\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Modifier}]/gu, '').trim();
 
-/** Build ISO date from day/month/year parts */
+/** Build ISO date from day/month/year parts with auto-correction for template year typos */
 const buildDate = (day, monthStr, year) => {
   const key = monthStr.toLowerCase().replace(/[^a-z]/g, '');
   const month = MONTH_MAP[key];
   if (!month) return null;
-  const yr = year ? String(year) : String(new Date().getFullYear());
+  
+  const currentYear = new Date().getFullYear();
+  let yr = currentYear;
+  if (year) {
+    yr = parseInt(year, 10);
+  }
+  
+  // Construct the parsed date object
+  const parsedDate = new Date(`${yr}-${month}-${String(day).padStart(2, '0')}`);
+  const today = new Date();
+  
+  // Calculate date difference in days
+  const diffTime = Math.abs(today - parsedDate);
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  // If the parsed date is more than 30 days in the past or future,
+  // it is highly likely a template year typo. Auto-correct to current year.
+  if (isNaN(parsedDate.getTime()) || diffDays > 30) {
+    return `${currentYear}-${month}-${String(day).padStart(2, '0')}`;
+  }
+  
   return `${yr}-${month}-${String(day).padStart(2, '0')}`;
 };
 
@@ -167,13 +187,11 @@ const parseDateString = (raw) => {
 };
 
 // ============================================================
-// STEP 3: Extract streamer name
-// ============================================================
 const extractName = (text) => {
-  // A0: Explicit "Nama : VALUE" or "NAMA: VALUE" field (highest priority)
-  const namaFieldMatch = text.match(/^NAMA\s*:\s*([^\n\r]+)/im);
-  if (namaFieldMatch) {
-    const candidate = normalizeName(namaFieldMatch[1]);
+  // A0: Explicit "Nama : VALUE" or "NAMA: VALUE" field check (highest priority)
+  const explicitNameMatch = text.match(/^\s*Nama\s*:\s*([^\n\r]+)/mi);
+  if (explicitNameMatch) {
+    const candidate = normalizeName(explicitNameMatch[1]);
     if (candidate) return candidate;
   }
 

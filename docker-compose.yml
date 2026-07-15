@@ -32,6 +32,10 @@ services:
       - JWT_EXPIRES_IN=7d
       # Put your Telegram Token here or load from VPS environment variables
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-YOUR_TELEGRAM_BOT_TOKEN_HERE}
+      - TELEGRAM_GROUP_CHAT_ID=${TELEGRAM_GROUP_CHAT_ID}
+      - TELEGRAM_REPORT_THREAD_ID=${TELEGRAM_REPORT_THREAD_ID}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ACTIVATION_CODE=${ACTIVATION_CODE:-casper2026}
     expose:
       - "5000"
     depends_on:

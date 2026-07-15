@@ -79,6 +79,7 @@ export const simulateReportParsing = async (req, res) => {
 export const updateReport = async (req, res) => {
   const { id } = req.params;
   const {
+    tanggal,
     kategori,
     tiktok_upload,
     youtube_upload,
@@ -91,25 +92,40 @@ export const updateReport = async (req, res) => {
   } = req.body;
 
   try {
-    const checkReport = await query('SELECT id FROM daily_reports WHERE id = $1', [id]);
+    const checkReport = await query('SELECT * FROM daily_reports WHERE id = $1', [id]);
     if (checkReport.rows.length === 0) {
       return res.status(404).json({ message: 'Report not found' });
     }
 
+    // If tanggal is being changed, check for duplicate (same streamer + new date)
+    if (tanggal && tanggal !== checkReport.rows[0].tanggal) {
+      const dupCheck = await query(
+        'SELECT id FROM daily_reports WHERE tanggal = $1 AND streamer_id = $2 AND id <> $3',
+        [tanggal, checkReport.rows[0].streamer_id, id]
+      );
+      if (dupCheck.rows.length > 0) {
+        return res.status(400).json({ message: 'Laporan untuk streamer pada tanggal tersebut sudah ada!' });
+      }
+    }
+
+    const finalTanggal = tanggal || checkReport.rows[0].tanggal;
+
     const result = await query(
       `UPDATE daily_reports 
-       SET kategori = $1,
-           tiktok_upload = $2,
-           youtube_upload = $3,
-           instagram_upload = $4,
-           facebook_upload = $5,
-           live_duration = $6,
-           chat_count = $7,
-           registration_count = $8,
-           ftd_count = $9
-       WHERE id = $10 
+       SET tanggal = $1,
+           kategori = $2,
+           tiktok_upload = $3,
+           youtube_upload = $4,
+           instagram_upload = $5,
+           facebook_upload = $6,
+           live_duration = $7,
+           chat_count = $8,
+           registration_count = $9,
+           ftd_count = $10
+       WHERE id = $11 
        RETURNING *`,
       [
+        finalTanggal,
         kategori,
         tiktok_upload || 0,
         youtube_upload || 0,
@@ -132,6 +148,7 @@ export const updateReport = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
 
 export const deleteReport = async (req, res) => {
   const { id } = req.params;

@@ -265,9 +265,6 @@ Rekomendasi Strategis:
     if (apiKey && apiKey !== 'YOUR_GEMINI_API_KEY' && apiKey.trim() !== '') {
       console.log('Gemini API key detected, generating enhanced AI insights...');
       
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
-
       try {
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
@@ -295,10 +292,9 @@ Raw Statistics:
                 }]
               }]
             }),
-            signal: controller.signal
+            signal: AbortSignal.timeout(5000)
           }
         );
-        clearTimeout(timeoutId);
 
         const data = await response.json();
         const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
