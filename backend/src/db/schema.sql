@@ -29,6 +29,7 @@ CREATE TABLE streamers (
     id SERIAL PRIMARY KEY,
     nama VARCHAR(255) UNIQUE NOT NULL,
     platform VARCHAR(100) NOT NULL DEFAULT 'TikTok',
+    telegram_username VARCHAR(100),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

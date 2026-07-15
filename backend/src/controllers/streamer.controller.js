@@ -19,7 +19,7 @@ export const getAllStreamers = async (req, res) => {
 };
 
 export const createStreamer = async (req, res) => {
-  const { nama, platform } = req.body;
+  const { nama, platform, telegram_username } = req.body;
 
   if (!nama) {
     return res.status(400).json({ message: 'Streamer name is required' });
@@ -32,8 +32,8 @@ export const createStreamer = async (req, res) => {
     }
 
     const result = await query(
-      'INSERT INTO streamers (nama, platform) VALUES ($1, $2) RETURNING *',
-      [nama.trim(), platform ? platform.trim() : 'TikTok']
+      'INSERT INTO streamers (nama, platform, telegram_username) VALUES ($1, $2, $3) RETURNING *',
+      [nama.trim(), platform ? platform.trim() : 'TikTok', telegram_username ? telegram_username.trim() : null]
     );
 
     res.status(201).json({
@@ -48,7 +48,7 @@ export const createStreamer = async (req, res) => {
 
 export const updateStreamer = async (req, res) => {
   const { id } = req.params;
-  const { nama, platform } = req.body;
+  const { nama, platform, telegram_username } = req.body;
 
   if (!nama) {
     return res.status(400).json({ message: 'Streamer name is required' });
@@ -65,8 +65,8 @@ export const updateStreamer = async (req, res) => {
     }
 
     const result = await query(
-      'UPDATE streamers SET nama = $1, platform = $2 WHERE id = $3 RETURNING *',
-      [nama.trim(), platform ? platform.trim() : 'TikTok', id]
+      'UPDATE streamers SET nama = $1, platform = $2, telegram_username = $3 WHERE id = $4 RETURNING *',
+      [nama.trim(), platform ? platform.trim() : 'TikTok', telegram_username ? telegram_username.trim() : null, id]
     );
 
     if (result.rows.length === 0) {

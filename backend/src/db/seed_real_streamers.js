@@ -1,17 +1,17 @@
 import pool from '../config/db.js';
 
 const realStreamers = [
-  { name: 'Brayy', platform: 'TikTok' },
-  { name: 'Tizza', platform: 'TikTok' },
-  { name: 'Rival Suhanda', platform: 'TikTok' },
-  { name: 'Ratu', platform: 'TikTok' },
-  { name: 'BG Chenn', platform: 'TikTok' },
-  { name: 'Keylaa', platform: 'TikTok' },
-  { name: 'Aline', platform: 'TikTok' },
-  { name: 'Katrineely', platform: 'TikTok' },
-  { name: 'Ajo', platform: 'TikTok' },
-  { name: 'Bagas', platform: 'TikTok' },
-  { name: 'Laflanca', platform: 'TikTok' }
+  { name: 'Brayy', platform: 'TikTok', telegram_username: 'brayycandle' },
+  { name: 'Tizza', platform: 'TikTok', telegram_username: 'tizzagot' },
+  { name: 'Rival Suhanda', platform: 'TikTok', telegram_username: 'rivalsuhanda' },
+  { name: 'Ratu', platform: 'TikTok', telegram_username: 'ratuvalencia' },
+  { name: 'BG Chenn', platform: 'TikTok', telegram_username: 'anandarioo' },
+  { name: 'Keylaa', platform: 'TikTok', telegram_username: 'keylaa' },
+  { name: 'Aline', platform: 'TikTok', telegram_username: 'aline' },
+  { name: 'Katrineely', platform: 'TikTok', telegram_username: 'katrinee_09' },
+  { name: 'Ajo', platform: 'TikTok', telegram_username: 'ajocandle' },
+  { name: 'Bagas', platform: 'TikTok', telegram_username: 'bagas' },
+  { name: 'Laflanca', platform: 'TikTok', telegram_username: 'laflanca' }
 ];
 
 async function seedRealStreamers() {
@@ -38,10 +38,10 @@ async function seedRealStreamers() {
     for (const streamer of realStreamers) {
       // 1. Insert Streamer
       const streamerRes = await client.query(
-        `INSERT INTO streamers (nama, platform)
-         VALUES ($1, $2)
+        `INSERT INTO streamers (nama, platform, telegram_username)
+         VALUES ($1, $2, $3)
          RETURNING id`,
-        [streamer.name, streamer.platform]
+        [streamer.name, streamer.platform, streamer.telegram_username]
       );
       const streamerId = streamerRes.rows[0].id;
       const cleanName = streamer.name.toLowerCase().replace(/\s+/g, '');

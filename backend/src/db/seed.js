@@ -21,18 +21,18 @@ async function seedData() {
 
     // 2. Insert Streamers
     const streamersList = [
-      { nama: 'Tizza', platform: 'TikTok' },
-      { nama: 'Got', platform: 'YouTube' },
-      { nama: 'Lulu', platform: 'Instagram' },
-      { nama: 'Romi', platform: 'TikTok' },
-      { nama: 'Vero', platform: 'Facebook' },
+      { nama: 'Tizza', platform: 'TikTok', telegram_username: 'tizzagot' },
+      { nama: 'Got', platform: 'YouTube', telegram_username: 'got_youtube' },
+      { nama: 'Lulu', platform: 'Instagram', telegram_username: 'lulu_insta' },
+      { nama: 'Romi', platform: 'TikTok', telegram_username: 'romi_tiktok' },
+      { nama: 'Vero', platform: 'Facebook', telegram_username: 'vero_fb' },
     ];
 
     const streamerIds = [];
     for (const streamer of streamersList) {
       const res = await client.query(
-        'INSERT INTO streamers (nama, platform) VALUES ($1, $2) RETURNING id, nama',
-        [streamer.nama, streamer.platform]
+        'INSERT INTO streamers (nama, platform, telegram_username) VALUES ($1, $2, $3) RETURNING id, nama',
+        [streamer.nama, streamer.platform, streamer.telegram_username]
       );
       streamerIds.push(res.rows[0]);
     }

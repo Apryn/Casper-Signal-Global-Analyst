@@ -22,7 +22,7 @@ const Streamers = () => {
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add'); // 'add' | 'edit'
-  const [currentStreamer, setCurrentStreamer] = useState({ id: '', nama: '', platform: 'TikTok' });
+  const [currentStreamer, setCurrentStreamer] = useState({ id: '', nama: '', platform: 'TikTok', telegram_username: '' });
   const [modalError, setModalError] = useState('');
   const [modalSuccess, setModalSuccess] = useState('');
 
@@ -101,7 +101,7 @@ const Streamers = () => {
   }, []);
 
   const handleOpenAddModal = () => {
-    setCurrentStreamer({ id: '', nama: '', platform: 'TikTok' });
+    setCurrentStreamer({ id: '', nama: '', platform: 'TikTok', telegram_username: '' });
     setModalMode('add');
     setModalError('');
     setModalSuccess('');
@@ -109,7 +109,7 @@ const Streamers = () => {
   };
 
   const handleOpenEditModal = (streamer) => {
-    setCurrentStreamer({ id: streamer.id, nama: streamer.nama, platform: streamer.platform });
+    setCurrentStreamer({ id: streamer.id, nama: streamer.nama, platform: streamer.platform, telegram_username: streamer.telegram_username || '' });
     setModalMode('edit');
     setModalError('');
     setModalSuccess('');
@@ -237,6 +237,10 @@ const Streamers = () => {
                 {/* Statistics counts */}
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between text-xs text-gray-400">
+                    <span>Telegram Handle</span>
+                    <strong className="text-indigo-400 font-semibold">{streamer.telegram_username ? `@${streamer.telegram_username}` : '-'}</strong>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400">
                     <span>Reports Ingested</span>
                     <strong className="text-white font-semibold">{streamer.total_reports} logs</strong>
                   </div>
@@ -334,6 +338,17 @@ const Streamers = () => {
                   <option value="Twitch">Twitch</option>
                   <option value="Other">Other</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Telegram Username (tanpa @)</label>
+                <input
+                  type="text"
+                  value={currentStreamer.telegram_username}
+                  onChange={(e) => setCurrentStreamer({ ...currentStreamer, telegram_username: e.target.value })}
+                  placeholder="e.g. brayycandle"
+                  className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
               </div>
 
               <button

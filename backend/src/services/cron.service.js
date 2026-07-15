@@ -85,7 +85,7 @@ export const checkMissingReports = async (wibDateStr) => {
   
   try {
     // Get all streamers
-    const streamersRes = await query('SELECT id, nama FROM streamers');
+    const streamersRes = await query('SELECT id, nama, telegram_username FROM streamers');
     const streamers = streamersRes.rows;
 
     for (const streamer of streamers) {
@@ -97,7 +97,10 @@ export const checkMissingReports = async (wibDateStr) => {
         );
 
         if (reportCheck.rows.length === 0) {
-          const message = `⚠️ Laporan Belum Dikirim: Streamer ${streamer.nama} belum mengirim laporan hari ini (${todayStr}).`;
+          const mention = streamer.telegram_username
+            ? `@${streamer.telegram_username.trim()}`
+            : streamer.nama;
+          const message = `⚠️ Laporan Belum Dikirim: Streamer ${mention} belum mengirim laporan hari ini (${todayStr}).`;
           
           // Double check if report reminder was already sent today to prevent duplicate spamming
           const doubleCheck = await query(
@@ -324,10 +327,10 @@ export const startCronJobs = (botInstance) => {
     checkTargetAchievements();
   }, 5000);
 
-  // ⏰ Check missing daily reports at 22:00 WIB every day
-  cron.schedule('0 22 * * *', () => {
+  // ⏰ Check missing daily reports at 23:00 WIB every day
+  cron.schedule('0 23 * * *', () => {
     const { dateStr } = getWibHourAndDate();
-    console.log(`[Cron] Running checkMissingReports at 22:00 WIB for ${dateStr}`);
+    console.log(`[Cron] Running checkMissingReports at 23:00 WIB for ${dateStr}`);
     checkMissingReports(dateStr);
   }, { timezone: 'Asia/Jakarta' });
 
