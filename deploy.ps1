@@ -74,7 +74,7 @@ if ($pilihan -eq "1") {
 
     Write-Host ""
     Write-Host "▶ [VPS] Mengupload file .env terbaru ke VPS..." -ForegroundColor Yellow
-    scp -o StrictHostKeyChecking=no (Join-Path $PSScriptRoot "backend\.env") "${VPS_USER}@${VPS_IP}:${APP_DIR}/backend/.env"
+    scp -o StrictHostKeyChecking=no "$(Join-Path $PSScriptRoot "backend\.env")" "${VPS_USER}@${VPS_IP}:${APP_DIR}/backend/.env"
 
     Write-Host "▶ [VPS] Menghubungkan ke VPS dan menjalankan update..." -ForegroundColor Yellow
 
