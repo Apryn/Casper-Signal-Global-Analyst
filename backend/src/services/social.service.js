@@ -43,6 +43,93 @@ const fetchYoutubeMetrics = async (url) => {
 };
 
 /**
+ * Attempts to fetch real metrics for a TikTok video using RapidAPI TikTok Scraper.
+ * Returns null if RAPIDAPI_KEY is not configured or request fails.
+ */
+const fetchTikTokVideoMetrics = async (videoUrl) => {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey || apiKey === 'YOUR_RAPIDAPI_KEY') return null;
+
+  try {
+    const url = `https://tiktok-scraper7.p.rapidapi.com/video/info?url=${encodeURIComponent(videoUrl)}`;
+    const res = await fetch(url, {
+      headers: {
+        'x-rapidapi-key': apiKey,
+        'x-rapidapi-host': 'tiktok-scraper7.p.rapidapi.com'
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+
+    if (!res.ok) return null;
+
+    const result = await res.json();
+    if (result.code === 0 && result.data) {
+      const v = result.data;
+      return {
+        views: parseInt(v.play_count, 10) || 0,
+        likes: parseInt(v.digg_count, 10) || 0,
+        comments: parseInt(v.comment_count, 10) || 0,
+        shares: parseInt(v.share_count, 10) || 0
+      };
+    }
+  } catch (error) {
+    console.warn(`[Social Service]: Failed to fetch TikTok metrics via RapidAPI for ${videoUrl}: ${error.message}`);
+  }
+  return null;
+};
+
+/**
+ * Fetches latest video uploads for a TikTok user profile using RapidAPI TikTok Scraper
+ */
+const fetchTikTokRssVideos = async (username) => {
+  const apiKey = process.env.RAPIDAPI_KEY;
+  if (!apiKey || apiKey === 'YOUR_RAPIDAPI_KEY') {
+    return [];
+  }
+
+  // Remove '@' prefix if present
+  const cleanUsername = username.replace(/^@/, '');
+
+  try {
+    const url = `https://tiktok-scraper7.p.rapidapi.com/user/posts?unique_id=${cleanUsername}&count=10`;
+    const res = await fetch(url, {
+      headers: {
+        'x-rapidapi-key': apiKey,
+        'x-rapidapi-host': 'tiktok-scraper7.p.rapidapi.com'
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+
+    if (!res.ok) return [];
+
+    const result = await res.json();
+    if (result.code !== 0 || !result.data || !result.data.videos) {
+      console.warn(`[Social Service]: TikTok Scraper API returned error for ${cleanUsername}:`, result.msg);
+      return [];
+    }
+
+    const videos = result.data.videos.map(v => {
+      const uploadDate = new Date(v.create_time * 1000).toISOString().split('T')[0];
+      const videoLink = `https://www.tiktok.com/@${cleanUsername}/video/${v.video_id}`;
+      return {
+        title: v.title || `Video by @${cleanUsername}`,
+        link: videoLink,
+        uploadDate,
+        views: parseInt(v.play_count, 10) || 0,
+        likes: parseInt(v.digg_count, 10) || 0,
+        comments: parseInt(v.comment_count, 10) || 0,
+        shares: parseInt(v.share_count, 10) || 0
+      };
+    });
+
+    return videos;
+  } catch (error) {
+    console.warn(`[Social Service]: Failed to fetch TikTok videos via RapidAPI for ${cleanUsername}: ${error.message}`);
+  }
+  return [];
+};
+
+/**
  * Main function to sync social media content metrics from all platforms.
  * Uses real API integration if credentials exist, falling back to realistic organic growth.
  */
@@ -61,6 +148,8 @@ export const syncSocialMetrics = async () => {
       // 2. Attempt real API fetch based on platform
       if (row.platform === 'YouTube' && row.link) {
         metrics = await fetchYoutubeMetrics(row.link);
+      } else if (row.platform === 'TikTok' && row.link) {
+        metrics = await fetchTikTokVideoMetrics(row.link);
       }
 
       // 3. Fallback: Organic Growth Simulation Engine
@@ -222,7 +311,6 @@ export const discoverNewContent = async () => {
           console.log(`[Social Service]: Found ${rssVideos.length} videos in RSS feed for ${acc.streamer_name}`);
           
           for (const video of rssVideos) {
-            // Check if this video link already exists in the content table
             const existsCheck = await query(
               'SELECT id FROM content WHERE link = $1',
               [video.link]
@@ -250,8 +338,39 @@ export const discoverNewContent = async () => {
             }
           }
         }
+      } else if (acc.platform === 'TikTok' && acc.username) {
+        console.log(`[Social Service]: Crawling TikTok account for streamer ${acc.streamer_name}...`);
+        const tiktokVideos = await fetchTikTokRssVideos(acc.username);
+        console.log(`[Social Service]: Found ${tiktokVideos.length} videos on TikTok for ${acc.streamer_name}`);
+        
+        for (const video of tiktokVideos) {
+          const existsCheck = await query(
+            'SELECT id FROM content WHERE link = $1',
+            [video.link]
+          );
+
+          if (existsCheck.rows.length === 0) {
+            await query(
+              `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+              [
+                acc.streamer_id,
+                acc.platform,
+                video.title,
+                video.uploadDate,
+                video.link,
+                video.views,
+                video.likes,
+                video.comments,
+                video.shares,
+                acc.id
+              ]
+            );
+            discoveredCount++;
+          }
+        }
       } else {
-        // TikTok, Instagram, Facebook:
+        // Instagram, Facebook:
         // Do NOT generate mock fallback content in production to maintain data integrity!
         console.log(`[Social Service]: Skipping crawler for ${acc.platform} account of ${acc.streamer_name} (requires manual entry or dedicated crawler API).`);
       }
