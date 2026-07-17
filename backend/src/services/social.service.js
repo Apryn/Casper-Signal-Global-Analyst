@@ -43,7 +43,7 @@ const fetchYoutubeMetrics = async (url) => {
 };
 
 /**
- * Attempts to fetch real metrics for a TikTok video using RapidAPI TikTok Scraper.
+ * Attempts to fetch real metrics for a TikTok video using RapidAPI tiktok-api23.
  * Returns null if RAPIDAPI_KEY is not configured or request fails.
  */
 const fetchTikTokVideoMetrics = async (videoUrl) => {
@@ -51,11 +51,15 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
   if (!apiKey || apiKey === 'YOUR_RAPIDAPI_KEY') return null;
 
   try {
-    const url = `https://tiktok-scraper7.p.rapidapi.com/video/info?url=${encodeURIComponent(videoUrl)}`;
+    const videoIdMatch = videoUrl.match(/video\/(\d+)/);
+    if (!videoIdMatch) return null;
+    const videoId = videoIdMatch[1];
+
+    const url = `https://tiktok-api23.p.rapidapi.com/api/post/info?itemId=${videoId}`;
     const res = await fetch(url, {
       headers: {
         'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': 'tiktok-scraper7.p.rapidapi.com'
+        'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
       },
       signal: AbortSignal.timeout(5000)
     });
@@ -63,13 +67,14 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
     if (!res.ok) return null;
 
     const result = await res.json();
-    if (result.code === 0 && result.data) {
-      const v = result.data;
+    const itemInfo = result?.itemInfo?.itemStruct || result?.data;
+    if (itemInfo) {
+      const stats = itemInfo.stats;
       return {
-        views: parseInt(v.play_count, 10) || 0,
-        likes: parseInt(v.digg_count, 10) || 0,
-        comments: parseInt(v.comment_count, 10) || 0,
-        shares: parseInt(v.share_count, 10) || 0
+        views: parseInt(stats?.playCount || itemInfo.play_count, 10) || 0,
+        likes: parseInt(stats?.diggCount || itemInfo.digg_count, 10) || 0,
+        comments: parseInt(stats?.commentCount || itemInfo.comment_count, 10) || 0,
+        shares: parseInt(stats?.shareCount || itemInfo.share_count, 10) || 0
       };
     }
   } catch (error) {
@@ -79,7 +84,7 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
 };
 
 /**
- * Fetches latest video uploads for a TikTok user profile using RapidAPI TikTok Scraper
+ * Fetches latest video uploads for a TikTok user profile using RapidAPI tiktok-api23
  */
 const fetchTikTokRssVideos = async (username) => {
   const apiKey = process.env.RAPIDAPI_KEY;
@@ -91,36 +96,76 @@ const fetchTikTokRssVideos = async (username) => {
   const cleanUsername = username.replace(/^@/, '');
 
   try {
-    const url = `https://tiktok-scraper7.p.rapidapi.com/user/posts?unique_id=${cleanUsername}&count=10`;
-    const res = await fetch(url, {
+    // 1. Resolve username to secUid via /api/user/info
+    console.log(`[Social Service]: Resolving TikTok username ${cleanUsername} to secUid via tiktok-api23...`);
+    const infoUrl = `https://tiktok-api23.p.rapidapi.com/api/user/info?uniqueId=${cleanUsername}`;
+    const infoRes = await fetch(infoUrl, {
       headers: {
         'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': 'tiktok-scraper7.p.rapidapi.com'
+        'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
       },
       signal: AbortSignal.timeout(5000)
     });
 
-    if (!res.ok) return [];
-
-    const result = await res.json();
-    if (result.code !== 0 || !result.data || !result.data.videos) {
-      console.warn(`[Social Service]: TikTok Scraper API returned error for ${cleanUsername}:`, result.msg);
+    if (!infoRes.ok) {
+      console.warn(`[Social Service]: Failed to get TikTok user info for ${cleanUsername}. Status: ${infoRes.status}`);
       return [];
     }
 
-    const videos = result.data.videos.map(v => {
-      const uploadDate = new Date(v.create_time * 1000).toISOString().split('T')[0];
-      const videoLink = `https://www.tiktok.com/@${cleanUsername}/video/${v.video_id}`;
-      return {
-        title: v.title || `Video by @${cleanUsername}`,
-        link: videoLink,
-        uploadDate,
-        views: parseInt(v.play_count, 10) || 0,
-        likes: parseInt(v.digg_count, 10) || 0,
-        comments: parseInt(v.comment_count, 10) || 0,
-        shares: parseInt(v.share_count, 10) || 0
-      };
+    const infoResult = await infoRes.json();
+    const secUid = infoResult?.userInfo?.user?.secUid || infoResult?.data?.secUid || infoResult?.data?.user?.secUid;
+    
+    if (!secUid) {
+      console.warn(`[Social Service]: Could not extract secUid for TikTok user ${cleanUsername}. Response:`, JSON.stringify(infoResult).slice(0, 200));
+      return [];
+    }
+
+    console.log(`[Social Service]: Successfully resolved secUid for ${cleanUsername}: ${secUid}`);
+
+    // 2. Fetch posts via /api/user/posts
+    const postsUrl = `https://tiktok-api23.p.rapidapi.com/api/user/posts?secUid=${secUid}&count=10&cursor=0`;
+    const postsRes = await fetch(postsUrl, {
+      headers: {
+        'x-rapidapi-key': apiKey,
+        'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
+      },
+      signal: AbortSignal.timeout(5000)
     });
+
+    if (!postsRes.ok) {
+      console.warn(`[Social Service]: Failed to get TikTok posts for ${cleanUsername}. Status: ${postsRes.status}`);
+      return [];
+    }
+
+    const postsResult = await postsRes.json();
+    const videosArray = postsResult?.itemList || postsResult?.data?.videos || postsResult?.data?.itemList || [];
+    
+    console.log(`[Social Service]: TikTok API returned ${videosArray.length} items for ${cleanUsername}`);
+
+    const videos = [];
+    for (const v of videosArray) {
+      const vId = v.id || v.video_id;
+      if (!vId) continue;
+
+      const title = v.desc || v.title || `Video by @${cleanUsername}`;
+      const createTime = v.createTime || v.create_time;
+      const uploadDate = createTime ? new Date(createTime * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      
+      const playCount = v.stats?.playCount || v.play_count || 0;
+      const diggCount = v.stats?.diggCount || v.digg_count || 0;
+      const commentCount = v.stats?.commentCount || v.comment_count || 0;
+      const shareCount = v.stats?.shareCount || v.share_count || 0;
+
+      videos.push({
+        title,
+        link: `https://www.tiktok.com/@${cleanUsername}/video/${vId}`,
+        uploadDate,
+        views: parseInt(playCount, 10) || 0,
+        likes: parseInt(diggCount, 10) || 0,
+        comments: parseInt(commentCount, 10) || 0,
+        shares: parseInt(shareCount, 10) || 0
+      });
+    }
 
     return videos;
   } catch (error) {
