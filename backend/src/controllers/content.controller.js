@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { syncSocialMetrics } from '../services/social.service.js';
 
 export const getContentList = async (req, res) => {
   const { platform, streamerName, sortBy = 'upload_date', sortOrder = 'DESC' } = req.query;
@@ -171,5 +172,18 @@ export const deleteContent = async (req, res) => {
   } catch (error) {
     console.error('Error deleting content:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const syncAllContent = async (req, res) => {
+  try {
+    const updatedCount = await syncSocialMetrics();
+    res.json({
+      message: 'Social content metrics synchronized successfully',
+      updatedCount
+    });
+  } catch (error) {
+    console.error('Error in syncAllContent controller:', error);
+    res.status(500).json({ message: 'Internal server error during synchronization' });
   }
 };

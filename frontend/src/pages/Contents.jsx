@@ -14,7 +14,8 @@ import {
   Share2,
   Tv,
   CheckCircle2,
-  Trophy
+  Trophy,
+  RefreshCw
 } from 'lucide-react';
 
 const Contents = () => {
@@ -45,6 +46,29 @@ const Contents = () => {
   // Handles state variables
   const [streamerAccounts, setStreamerAccounts] = useState([]);
   const [selectedAccountId, setSelectedAccountId] = useState('');
+
+  // Sync state variables
+  const [syncing, setSyncing] = useState(false);
+  const [syncSuccess, setSyncSuccess] = useState('');
+  const [syncError, setSyncError] = useState('');
+
+  const handleSyncContent = async () => {
+    setSyncing(true);
+    setSyncSuccess('');
+    setSyncError('');
+    try {
+      const res = await api.post('/content/sync');
+      setSyncSuccess(`Success! Synchronized ${res.data.updatedCount} content metrics.`);
+      fetchData(); // Reload all stats and lists
+      setTimeout(() => setSyncSuccess(''), 4000);
+    } catch (err) {
+      console.error('Error syncing content metrics:', err);
+      setSyncError(err.response?.data?.message || 'Failed to sync content metrics.');
+      setTimeout(() => setSyncError(''), 4000);
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Fetch handles/accounts whenever chosen streamer changes
   useEffect(() => {
@@ -162,14 +186,43 @@ const Contents = () => {
           <p className="text-sm text-gray-400">Track views, likes, shares, and find the highest-performing content clips.</p>
         </div>
 
-        <button
-          onClick={handleOpenModal}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200"
-        >
-          <Plus className="h-4.5 w-4.5" />
-          Log Uploaded Content
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleSyncContent}
+            disabled={syncing}
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-dark-border text-gray-300 hover:text-white shadow-lg active:translate-y-px transition-all duration-200 ${
+              syncing 
+                ? 'bg-slate-900 cursor-not-allowed opacity-70' 
+                : 'bg-slate-950/40 hover:bg-slate-900/60'
+            }`}
+          >
+            <RefreshCw className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync Content Metrics'}
+          </button>
+
+          <button
+            onClick={handleOpenModal}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200 animate-fadeIn"
+          >
+            <Plus className="h-4.5 w-4.5" />
+            Log Uploaded Content
+          </button>
+        </div>
       </div>
+
+      {/* Sync Status Notifications */}
+      {syncSuccess && (
+        <div className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
+          <CheckCircle2 className="h-4.5 w-4.5 shrink-0" />
+          <span>{syncSuccess}</span>
+        </div>
+      )}
+      {syncError && (
+        <div className="bg-rose-500/15 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
+          <X className="h-4.5 w-4.5 shrink-0" />
+          <span>{syncError}</span>
+        </div>
+      )}
 
       {/* Analytics Summary Cards */}
       {analytics && (

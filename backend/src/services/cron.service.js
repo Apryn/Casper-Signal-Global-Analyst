@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import cron from 'node-cron';
+import { syncSocialMetrics } from './social.service.js';
 
 let bot = null;
 
@@ -346,5 +347,11 @@ export const startCronJobs = (botInstance) => {
     console.log('[Cron] Running checkPerformanceDrops & checkTargetAchievements at 09:00 WIB');
     checkPerformanceDrops();
     checkTargetAchievements();
+  }, { timezone: 'Asia/Jakarta' });
+
+  // ⏰ Run social media metrics synchronization at 02:00 WIB every day
+  cron.schedule('0 2 * * *', () => {
+    console.log('[Cron] Running daily social media content metrics synchronization at 02:00 WIB');
+    syncSocialMetrics().catch(err => console.error('[Cron] Error running syncSocialMetrics:', err));
   }, { timezone: 'Asia/Jakarta' });
 };

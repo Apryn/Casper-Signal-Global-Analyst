@@ -4,7 +4,8 @@ import {
   getContentAnalytics,
   addContent,
   updateContent,
-  deleteContent
+  deleteContent,
+  syncAllContent
 } from '../controllers/content.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
@@ -15,6 +16,7 @@ router.use(authenticateToken);
 router.get('/', getContentList);
 router.get('/analytics', getContentAnalytics);
 router.post('/', addContent);
+router.post('/sync', syncAllContent);
 router.put('/:id', updateContent);
 router.delete('/:id', deleteContent);
 
