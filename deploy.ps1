@@ -5,6 +5,10 @@
 # Casper    -> port 81  (backend :5001)
 # ==============================================================================
 
+param(
+    [string]$Method = ""
+)
+
 Clear-Host
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host "  CASPER SIGNAL ANALYTICS - DEPLOYMENT TO VPS     " -ForegroundColor Cyan
@@ -55,8 +59,11 @@ Write-Host "      Install Node.js, Nginx, PM2, clone repo,"
 # Write-Host "      setup .env, init database, build frontend"
 Write-Host "====================================================" -ForegroundColor Cyan
 Write-Host ""
-
-$pilihan = Read-Host "Masukkan pilihan (1 atau 2, default: 1)"
+if ($Method -ne "") {
+    $pilihan = $Method
+} else {
+    $pilihan = Read-Host "Masukkan pilihan (1 atau 2, default: 1)"
+}
 if ($pilihan -ne "2") { $pilihan = "1" }
 
 # Set Project Directory
@@ -73,28 +80,19 @@ if ($pilihan -eq "1") {
     Write-Host "====================================================" -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "▶ [VPS] Mengupload file .env terbaru ke VPS..." -ForegroundColor Yellow
-    scp -o StrictHostKeyChecking=no "$(Join-Path $PSScriptRoot "backend\.env")" "${VPS_USER}@${VPS_IP}:${APP_DIR}/backend/.env"
+    Write-Host "▶ [VPS] Menghubungkan ke VPS untuk menulis .env dan menjalankan update..." -ForegroundColor Yellow
 
-    Write-Host "▶ [VPS] Menghubungkan ke VPS dan menjalankan update..." -ForegroundColor Yellow
+    $ENV_CONTENT = Get-Content -Raw -Path "$(Join-Path $PSScriptRoot "backend\.env")"
 
     $REMOTE_COMMANDS = @"
+echo '-> Menulis file .env terbaru...'
+cat << 'ENVEOF' > $APP_DIR/backend/.env
+$ENV_CONTENT
+ENVEOF
+
 echo '-> Pull kode terbaru...'
 cd $APP_DIR
 git pull origin master
-
-echo '-> Update .env config...'
-if grep -q "ACTIVATION_CODE" $APP_DIR/backend/.env; then
-  sed -i 's/^ACTIVATION_CODE=.*/ACTIVATION_CODE=$ENV_ACTIVATION_CODE/' $APP_DIR/backend/.env
-else
-  echo "ACTIVATION_CODE=$ENV_ACTIVATION_CODE" >> $APP_DIR/backend/.env
-fi
-
-if grep -q "GEMINI_API_KEY" $APP_DIR/backend/.env; then
-  sed -i 's/^GEMINI_API_KEY=.*/GEMINI_API_KEY=$ENV_GEMINI_API_KEY/' $APP_DIR/backend/.env
-else
-  echo "GEMINI_API_KEY=$ENV_GEMINI_API_KEY" >> $APP_DIR/backend/.env
-fi
 
 echo '-> Update dependencies backend...'
 cd $APP_DIR/backend
