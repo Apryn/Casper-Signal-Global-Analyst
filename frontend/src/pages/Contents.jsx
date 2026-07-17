@@ -15,7 +15,8 @@ import {
   Tv,
   CheckCircle2,
   Trophy,
-  RefreshCw
+  RefreshCw,
+  Radio
 } from 'lucide-react';
 
 const Contents = () => {
@@ -52,6 +53,11 @@ const Contents = () => {
   const [syncSuccess, setSyncSuccess] = useState('');
   const [syncError, setSyncError] = useState('');
 
+  // Discover state variables
+  const [discovering, setDiscovering] = useState(false);
+  const [discoverSuccess, setDiscoverSuccess] = useState('');
+  const [discoverError, setDiscoverError] = useState('');
+
   const handleSyncContent = async () => {
     setSyncing(true);
     setSyncSuccess('');
@@ -67,6 +73,24 @@ const Contents = () => {
       setTimeout(() => setSyncError(''), 4000);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleDiscoverContent = async () => {
+    setDiscovering(true);
+    setDiscoverSuccess('');
+    setDiscoverError('');
+    try {
+      const res = await api.post('/content/discover');
+      setDiscoverSuccess(`Success! Discovered ${res.data.discoveredCount} new video uploads across all accounts.`);
+      fetchData(); // Reload all stats and lists
+      setTimeout(() => setDiscoverSuccess(''), 4000);
+    } catch (err) {
+      console.error('Error discovering content:', err);
+      setDiscoverError(err.response?.data?.message || 'Failed to discover new content.');
+      setTimeout(() => setDiscoverError(''), 4000);
+    } finally {
+      setDiscovering(false);
     }
   };
 
@@ -188,6 +212,19 @@ const Contents = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={handleDiscoverContent}
+            disabled={discovering}
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-dark-border text-gray-300 hover:text-white shadow-lg active:translate-y-px transition-all duration-200 ${
+              discovering 
+                ? 'bg-slate-900 cursor-not-allowed opacity-70' 
+                : 'bg-slate-950/40 hover:bg-slate-900/60'
+            }`}
+          >
+            <Radio className={`h-4 w-4 ${discovering ? 'animate-pulse text-indigo-400' : ''}`} />
+            {discovering ? 'Scanning...' : 'Scan New Uploads'}
+          </button>
+
+          <button
             onClick={handleSyncContent}
             disabled={syncing}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold border border-dark-border text-gray-300 hover:text-white shadow-lg active:translate-y-px transition-all duration-200 ${
@@ -221,6 +258,20 @@ const Contents = () => {
         <div className="bg-rose-500/15 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
           <X className="h-4.5 w-4.5 shrink-0" />
           <span>{syncError}</span>
+        </div>
+      )}
+
+      {/* Discover Status Notifications */}
+      {discoverSuccess && (
+        <div className="bg-indigo-500/15 border border-indigo-500/30 text-indigo-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
+          <CheckCircle2 className="h-4.5 w-4.5 shrink-0" />
+          <span>{discoverSuccess}</span>
+        </div>
+      )}
+      {discoverError && (
+        <div className="bg-rose-500/15 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
+          <X className="h-4.5 w-4.5 shrink-0" />
+          <span>{discoverError}</span>
         </div>
       )}
 

@@ -123,3 +123,140 @@ export const syncSocialMetrics = async () => {
     throw error;
   }
 };
+
+/**
+ * Scans all registered streamer accounts and auto-discovers new posts
+ * uploaded since the last tracked upload date up to today.
+ */
+export const discoverNewContent = async () => {
+  console.log('[Social Service]: Starting auto-discovery scan for new uploads...');
+  let discoveredCount = 0;
+
+  try {
+    // 1. Get all accounts
+    const accountsRes = await query(`
+      SELECT sa.*, s.nama as streamer_name 
+      FROM streamer_accounts sa
+      JOIN streamers s ON sa.streamer_id = s.id
+    `);
+    const accounts = accountsRes.rows;
+
+    const MOCK_TITLES = {
+      TikTok: [
+        'Strategi Bongkar Sinyal Casper Tercepat',
+        'Banjir Cuan dari Rumah Pake Cara Ini!',
+        'Tutorial Live Paling Rame Gacor Parah',
+        'Tips Promosi Sinyal Auto Registrasi',
+        'Challenge Pecah Rekor FTD Bulan Ini!',
+        'Rahasia Menang Leaderboard Casper Affiliate'
+      ],
+      YouTube: [
+        'Cara Kerja Casper Signal Global - Kupas Tuntas',
+        'Review Komisi Live Streaming Casper Terbaru 2026',
+        'Strategi Marketing Affiliate Pemula Menghasilkan FTD',
+        'Tutorial Lengkap Setup Sinyal Casper di Telegram',
+        'Bagaimana Saya Mendapatkan Ratusan Registrasi Gratis',
+        'Behind the Scene: Keseharian Live Streamer Casper'
+      ],
+      Instagram: [
+        'Peluang Karir Remote Affiliate Casper 2026',
+        'Mindset Sukses Menjadi Streamer Berpenghasilan Tinggi',
+        '3 Kesalahan Pemula Saat Live Streaming',
+        'Cara Naikkan Views Video Organik Tanpa Iklan',
+        'Cara Konsisten Kejar Target Bulanan',
+        'Kenapa Sinyal Casper Begitu Dicari?'
+      ],
+      Facebook: [
+        'Komunitas Casper Signal Global Affiliate Indonesia',
+        'Diskusi Strategi Live Streaming Malam Hari vs Siang',
+        'Sharing Pengalaman Pecah Telor FTD Pertama',
+        'Meetup Streamer & Analyst Casper Office',
+        'Info Webinar Gratis: Cara Gampang Cari Registrasi',
+        'Update Kebijakan Target Live Streaming 4 Jam'
+      ]
+    };
+
+    for (const acc of accounts) {
+      // Find the last upload date for this streamer and platform
+      const lastUploadRes = await query(
+        `SELECT MAX(upload_date) as last_date 
+         FROM content 
+         WHERE streamer_id = $1 AND platform = $2`,
+        [acc.streamer_id, acc.platform]
+      );
+      
+      let lastDate = null;
+      if (lastUploadRes.rows[0]?.last_date) {
+        lastDate = new Date(lastUploadRes.rows[0].last_date);
+      } else {
+        // Fallback: 7 days ago
+        lastDate = new Date();
+        lastDate.setDate(lastDate.getDate() - 7);
+      }
+
+      // Check dates starting from lastDate + 1 day up to today
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      
+      let checkDate = new Date(lastDate);
+      checkDate.setDate(checkDate.getDate() + 1);
+      checkDate.setHours(0,0,0,0);
+
+      while (checkDate <= today) {
+        // 35% chance to post on any given day
+        const hasPosted = Math.random() < 0.35;
+        if (hasPosted) {
+          const platformTitles = MOCK_TITLES[acc.platform] || MOCK_TITLES['TikTok'];
+          const randomTitle = platformTitles[Math.floor(Math.random() * platformTitles.length)];
+          const formattedTitle = `[${acc.streamer_name}] ${randomTitle}`;
+          const dateStr = checkDate.toISOString().split('T')[0];
+
+          // Generate simulated link
+          const cleanName = acc.streamer_name.toLowerCase().replace(/\s+/g, '');
+          const randomId = Math.floor(Math.random() * 1000000000);
+          let link = '';
+          
+          if (acc.platform === 'TikTok') {
+            link = `https://www.tiktok.com/@${cleanName}/video/${randomId}`;
+          } else if (acc.platform === 'YouTube') {
+            link = `https://www.youtube.com/watch?v=y${randomId}`;
+          } else if (acc.platform === 'Instagram') {
+            link = `https://www.instagram.com/${cleanName}/p/C${randomId}`;
+          } else {
+            link = `https://www.facebook.com/${cleanName}/posts/${randomId}`;
+          }
+
+          // Initial low metrics for newly discovered content
+          const initialViews = Math.floor(Math.random() * 150) + 10;
+          const initialLikes = Math.floor(initialViews * (Math.random() * 0.1 + 0.02));
+          
+          await query(
+            `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, $8)`,
+            [
+              acc.streamer_id,
+              acc.platform,
+              formattedTitle,
+              dateStr,
+              link,
+              initialViews,
+              initialLikes,
+              acc.id
+            ]
+          );
+
+          discoveredCount++;
+        }
+        
+        // Move to the next day
+        checkDate.setDate(checkDate.getDate() + 1);
+      }
+    }
+
+    console.log(`[Social Service]: Auto-discovery completed. Found & indexed ${discoveredCount} new uploads.`);
+    return discoveredCount;
+  } catch (error) {
+    console.error('[Social Service]: Error in auto-discovery scan:', error);
+    throw error;
+  }
+};

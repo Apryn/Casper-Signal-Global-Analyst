@@ -1,6 +1,6 @@
 import { query } from '../config/db.js';
 import cron from 'node-cron';
-import { syncSocialMetrics } from './social.service.js';
+import { syncSocialMetrics, discoverNewContent } from './social.service.js';
 
 let bot = null;
 
@@ -353,5 +353,11 @@ export const startCronJobs = (botInstance) => {
   cron.schedule('0 2 * * *', () => {
     console.log('[Cron] Running daily social media content metrics synchronization at 02:00 WIB');
     syncSocialMetrics().catch(err => console.error('[Cron] Error running syncSocialMetrics:', err));
+  }, { timezone: 'Asia/Jakarta' });
+
+  // ⏰ Run social media content auto-discovery every 4 hours
+  cron.schedule('0 */4 * * *', () => {
+    console.log('[Cron] Running social media content auto-discovery...');
+    discoverNewContent().catch(err => console.error('[Cron] Error running discoverNewContent:', err));
   }, { timezone: 'Asia/Jakarta' });
 };

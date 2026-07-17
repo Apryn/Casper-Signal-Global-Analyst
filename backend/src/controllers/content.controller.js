@@ -1,5 +1,5 @@
 import { query } from '../config/db.js';
-import { syncSocialMetrics } from '../services/social.service.js';
+import { syncSocialMetrics, discoverNewContent } from '../services/social.service.js';
 
 export const getContentList = async (req, res) => {
   const { platform, streamerName, sortBy = 'upload_date', sortOrder = 'DESC' } = req.query;
@@ -185,5 +185,18 @@ export const syncAllContent = async (req, res) => {
   } catch (error) {
     console.error('Error in syncAllContent controller:', error);
     res.status(500).json({ message: 'Internal server error during synchronization' });
+  }
+};
+
+export const discoverContent = async (req, res) => {
+  try {
+    const discoveredCount = await discoverNewContent();
+    res.json({
+      message: 'Social media content auto-discovery completed successfully',
+      discoveredCount
+    });
+  } catch (error) {
+    console.error('Error in discoverContent controller:', error);
+    res.status(500).json({ message: 'Internal server error during content discovery' });
   }
 };
