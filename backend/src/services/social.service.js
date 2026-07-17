@@ -61,7 +61,7 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
         'x-rapidapi-key': apiKey,
         'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
       },
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(25000)
     });
 
     if (!res.ok) return null;
@@ -86,7 +86,7 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
 /**
  * Fetches latest video uploads for a TikTok user profile using RapidAPI tiktok-api23
  */
-const fetchTikTokRssVideos = async (username) => {
+const fetchTikTokRssVideos = async (username, accountLink) => {
   const apiKey = process.env.RAPIDAPI_KEY;
   if (!apiKey || apiKey === 'YOUR_RAPIDAPI_KEY') {
     return [];
@@ -96,31 +96,48 @@ const fetchTikTokRssVideos = async (username) => {
   const cleanUsername = username.replace(/^@/, '');
 
   try {
-    // 1. Resolve username to secUid via /api/user/info
-    console.log(`[Social Service]: Resolving TikTok username ${cleanUsername} to secUid via tiktok-api23...`);
-    const infoUrl = `https://tiktok-api23.p.rapidapi.com/api/user/info?uniqueId=${cleanUsername}`;
-    const infoRes = await fetch(infoUrl, {
-      headers: {
-        'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
-      },
-      signal: AbortSignal.timeout(5000)
-    });
+    let secUid = null;
 
-    if (!infoRes.ok) {
-      console.warn(`[Social Service]: Failed to get TikTok user info for ${cleanUsername}. Status: ${infoRes.status}`);
-      return [];
+    // Check if secUid is provided in the account link query params
+    if (accountLink && accountLink.includes('secUid=')) {
+      try {
+        const urlObj = new URL(accountLink);
+        secUid = urlObj.searchParams.get('secUid');
+        if (secUid) {
+          console.log(`[Social Service]: Extracted secUid directly from account link: ${secUid}`);
+        }
+      } catch (e) {
+        console.warn(`[Social Service]: Failed to parse URL from link ${accountLink}: ${e.message}`);
+      }
     }
 
-    const infoResult = await infoRes.json();
-    const secUid = infoResult?.userInfo?.user?.secUid || infoResult?.data?.secUid || infoResult?.data?.user?.secUid;
-    
+    // If not provided, try to resolve via info endpoint (fallback)
     if (!secUid) {
-      console.warn(`[Social Service]: Could not extract secUid for TikTok user ${cleanUsername}. Response:`, JSON.stringify(infoResult).slice(0, 200));
+      console.log(`[Social Service]: secUid not found in link. Resolving TikTok username ${cleanUsername} to secUid via API...`);
+      const infoUrl = `https://tiktok-api23.p.rapidapi.com/api/user/info?uniqueId=${cleanUsername}`;
+      const infoRes = await fetch(infoUrl, {
+        headers: {
+          'x-rapidapi-key': apiKey,
+          'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
+        },
+        signal: AbortSignal.timeout(25000)
+      });
+
+      if (infoRes.ok) {
+        const text = await infoRes.text();
+        if (text) {
+          const infoResult = JSON.parse(text);
+          secUid = infoResult?.userInfo?.user?.secUid || infoResult?.data?.secUid || infoResult?.data?.user?.secUid;
+        }
+      }
+    }
+
+    if (!secUid) {
+      console.warn(`[Social Service]: Could not resolve secUid for TikTok user ${cleanUsername}. Skipping.`);
       return [];
     }
 
-    console.log(`[Social Service]: Successfully resolved secUid for ${cleanUsername}: ${secUid}`);
+    console.log(`[Social Service]: Using secUid for ${cleanUsername}: ${secUid}`);
 
     // 2. Fetch posts via /api/user/posts
     const postsUrl = `https://tiktok-api23.p.rapidapi.com/api/user/posts?secUid=${secUid}&count=10&cursor=0`;
@@ -129,7 +146,7 @@ const fetchTikTokRssVideos = async (username) => {
         'x-rapidapi-key': apiKey,
         'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
       },
-      signal: AbortSignal.timeout(5000)
+      signal: AbortSignal.timeout(25000)
     });
 
     if (!postsRes.ok) {
@@ -147,7 +164,8 @@ const fetchTikTokRssVideos = async (username) => {
       const vId = v.id || v.video_id;
       if (!vId) continue;
 
-      const title = v.desc || v.title || `Video by @${cleanUsername}`;
+      const rawTitle = v.desc || v.title || `Video by @${cleanUsername}`;
+      const title = rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle;
       const createTime = v.createTime || v.create_time;
       const uploadDate = createTime ? new Date(createTime * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
       
@@ -385,7 +403,7 @@ export const discoverNewContent = async () => {
         }
       } else if (acc.platform === 'TikTok' && acc.username) {
         console.log(`[Social Service]: Crawling TikTok account for streamer ${acc.streamer_name}...`);
-        const tiktokVideos = await fetchTikTokRssVideos(acc.username);
+        const tiktokVideos = await fetchTikTokRssVideos(acc.username, acc.link);
         console.log(`[Social Service]: Found ${tiktokVideos.length} videos on TikTok for ${acc.streamer_name}`);
         
         for (const video of tiktokVideos) {
