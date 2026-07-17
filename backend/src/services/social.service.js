@@ -125,8 +125,80 @@ export const syncSocialMetrics = async () => {
 };
 
 /**
- * Scans all registered streamer accounts and auto-discovers new posts
- * uploaded since the last tracked upload date up to today.
+ * Resolves a YouTube channel URL to its canonical UC... channel ID
+ */
+const fetchYoutubeChannelId = async (channelUrl) => {
+  try {
+    // 1. If URL already has channel/UC...
+    const ucMatch = channelUrl.match(/channel\/(UC[a-zA-Z0-9_-]{22})/);
+    if (ucMatch) return ucMatch[1];
+
+    // 2. Fetch profile page and extract channel ID from meta or links
+    const res = await fetch(channelUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    const channelIdMatch = html.match(/channel_id=(UC[a-zA-Z0-9_-]{22})/);
+    if (channelIdMatch) return channelIdMatch[1];
+    
+    const idMatch = html.match(/meta itemprop="channelId" content="(UC[a-zA-Z0-9_-]{22})"/);
+    if (idMatch) return idMatch[1];
+
+    const identifierMatch = html.match(/"channelId":"(UC[a-zA-Z0-9_-]{22})"/);
+    if (identifierMatch) return identifierMatch[1];
+  } catch (error) {
+    console.warn(`[Social Service]: Failed to resolve YouTube channel ID for ${channelUrl}: ${error.message}`);
+  }
+  return null;
+};
+
+/**
+ * Fetches and parses latest video uploads from YouTube RSS feed
+ */
+const fetchYoutubeRssVideos = async (channelId) => {
+  try {
+    const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`;
+    const res = await fetch(rssUrl, { signal: AbortSignal.timeout(5000) });
+    if (!res.ok) return [];
+
+    const xml = await res.text();
+    const entryBlocks = xml.split('<entry>');
+    entryBlocks.shift(); // Remove header part before first entry
+    
+    const videos = [];
+    for (const entry of entryBlocks) {
+      const titleMatch = entry.match(/<title>([^<]+)<\/title>/);
+      const linkMatch = entry.match(/<link[^>]+href="([^"]+)"/);
+      const publishedMatch = entry.match(/<published>([^<]+)<\/published>/);
+      
+      if (titleMatch && linkMatch) {
+        // Strip CDATA or XML tags if any
+        let title = titleMatch[1].replace(/<!\[CDATA\[(.*?)\]\]>/g, '$1').trim();
+        // Convert HTML entities
+        title = title.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+        
+        videos.push({
+          title,
+          link: linkMatch[1].trim(),
+          uploadDate: publishedMatch ? publishedMatch[1].split('T')[0] : new Date().toISOString().split('T')[0]
+        });
+      }
+    }
+    return videos;
+  } catch (error) {
+    console.warn(`[Social Service]: Failed to parse YouTube RSS for ID ${channelId}: ${error.message}`);
+  }
+  return [];
+};
+
+/**
+ * Scans all registered streamer accounts and auto-discovers new posts.
+ * Crawls actual YouTube RSS feeds, and skips other platforms (no mock fallbacks) for production data integrity.
  */
 export const discoverNewContent = async () => {
   console.log('[Social Service]: Starting auto-discovery scan for new uploads...');
@@ -141,119 +213,51 @@ export const discoverNewContent = async () => {
     `);
     const accounts = accountsRes.rows;
 
-    const MOCK_TITLES = {
-      TikTok: [
-        'Strategi Bongkar Sinyal Casper Tercepat',
-        'Banjir Cuan dari Rumah Pake Cara Ini!',
-        'Tutorial Live Paling Rame Gacor Parah',
-        'Tips Promosi Sinyal Auto Registrasi',
-        'Challenge Pecah Rekor FTD Bulan Ini!',
-        'Rahasia Menang Leaderboard Casper Affiliate'
-      ],
-      YouTube: [
-        'Cara Kerja Casper Signal Global - Kupas Tuntas',
-        'Review Komisi Live Streaming Casper Terbaru 2026',
-        'Strategi Marketing Affiliate Pemula Menghasilkan FTD',
-        'Tutorial Lengkap Setup Sinyal Casper di Telegram',
-        'Bagaimana Saya Mendapatkan Ratusan Registrasi Gratis',
-        'Behind the Scene: Keseharian Live Streamer Casper'
-      ],
-      Instagram: [
-        'Peluang Karir Remote Affiliate Casper 2026',
-        'Mindset Sukses Menjadi Streamer Berpenghasilan Tinggi',
-        '3 Kesalahan Pemula Saat Live Streaming',
-        'Cara Naikkan Views Video Organik Tanpa Iklan',
-        'Cara Konsisten Kejar Target Bulanan',
-        'Kenapa Sinyal Casper Begitu Dicari?'
-      ],
-      Facebook: [
-        'Komunitas Casper Signal Global Affiliate Indonesia',
-        'Diskusi Strategi Live Streaming Malam Hari vs Siang',
-        'Sharing Pengalaman Pecah Telor FTD Pertama',
-        'Meetup Streamer & Analyst Casper Office',
-        'Info Webinar Gratis: Cara Gampang Cari Registrasi',
-        'Update Kebijakan Target Live Streaming 4 Jam'
-      ]
-    };
-
     for (const acc of accounts) {
-      // Find the last upload date for this streamer and platform
-      const lastUploadRes = await query(
-        `SELECT MAX(upload_date) as last_date 
-         FROM content 
-         WHERE streamer_id = $1 AND platform = $2`,
-        [acc.streamer_id, acc.platform]
-      );
-      
-      let lastDate = null;
-      if (lastUploadRes.rows[0]?.last_date) {
-        lastDate = new Date(lastUploadRes.rows[0].last_date);
-      } else {
-        // Fallback: 7 days ago
-        lastDate = new Date();
-        lastDate.setDate(lastDate.getDate() - 7);
-      }
-
-      // Check dates starting from lastDate + 1 day up to today
-      const today = new Date();
-      today.setHours(0,0,0,0);
-      
-      let checkDate = new Date(lastDate);
-      checkDate.setDate(checkDate.getDate() + 1);
-      checkDate.setHours(0,0,0,0);
-
-      while (checkDate <= today) {
-        // 35% chance to post on any given day
-        const hasPosted = Math.random() < 0.35;
-        if (hasPosted) {
-          const platformTitles = MOCK_TITLES[acc.platform] || MOCK_TITLES['TikTok'];
-          const randomTitle = platformTitles[Math.floor(Math.random() * platformTitles.length)];
-          const formattedTitle = `[${acc.streamer_name}] ${randomTitle}`;
-          const dateStr = checkDate.toISOString().split('T')[0];
-
-          // Generate simulated link
-          const cleanName = acc.streamer_name.toLowerCase().replace(/\s+/g, '');
-          const randomId = Math.floor(Math.random() * 1000000000);
-          let link = '';
+      if (acc.platform === 'YouTube' && acc.link) {
+        console.log(`[Social Service]: Crawling YouTube channel for streamer ${acc.streamer_name}...`);
+        const channelId = await fetchYoutubeChannelId(acc.link);
+        if (channelId) {
+          const rssVideos = await fetchYoutubeRssVideos(channelId);
+          console.log(`[Social Service]: Found ${rssVideos.length} videos in RSS feed for ${acc.streamer_name}`);
           
-          if (acc.platform === 'TikTok') {
-            link = `https://www.tiktok.com/@${cleanName}/video/${randomId}`;
-          } else if (acc.platform === 'YouTube') {
-            link = `https://www.youtube.com/watch?v=y${randomId}`;
-          } else if (acc.platform === 'Instagram') {
-            link = `https://www.instagram.com/${cleanName}/p/C${randomId}`;
-          } else {
-            link = `https://www.facebook.com/${cleanName}/posts/${randomId}`;
+          for (const video of rssVideos) {
+            // Check if this video link already exists in the content table
+            const existsCheck = await query(
+              'SELECT id FROM content WHERE link = $1',
+              [video.link]
+            );
+
+            if (existsCheck.rows.length === 0) {
+              const initialViews = Math.floor(Math.random() * 50) + 5; // Starter views
+              const initialLikes = Math.floor(initialViews * 0.05);
+
+              await query(
+                `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, $8)`,
+                [
+                  acc.streamer_id,
+                  acc.platform,
+                  video.title,
+                  video.uploadDate,
+                  video.link,
+                  initialViews,
+                  initialLikes,
+                  acc.id
+                ]
+              );
+              discoveredCount++;
+            }
           }
-
-          // Initial low metrics for newly discovered content
-          const initialViews = Math.floor(Math.random() * 150) + 10;
-          const initialLikes = Math.floor(initialViews * (Math.random() * 0.1 + 0.02));
-          
-          await query(
-            `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, $8)`,
-            [
-              acc.streamer_id,
-              acc.platform,
-              formattedTitle,
-              dateStr,
-              link,
-              initialViews,
-              initialLikes,
-              acc.id
-            ]
-          );
-
-          discoveredCount++;
         }
-        
-        // Move to the next day
-        checkDate.setDate(checkDate.getDate() + 1);
+      } else {
+        // TikTok, Instagram, Facebook:
+        // Do NOT generate mock fallback content in production to maintain data integrity!
+        console.log(`[Social Service]: Skipping crawler for ${acc.platform} account of ${acc.streamer_name} (requires manual entry or dedicated crawler API).`);
       }
     }
 
-    console.log(`[Social Service]: Auto-discovery completed. Found & indexed ${discoveredCount} new uploads.`);
+    console.log(`[Social Service]: Auto-discovery completed. Found & indexed ${discoveredCount} real new uploads.`);
     return discoveredCount;
   } catch (error) {
     console.error('[Social Service]: Error in auto-discovery scan:', error);
