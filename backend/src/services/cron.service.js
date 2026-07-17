@@ -1,6 +1,7 @@
 import { query } from '../config/db.js';
 import cron from 'node-cron';
 import { syncSocialMetrics, discoverNewContent } from './social.service.js';
+import { autoGenerateWeeklyEvaluations } from '../controllers/evaluation.controller.js';
 
 let bot = null;
 
@@ -359,5 +360,11 @@ export const startCronJobs = (botInstance) => {
   cron.schedule('0 */4 * * *', () => {
     console.log('[Cron] Running social media content auto-discovery...');
     discoverNewContent().catch(err => console.error('[Cron] Error running discoverNewContent:', err));
+  }, { timezone: 'Asia/Jakarta' });
+
+  // ⏰ Run automated weekly evaluations at 00:00 WIB every Monday
+  cron.schedule('0 0 * * 1', () => {
+    console.log('[Cron] Running weekly evaluations auto-generation at Monday 00:00 WIB');
+    autoGenerateWeeklyEvaluations().catch(err => console.error('[Cron] Error running autoGenerateWeeklyEvaluations:', err));
   }, { timezone: 'Asia/Jakarta' });
 };

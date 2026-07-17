@@ -2,7 +2,8 @@ import express from 'express';
 import { 
   getWeeklyEvaluation, 
   saveWeeklyEvaluation, 
-  getWeeklyEvaluationHistory 
+  getWeeklyEvaluationHistory,
+  chatWeeklyEvaluation
 } from '../controllers/evaluation.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
@@ -18,5 +19,8 @@ router.post('/save', saveWeeklyEvaluation);
 
 // GET /api/evaluations/history -> lists archived evaluations for a streamer
 router.get('/history', getWeeklyEvaluationHistory);
+
+// POST /api/evaluations/chat -> chat with AI growth analyst about metrics
+router.post('/chat', chatWeeklyEvaluation);
 
 export default router;

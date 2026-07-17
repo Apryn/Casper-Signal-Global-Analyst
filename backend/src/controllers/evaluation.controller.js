@@ -314,3 +314,251 @@ export const getWeeklyEvaluationHistory = async (req, res) => {
   }
 };
 
+// POST /api/evaluations/chat -> Chat with AI Growth Analyst about weekly performance
+export const chatWeeklyEvaluation = async (req, res) => {
+  const { streamerName, stats, targets, message, chatHistory = [] } = req.body;
+  const apiKey = process.env.GEMINI_API_KEY;
+
+  if (!message) {
+    return res.status(400).json({ message: 'Message is required' });
+  }
+
+  if (!apiKey || apiKey === 'YOUR_GEMINI_API_KEY_HERE' || apiKey.trim() === '') {
+    return res.status(503).json({ message: 'Gemini AI API key is not configured' });
+  }
+
+  try {
+    // Construct chat history context for Gemini
+    const historyContext = chatHistory.map(h => `${h.role === 'user' ? 'User' : 'Model'}: ${h.text}`).join('\n');
+
+    const textPrompt = `
+You are Head Office (HO) of Casper Signal, a professional affiliate BI platform. You are acting as an expert Growth Analyst.
+Here are the weekly performance stats for streamer "${streamerName}":
+- Live Duration: ${stats.liveDuration} hours (Target: ${targets.liveDuration} hours, Achievement: ${stats.liveAchievement}%)
+- Days Below 4-Hour Daily Minimum Target: ${stats.daysBelowMinLive} days
+- Upload Count: ${stats.uploads} videos (Target: ${targets.uploads} videos, Achievement: ${stats.uploadAchievement}%)
+- Chat Received: ${stats.chats}
+- Registrations: ${stats.registrations} (Target: ${targets.registrations}, Achievement: ${stats.regAchievement}%)
+- FTD (First Time Deposit): ${stats.ftds} (Target: ${targets.ftds}, Achievement: ${stats.ftdAchievement}%)
+- Registration Rate (Reg / Chats): ${stats.regRate}%
+- FTD Conversion Rate (FTDs / Reg): ${stats.ftdConversionRate}%
+- Schedule Adherence: ${stats.adherence}%
+
+Here is the conversation history:
+${historyContext}
+
+Answer the following user question/instruction. Provide a direct, tactical, data-backed response in Indonesian. Keep it concise (maximum 3-4 sentences/points) and actionable.
+User: ${message}
+Response:
+`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: textPrompt }] }]
+        }),
+        signal: AbortSignal.timeout(12000)
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error('[AI Chat] Gemini API error:', errText);
+      return res.status(502).json({ message: 'Failed to retrieve response from Gemini AI API' });
+    }
+
+    const data = await response.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+
+    if (text) {
+      res.json({ text });
+    } else {
+      res.status(500).json({ message: 'Empty response returned from AI model' });
+    }
+  } catch (error) {
+    console.error('Error in AI Chat controller:', error);
+    res.status(500).json({ message: 'Internal server error during AI analysis' });
+  }
+};
+
+// Core service function to generate and save weekly evaluations for all streamers
+export const autoGenerateWeeklyEvaluations = async () => {
+  console.log('[Cron Service]: Running automated weekly performance evaluations...');
+  
+  try {
+    const today = new Date();
+    const lastMonday = new Date(today);
+    // Go back 7 days
+    lastMonday.setDate(today.getDate() - 7);
+    const day = lastMonday.getDay();
+    const diff = lastMonday.getDate() - day + (day === 0 ? -6 : 1);
+    const startDateStr = new Date(lastMonday.setDate(diff)).toISOString().split('T')[0];
+    
+    const endDate = new Date(startDateStr);
+    endDate.setDate(endDate.getDate() + 6);
+    const endDateStr = endDate.toISOString().split('T')[0];
+
+    console.log(`[Cron Service]: Evaluation Period: ${startDateStr} to ${endDateStr}`);
+
+    const streamersRes = await query('SELECT * FROM streamers');
+    const streamers = streamersRes.rows;
+
+    let successCount = 0;
+
+    for (const streamer of streamers) {
+      try {
+        const existsCheck = await query(
+          'SELECT id FROM weekly_evaluations WHERE streamer_id = $1 AND start_date = $2',
+          [streamer.id, startDateStr]
+        );
+        if (existsCheck.rows.length > 0) {
+          console.log(`[Cron Service]: Evaluation already exists for ${streamer.nama} (${startDateStr}). Skipping.`);
+          continue;
+        }
+
+        const reportsRes = await query(
+          `SELECT 
+             COALESCE(SUM(live_duration), 0) as live_duration,
+             COALESCE(SUM(tiktok_upload + youtube_upload + instagram_upload + facebook_upload), 0) as uploads,
+             COALESCE(SUM(chat_count), 0) as chats,
+             COALESCE(SUM(registration_count), 0) as registrations,
+             COALESCE(SUM(ftd_count), 0) as ftds
+           FROM daily_reports
+           WHERE streamer_id = $1 AND tanggal BETWEEN $2 AND $3`,
+          [streamer.id, startDateStr, endDateStr]
+        );
+
+        const rawStats = reportsRes.rows[0];
+        const liveDuration = parseFloat(rawStats.live_duration) || 0;
+        const uploads = parseInt(rawStats.uploads, 10) || 0;
+        const chats = parseInt(rawStats.chats, 10) || 0;
+        const registrations = parseInt(rawStats.registrations, 10) || 0;
+        const ftds = parseInt(rawStats.ftds, 10) || 0;
+
+        const regRate = chats > 0 ? parseFloat(((registrations / chats) * 100).toFixed(1)) : 0;
+        const ftdConversionRate = registrations > 0 ? parseFloat(((ftds / registrations) * 100).toFixed(1)) : 0;
+
+        const minLiveCheckRes = await query(
+          `SELECT COUNT(*) as count 
+           FROM daily_reports 
+           WHERE streamer_id = $1 
+             AND tanggal BETWEEN $2 AND $3 
+             AND kategori = 'Streaming'
+             AND live_duration < 4.0`,
+          [streamer.id, startDateStr, endDateStr]
+        );
+        const daysBelowMinLive = parseInt(minLiveCheckRes.rows[0].count, 10) || 0;
+
+        const targetsRes = await query(
+          `SELECT target_type, target_value, period FROM targets WHERE streamer_id = $1`,
+          [streamer.id]
+        );
+
+        const targets = { liveDuration: 28, uploads: 21, registrations: 20, ftds: 5 };
+        targetsRes.rows.forEach(t => {
+          let multiplier = 1;
+          if (t.period === 'daily') multiplier = 7;
+          else if (t.period === 'monthly') multiplier = 0.25;
+
+          const val = parseFloat(t.target_value) * multiplier;
+
+          if (t.target_type === 'live_duration') targets.liveDuration = Math.round(val);
+          else if (t.target_type === 'uploads') targets.uploads = Math.round(val);
+          else if (t.target_type === 'registrations') targets.registrations = Math.round(val);
+          else if (t.target_type === 'ftds') targets.ftds = Math.round(val);
+        });
+
+        const liveAchievement = targets.liveDuration > 0 ? Math.round((liveDuration / targets.liveDuration) * 100) : 100;
+        const uploadAchievement = targets.uploads > 0 ? Math.round((uploads / targets.uploads) * 100) : 100;
+        const regAchievement = targets.registrations > 0 ? Math.round((registrations / targets.registrations) * 100) : 100;
+        const ftdAchievement = targets.ftds > 0 ? Math.round((ftds / targets.ftds) * 100) : 100;
+
+        const schedulesRes = await query(
+          `SELECT start_time, end_time 
+           FROM schedule 
+           WHERE streamer_id = $1 
+             AND DATE(start_time) BETWEEN $2 AND $3`,
+          [streamer.id, startDateStr, endDateStr]
+        );
+
+        let totalPlannedMinutes = 0;
+        schedulesRes.rows.forEach(s => {
+          const start = new Date(s.start_time);
+          const end = new Date(s.end_time);
+          let diff = (end - start) / (1000 * 60);
+          if (diff < 0) diff = 0;
+          totalPlannedMinutes += diff;
+        });
+
+        const plannedHours = totalPlannedMinutes / 60;
+        const adherence = plannedHours > 0 
+          ? Math.min(100, Math.round((liveDuration / plannedHours) * 100)) 
+          : 100;
+
+        const rawReportsRes = await query(
+          `SELECT raw_message FROM daily_reports 
+           WHERE streamer_id = $1 AND tanggal BETWEEN $2 AND $3`,
+          [streamer.id, startDateStr, endDateStr]
+        );
+
+        const hoursTally = {};
+        rawReportsRes.rows.forEach(r => {
+          if (!r.raw_message) return;
+          const times = r.raw_message.match(/\b(?:0\d|1\d|2[0-3])[:.][0-5]\d\b/g) || [];
+          times.forEach(t => {
+            const hour = t.slice(0, 2) + ':00';
+            hoursTally[hour] = (hoursTally[hour] || 0) + 1;
+          });
+        });
+
+        const sortedHours = Object.entries(hoursTally).sort((a, b) => b[1] - a[1]);
+        let peakHour = '20:00 - 22:00';
+        if (sortedHours.length > 0) {
+          const peakHourNum = parseInt(sortedHours[0][0], 10);
+          const peakEnd = Math.min(peakHourNum + 2, 23);
+          peakHour = `${String(peakHourNum).padStart(2, '0')}:00 - ${String(peakEnd).padStart(2, '0')}:00`;
+        }
+
+        const statsObj = {
+          liveDuration, uploads, chats, registrations, ftds,
+          regRate, ftdConversionRate, liveAchievement, uploadAchievement,
+          regAchievement, ftdAchievement, adherence, daysBelowMinLive
+        };
+
+        // Call Gemini AI for qualitative feedback
+        const aiFeedback = await generateAIEvaluation(streamer.nama, statsObj, targets);
+
+        // Save into weekly_evaluations
+        await query(
+          `INSERT INTO weekly_evaluations (streamer_id, start_date, end_date, stats, targets, peak_hour, kelebihan, kekurangan, rekomendasi)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [
+            streamer.id,
+            startDateStr,
+            endDateStr,
+            JSON.stringify(statsObj),
+            JSON.stringify(targets),
+            peakHour,
+            aiFeedback.kelebihan,
+            aiFeedback.kekurangan,
+            aiFeedback.rekomendasi
+          ]
+        );
+        successCount++;
+        console.log(`[Cron Service]: Successfully archived evaluation for ${streamer.nama}.`);
+      } catch (err) {
+        console.error(`[Cron Service]: Failed to generate evaluation for ${streamer.nama}:`, err);
+      }
+    }
+
+    console.log(`[Cron Service]: Weekly evaluations completed. Archived ${successCount} reports.`);
+    return successCount;
+  } catch (error) {
+    console.error('[Cron Service]: Error in autoGenerateWeeklyEvaluations:', error);
+    throw error;
+  }
+};
+

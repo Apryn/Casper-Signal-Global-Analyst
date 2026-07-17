@@ -39,6 +39,40 @@ const Evaluations = () => {
   const [historyList, setHistoryList] = useState([]);
   const [activeTab, setActiveTab] = useState('generate'); // 'generate' | 'history'
 
+  // AI Chat Assistant states
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+
+  const handleSendChat = async () => {
+    if (!chatInput.trim() || !evaluation) return;
+    
+    const userMessage = { role: 'user', text: chatInput };
+    setChatHistory(prev => [...prev, userMessage]);
+    const currentInput = chatInput;
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const res = await api.post('/evaluations/chat', {
+        streamerName: evaluation.streamer.nama,
+        stats: evaluation.stats,
+        targets: evaluation.targets,
+        message: currentInput,
+        chatHistory: chatHistory
+      });
+
+      const assistantMessage = { role: 'assistant', text: res.data.text };
+      setChatHistory(prev => [...prev, assistantMessage]);
+    } catch (err) {
+      console.error('Error in AI chat assistant:', err);
+      const errorMessage = { role: 'assistant', text: 'Maaf, sistem AI sedang mengalami kendala. Silakan coba beberapa saat lagi.' };
+      setChatHistory(prev => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const fetchHistory = async (streamerId) => {
     if (!streamerId) return;
     try {
@@ -110,6 +144,8 @@ const Evaluations = () => {
     setLoading(true);
     setError('');
     setEvaluation(null);
+    setChatHistory([]);
+    setChatInput('');
 
     const monday = getMonday(selectedDate);
 
@@ -516,6 +552,85 @@ const Evaluations = () => {
               </div>
             </div>
 
+            {/* AI Analyst Assistant Panel (no-print) */}
+            <div className="bg-indigo-950/25 border border-indigo-500/30 rounded-xl p-5 mt-8 no-print">
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
+                <h3 className="text-sm font-bold text-white">AI Growth Analyst Chat Assistant</h3>
+              </div>
+              <p className="text-xs text-slate-400 mb-4">
+                Tanyakan langsung kepada AI untuk menggali lebih dalam metrik performa {evaluation.streamer.nama} minggu ini, mencari pola konten yang berhasil, atau meminta alternatif strategi closing FTD.
+              </p>
+              
+              {/* Chat Message History */}
+              <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-4 max-h-60 overflow-y-auto mb-4 space-y-3.5 text-xs">
+                {chatHistory.length === 0 ? (
+                  <div className="text-slate-500 text-center py-4">
+                    Belum ada obrolan. Contoh pertanyaan: 
+                    <div className="mt-3 space-y-2">
+                      <button 
+                        onClick={() => setChatInput("Kenapa pencapaian FTD streamer ini rendah minggu ini? Berikan solusinya.")} 
+                        className="block mx-auto text-indigo-400 hover:text-indigo-300 hover:underline text-left bg-slate-900/40 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg w-full max-w-md transition"
+                      >
+                        💡 "Kenapa pencapaian FTD streamer ini rendah minggu ini? Berikan solusinya."
+                      </button>
+                      <button 
+                        onClick={() => setChatInput("Bagaimana cara menaikkan rasio Registrasi berdasarkan data chat masuk?")} 
+                        className="block mx-auto text-indigo-400 hover:text-indigo-300 hover:underline text-left bg-slate-900/40 hover:bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg w-full max-w-md transition"
+                      >
+                        💡 "Bagaimana cara menaikkan rasio Registrasi berdasarkan data chat masuk?"
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  chatHistory.map((msg, i) => (
+                    <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                      <span className="text-[9px] text-slate-500 mb-1 font-bold">
+                        {msg.role === 'user' ? 'Anda (Growth Analyst)' : 'Casper AI Analyst'}
+                      </span>
+                      <div className={`p-3 rounded-xl max-w-[85%] leading-relaxed whitespace-pre-line ${
+                        msg.role === 'user' 
+                          ? 'bg-indigo-600 text-white rounded-tr-none font-medium' 
+                          : 'bg-slate-900 text-slate-200 border border-slate-800 rounded-tl-none'
+                      }`}>
+                        {msg.text}
+                      </div>
+                    </div>
+                  ))
+                )}
+                {chatLoading && (
+                  <div className="flex items-center gap-2 text-slate-400 animate-pulse py-2">
+                    <Sparkles size={14} className="animate-spin text-indigo-400" />
+                    <span>AI sedang merumuskan analisis...</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Chat Input Field */}
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleSendChat();
+                    }
+                  }}
+                  placeholder="Ketik pertanyaan analitik untuk performa streamer ini..."
+                  className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition"
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={chatLoading || !chatInput.trim()}
+                  className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-5 rounded-xl text-xs font-bold transition-all shrink-0"
+                >
+                  Tanyakan AI
+                </button>
+              </div>
+            </div>
+
             {/* Signature Block (Printed only) */}
             <div className="mt-12 flex justify-between items-end border-t border-slate-800/40 pt-8 text-xs text-slate-400">
               <div>
@@ -575,6 +690,8 @@ const Evaluations = () => {
                           kekurangan: h.kekurangan,
                           rekomendasi: h.rekomendasi
                         });
+                        setChatHistory([]);
+                        setChatInput('');
                         setActiveTab('generate');
                       }}
                       className="text-xs bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-400 hover:text-indigo-300 border border-indigo-500/20 px-3 py-1.5 rounded-lg transition font-semibold"
