@@ -109,7 +109,7 @@ export const sendManualReportReminder = async () => {
 
   // Get active streamers who have not sent report today
   const missingStreamersRes = await query(`
-    SELECT nama 
+    SELECT id, nama, telegram_username 
     FROM streamers 
     WHERE id NOT IN (
       SELECT streamer_id 
@@ -118,18 +118,7 @@ export const sendManualReportReminder = async () => {
     )
     ORDER BY nama ASC
   `, [dateStr]);
-  const missingStreamers = missingStreamersRes.rows.map(r => r.nama);
-
-  let message = '';
-  if (missingStreamers.length > 0) {
-    message = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\nTanggal: *${formattedDate}*\n\nBerikut streamer yang *belum* mengirimkan laporan hari ini:\n`;
-    missingStreamers.forEach((name, index) => {
-      message += `${index + 1}. *${name}*\n`;
-    });
-    message += `\nMohon untuk segera mengirimkan rekap harian Anda ke grup ini. Terima kasih! 🙏`;
-  } else {
-    message = `✅ *LAPORAN HARIAN SELESAI* ✅\nTanggal: *${formattedDate}*\n\nLuar biasa! Semua streamer sudah mengirimkan laporan harian untuk hari ini. Terima kasih atas kerja samanya! 🚀`;
-  }
+  const missingStreamers = missingStreamersRes.rows;
 
   let chatId = process.env.TELEGRAM_GROUP_CHAT_ID || process.env.TELEGRAM_GROUP_ID;
 
@@ -155,14 +144,43 @@ export const sendManualReportReminder = async () => {
     options.message_thread_id = threadId;
   }
 
-  await bot.telegram.sendMessage(chatId, message, options);
-  console.log(`[Manual Notification Sent to Telegram Chat ${chatId} (Thread: ${threadId || 'none'})]: Success`);
+  if (missingStreamers.length > 0) {
+    for (const streamer of missingStreamers) {
+      const mention = streamer.telegram_username
+        ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
+        : `*${streamer.nama}*`;
+      
+      const message = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\n\nStreamer ${mention} belum mengirimkan rekap harian untuk hari ini (*${formattedDate}*). Mohon segera dikirim ya! 🙏`;
+
+      try {
+        await bot.telegram.sendMessage(chatId, message, options);
+
+        // Log to database
+        await query(
+          `INSERT INTO notifications (streamer_id, message, status, type) 
+           VALUES ($1, $2, 'Sent', 'Report Reminder')`,
+          [streamer.id, message]
+        );
+
+        console.log(`[Manual Notification Sent to Streamer ${streamer.nama} in Telegram Chat ${chatId} (Thread: ${threadId || 'none'})]: Success`);
+      } catch (err) {
+        console.error(`[Manual Notification Error for Streamer ${streamer.nama}]: ${err.message}`);
+      }
+
+      // Small delay to avoid spamming / rate limiting
+      await new Promise(resolve => setTimeout(resolve, 300));
+    }
+  } else {
+    // If everyone submitted
+    const message = `✅ *LAPORAN HARIAN SELESAI* ✅\nTanggal: *${formattedDate}*\n\nLuar biasa! Semua streamer sudah mengirimkan laporan harian untuk hari ini. Terima kasih atas kerja samanya! 🚀`;
+    await bot.telegram.sendMessage(chatId, message, options);
+  }
 
   return {
     success: true,
     message: 'Report reminder sent to Telegram!',
     recipientCount: missingStreamers.length,
-    missingStreamers
+    missingStreamers: missingStreamers.map(s => s.nama)
   };
 };
 
