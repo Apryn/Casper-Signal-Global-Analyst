@@ -103,7 +103,7 @@ const Layout = () => {
   });
 
   return (
-    <div className="flex h-screen overflow-hidden bg-dark-bg text-gray-200">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-dark-bg text-gray-200">
       
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex md:w-64 md:flex-col bg-dark-card border-r-3 border-black relative z-30">
@@ -180,7 +180,7 @@ const Layout = () => {
       </aside>
 
       {/* Mobile Header and Sidebar Menu */}
-      <div className="md:hidden flex flex-col w-full h-screen overflow-hidden">
+      <div className="md:hidden flex flex-col w-full z-20">
         {/* Mobile top bar */}
         <header className="flex h-16 items-center justify-between px-6 bg-dark-card border-b-3 border-black shadow-tactile-sm relative z-20">
           <div className="flex items-center gap-2.5">
@@ -256,7 +256,7 @@ const Layout = () => {
       </div>
 
       {/* Main Content Area - Desktop & Mobile */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
         {/* Top Header - Desktop only */}
         <header className="hidden md:flex h-20 items-center justify-between px-8 bg-dark-card border-b-3 border-black shadow-tactile-sm relative z-20">
           <div>
