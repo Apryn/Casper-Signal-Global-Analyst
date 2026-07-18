@@ -15,7 +15,8 @@ import {
   UserCheck,
   Coins,
   CheckCircle2,
-  Tv
+  Tv,
+  Send
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -34,6 +35,10 @@ const Reports = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editingReport, setEditingReport] = useState(null);
   const [addModalOpen, setAddModalOpen] = useState(false);
+
+  // Telegram status states
+  const [telegramSending, setTelegramSending] = useState(false);
+  const [telegramStatus, setTelegramStatus] = useState({ type: '', message: '' });
   const [newReport, setNewReport] = useState({
     streamer_id: '',
     tanggal: new Date().toISOString().split('T')[0],
@@ -332,6 +337,34 @@ const Reports = () => {
     setKategori('');
   };
 
+  const handleSendTelegramReminder = async () => {
+    if (!window.confirm("Apakah Anda yakin ingin mengirimkan pengingat laporan ke grup Telegram sekarang?")) {
+      return;
+    }
+
+    setTelegramSending(true);
+    setTelegramStatus({ type: '', message: '' });
+
+    try {
+      const res = await api.post('/reports/telegram-reminder');
+      setTelegramStatus({
+        type: 'success',
+        message: `Pengingat berhasil dikirim! (${res.data.recipientCount} streamer belum melapor)`
+      });
+      setTimeout(() => {
+        setTelegramStatus({ type: '', message: '' });
+      }, 8000);
+    } catch (err) {
+      console.error('Error sending telegram reminder:', err);
+      setTelegramStatus({
+        type: 'error',
+        message: err.response?.data?.message || 'Gagal mengirimkan pengingat ke Telegram.'
+      });
+    } finally {
+      setTelegramSending(false);
+    }
+  };
+
   const totalTiktok = reports.reduce((sum, r) => sum + (r.tiktok_upload || 0), 0);
   const totalYoutube = reports.reduce((sum, r) => sum + (r.youtube_upload || 0), 0);
   const totalInstagram = reports.reduce((sum, r) => sum + (r.instagram_upload || 0), 0);
@@ -369,6 +402,28 @@ const Reports = () => {
           </button>
 
           <button
+            onClick={handleSendTelegramReminder}
+            disabled={telegramSending}
+            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-lg transition-all duration-200 active:translate-y-px ${
+              telegramSending 
+                ? 'bg-sky-700/50 cursor-not-allowed opacity-75' 
+                : 'bg-sky-600 hover:bg-sky-500 shadow-sky-600/10'
+            }`}
+          >
+            {telegramSending ? (
+              <>
+                <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                Sending...
+              </>
+            ) : (
+              <>
+                <Send className="h-4 w-4" />
+                Kirim Pengingat Telegram
+              </>
+            )}
+          </button>
+
+          <button
             onClick={handleOpenAddModal}
             className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200"
           >
@@ -377,6 +432,29 @@ const Reports = () => {
           </button>
         </div>
       </div>
+
+      {telegramStatus.message && (
+        <div className={`p-4 rounded-xl border flex items-center justify-between transition-all duration-300 ${
+          telegramStatus.type === 'success' 
+            ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400' 
+            : 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+        }`}>
+          <div className="flex items-center gap-2.5">
+            {telegramStatus.type === 'success' ? (
+              <CheckCircle2 className="h-5 w-5 shrink-0" />
+            ) : (
+              <X className="h-5 w-5 shrink-0 cursor-pointer" onClick={() => setTelegramStatus({ type: '', message: '' })} />
+            )}
+            <span className="text-sm font-medium">{telegramStatus.message}</span>
+          </div>
+          <button 
+            onClick={() => setTelegramStatus({ type: '', message: '' })}
+            className="text-xs font-semibold opacity-70 hover:opacity-100 transition-opacity"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Filter Control Bar */}
       <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">

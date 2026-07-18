@@ -4,7 +4,8 @@ import {
   simulateReportParsing,
   updateReport,
   deleteReport,
-  createReport
+  createReport,
+  sendTelegramReminder
 } from '../controllers/report.controller.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.middleware.js';
 
@@ -22,6 +23,7 @@ router.post('/', createReport);
 // Simulate / parse report (both endpoints do the same thing)
 router.post('/simulate', simulateReportParsing);
 router.post('/parse', simulateReportParsing);
+router.post('/telegram-reminder', sendTelegramReminder);
 
 // Update details
 router.put('/:id', updateReport);

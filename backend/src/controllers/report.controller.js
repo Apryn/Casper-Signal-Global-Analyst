@@ -1,5 +1,6 @@
 import { query } from '../config/db.js';
 import { parseMessageText } from '../services/telegram.service.js';
+import { sendManualReportReminder } from '../services/cron.service.js';
 
 export const getReports = async (req, res) => {
   const { startDate, endDate, streamerName, kategori, sortBy, sortOrder } = req.query;
@@ -221,6 +222,16 @@ export const createReport = async (req, res) => {
       return res.status(400).json({ message: 'Laporan untuk streamer pada tanggal tersebut sudah ada!' });
     }
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const sendTelegramReminder = async (req, res) => {
+  try {
+    const result = await sendManualReportReminder();
+    res.json(result);
+  } catch (error) {
+    console.error('Error sending manual Telegram reminder:', error);
+    res.status(500).json({ message: error.message || 'Gagal mengirim pengingat ke Telegram' });
   }
 };
 

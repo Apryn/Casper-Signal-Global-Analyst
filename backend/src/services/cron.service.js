@@ -80,6 +80,93 @@ const sendTelegramNotification = async (message) => {
 };
 
 /**
+ * Compiles a consolidated list of streamers who have not submitted their report today
+ * and posts it to the Telegram group chat / thread.
+ */
+export const sendManualReportReminder = async () => {
+  if (!bot) {
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    if (token && token !== 'YOUR_TELEGRAM_BOT_TOKEN_HERE' && token.trim() !== '') {
+      try {
+        const { Telegraf } = await import('telegraf');
+        bot = new Telegraf(token);
+      } catch (err) {
+        console.error('Failed to dynamically initialize Telegraf bot for manual reminder:', err);
+      }
+    }
+  }
+
+  if (!bot) {
+    throw new Error('Telegram Bot is not initialized or configured. Please check your TELEGRAM_BOT_TOKEN.');
+  }
+
+  const { dateStr } = getWibHourAndDate();
+  
+  // Format date to Indonesian (e.g. 18 Juli 2026)
+  const dateParts = dateStr.split('-');
+  const months = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+  const formattedDate = `${parseInt(dateParts[2], 10)} ${months[parseInt(dateParts[1], 10) - 1]} ${dateParts[0]}`;
+
+  // Get active streamers who have not sent report today
+  const missingStreamersRes = await query(`
+    SELECT nama 
+    FROM streamers 
+    WHERE id NOT IN (
+      SELECT streamer_id 
+      FROM daily_reports 
+      WHERE tanggal = $1
+    )
+    ORDER BY nama ASC
+  `, [dateStr]);
+  const missingStreamers = missingStreamersRes.rows.map(r => r.nama);
+
+  let message = '';
+  if (missingStreamers.length > 0) {
+    message = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\nTanggal: *${formattedDate}*\n\nBerikut streamer yang *belum* mengirimkan laporan hari ini:\n`;
+    missingStreamers.forEach((name, index) => {
+      message += `${index + 1}. *${name}*\n`;
+    });
+    message += `\nMohon untuk segera mengirimkan rekap harian Anda ke grup ini. Terima kasih! 🙏`;
+  } else {
+    message = `✅ *LAPORAN HARIAN SELESAI* ✅\nTanggal: *${formattedDate}*\n\nLuar biasa! Semua streamer sudah mengirimkan laporan harian untuk hari ini. Terima kasih atas kerja samanya! 🚀`;
+  }
+
+  let chatId = process.env.TELEGRAM_GROUP_CHAT_ID || process.env.TELEGRAM_GROUP_ID;
+
+  if (!chatId) {
+    try {
+      const chatRulesRes = await query("SELECT value FROM config WHERE key = 'telegram_group_id'");
+      chatId = chatRulesRes.rows[0]?.value;
+    } catch (err) {
+      console.warn(`[Notification Engine]: Config table query failed: ${err.message}`);
+    }
+  }
+
+  if (!chatId) {
+    throw new Error('Telegram Group ID is not configured.');
+  }
+
+  const threadId = process.env.TELEGRAM_REPORT_THREAD_ID
+    ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)
+    : null;
+
+  const options = { parse_mode: 'Markdown' };
+  if (threadId) {
+    options.message_thread_id = threadId;
+  }
+
+  await bot.telegram.sendMessage(chatId, message, options);
+  console.log(`[Manual Notification Sent to Telegram Chat ${chatId} (Thread: ${threadId || 'none'})]: Success`);
+
+  return {
+    success: true,
+    message: 'Report reminder sent to Telegram!',
+    recipientCount: missingStreamers.length,
+    missingStreamers
+  };
+};
+
+/**
  * Checks for missing daily reports (runs at 22:00 WIB)
  */
 export const checkMissingReports = async (wibDateStr) => {
