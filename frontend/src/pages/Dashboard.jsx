@@ -186,6 +186,11 @@ const Dashboard = () => {
   const [comparison, setComparison] = useState(null);
   const [aiReport, setAiReport] = useState(null);
   
+  // AI Analyst Engine States
+  const [aiEngine, setAiEngine] = useState('rule-based');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState(null);
+  
   // Telegram Bot Simulator state
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [rawMessage, setRawMessage] = useState('');
@@ -193,21 +198,46 @@ const Dashboard = () => {
   const [simError, setSimError] = useState('');
   const [simLoading, setSimLoading] = useState(false);
 
+  const fetchAiReport = async (engineType) => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await api.get(`/analytics/ai-report?engine=${engineType}`);
+      setAiReport(res.data);
+    } catch (err) {
+      console.error('Error fetching AI report:', err);
+      setAiError(err.response?.data?.message || 'Gagal memuat laporan analitik AI.');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleEngineChange = async (engineType) => {
+    setAiEngine(engineType);
+    await fetchAiReport(engineType);
+  };
+
   const fetchDashboardData = async () => {
     setLoading(true);
+    // Don't clear aiError here so we don't flash errors unnecessarily on range changes
     try {
       const [summaryRes, chartsRes, comparisonRes, aiReportRes] = await Promise.all([
         api.get(`/dashboard/summary?range=${range}`),
         api.get('/dashboard/charts'),
         api.get(`/dashboard/comparison?range=${range}`),
-        api.get('/analytics/ai-report')
+        api.get(`/analytics/ai-report?engine=${aiEngine}`)
       ]);
       setSummary(summaryRes.data);
       setChartData(chartsRes.data);
       setComparison(comparisonRes.data);
       setAiReport(aiReportRes.data);
+      setAiError(null); // Clear errors on successful fetch
     } catch (error) {
       console.error('Error fetching dashboard summary:', error);
+      // Only set aiError if it was the AI endpoint that failed
+      if (error.response?.config?.url?.includes('/analytics/ai-report')) {
+        setAiError(error.response?.data?.message || 'Gagal memuat laporan analitik AI.');
+      }
     } finally {
       setLoading(false);
     }
@@ -606,24 +636,78 @@ const Dashboard = () => {
       </div>
 
       {/* AI Business Analyst Insights Card */}
-      {aiReport && (
-        <div className="tactile-card p-6 border-2 border-black bg-dark-panel">
-          <div className="flex items-center gap-2 mb-4 border-b-2 border-black pb-3">
+      <div className="tactile-card p-6 border-2 border-black bg-dark-panel">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 border-b-2 border-black pb-3">
+          <div className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
             <h3 className="text-sm font-extrabold text-white tracking-wider uppercase">AI Business Analyst Insights</h3>
-            <span className={`ml-auto text-[9px] font-extrabold px-2 py-0.5 rounded border-2 uppercase ${
-              aiReport.isAI 
-                ? 'bg-tactile-purple text-white border-black shadow-tactile-sm' 
-                : 'bg-slate-800 text-white border-black shadow-tactile-sm'
-            }`}>
-              {aiReport.isAI ? 'Gemini AI' : 'Rule-Based Engine'}
-            </span>
           </div>
+          
+          {/* Engine Selector */}
+          <div className="flex items-center gap-2.5 self-start sm:self-center">
+            <div className="flex rounded-md p-0.5 bg-slate-950 border-2 border-black shadow-inset-screen shrink-0">
+              {[
+                { id: 'rule-based', label: 'Rule-Based' },
+                { id: 'gemini', label: 'Gemini AI' }
+              ].map((engine) => (
+                <button
+                  key={engine.id}
+                  disabled={aiLoading}
+                  onClick={() => handleEngineChange(engine.id)}
+                  className={`px-3 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    aiEngine === engine.id 
+                      ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
+                      : 'text-slate-400 hover:text-white border-2 border-transparent'
+                  }`}
+                >
+                  {engine.label}
+                </button>
+              ))}
+            </div>
+
+            {aiReport && !aiLoading && !aiError && (
+              <span className={`text-[9px] font-extrabold px-2.5 py-1.5 rounded border-2 uppercase tracking-wider shadow-tactile-sm ${
+                aiReport.isAI 
+                  ? 'bg-tactile-purple text-white border-black' 
+                  : 'bg-slate-800 text-white border-black'
+              }`}>
+                {aiReport.isAI ? 'Gemini Active' : 'Rule-Based Active'}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {aiLoading ? (
+          <div className="h-28 flex items-center justify-center text-indigo-400 bg-black rounded-lg border-2 border-black shadow-inset-screen">
+            <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent mr-2.5"></div>
+            <span className="text-xs font-mono tracking-wide">Menganalisis performa data...</span>
+          </div>
+        ) : aiError ? (
+          <div className="p-4 rounded-lg bg-rose-950/20 border-2 border-rose-500 shadow-tactile-sm">
+            <div className="flex items-start gap-2.5">
+              <AlertCircle className="h-5 w-5 text-rose-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-1">Gagal Memuat Analisis AI</h4>
+                <p className="text-[11px] text-slate-300 leading-relaxed mb-3">{aiError}</p>
+                <button 
+                  onClick={() => handleEngineChange('rule-based')}
+                  className="px-3 py-1 bg-slate-900 hover:bg-slate-850 text-white text-[9px] font-bold uppercase rounded border-2 border-black shadow-tactile-sm cursor-pointer transition-all"
+                >
+                  Gunakan Rule-Based Engine
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : aiReport ? (
           <div className="text-xs text-gray-300 leading-relaxed font-mono p-4 rounded-lg bg-black border-2 border-black shadow-inset-screen space-y-1">
             {renderMarkdown(aiReport.report)}
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="text-xs text-gray-500 leading-relaxed font-mono p-4 rounded-lg bg-black border-2 border-black shadow-inset-screen text-center">
+            Belum ada data analisis.
+          </div>
+        )}
+      </div>
 
       {/* Charts Section */}
       <div className="tactile-card p-6 border-2 border-black bg-dark-card">

@@ -192,6 +192,8 @@ export const getLeaderboardWithScores = async (req, res) => {
  * Rule-Based and LLM-Enhanced Business Analyst Engine
  */
 export const getAiAnalystReport = async (req, res) => {
+  const { engine = 'auto' } = req.query;
+
   try {
     // 1. Fetch Current Week Stats (Last 7 days)
     const currentWeekRes = await query(
@@ -260,10 +262,19 @@ Rekomendasi Strategis:
 3. Optimalkan call-to-action di platform ${bestPlatform} untuk mempertahankan tren positif akuisisi user baru.
     `.trim();
 
+    // If rule-based is explicitly requested, return immediately
+    if (engine === 'rule-based') {
+      return res.json({
+        isAI: false,
+        report: statsSummaryText,
+        metrics: { ftdCurrent, ftdPrior, ftdGrowth, topStreamerName, bestPlatform }
+      });
+    }
+
     // Check if Gemini API Key is available
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey && apiKey !== 'YOUR_GEMINI_API_KEY' && apiKey.trim() !== '') {
-      console.log('Gemini API key detected, generating enhanced AI insights...');
+      console.log(`Generating AI insights using Gemini (requested engine: ${engine})...`);
       
       try {
         const response = await fetch(
@@ -297,6 +308,11 @@ Raw Statistics:
         );
 
         const data = await response.json();
+        
+        if (data.error) {
+          throw new Error(data.error.message || JSON.stringify(data.error));
+        }
+
         const aiText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (aiText) {
           return res.json({
@@ -306,7 +322,19 @@ Raw Statistics:
           });
         }
       } catch (err) {
-        console.error('Gemini API call failed, falling back to rule-based compiler:', err.message);
+        console.error('Gemini API call failed:', err.message);
+        if (engine === 'gemini') {
+          return res.status(502).json({ 
+            message: `Gagal memanggil Gemini API: ${err.message}. Pastikan API Key di .env backend valid.`,
+            error: err.message
+          });
+        }
+      }
+    } else {
+      if (engine === 'gemini') {
+        return res.status(400).json({ 
+          message: 'Gemini API Key tidak ditemukan atau belum dikonfigurasi di file .env backend.' 
+        });
       }
     }
 
