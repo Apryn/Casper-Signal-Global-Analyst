@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Trophy,
   RefreshCw,
-  Radio
+  Radio,
+  Trash2
 } from 'lucide-react';
 
 const Contents = () => {
@@ -58,6 +59,11 @@ const Contents = () => {
   const [discoverSuccess, setDiscoverSuccess] = useState('');
   const [discoverError, setDiscoverError] = useState('');
 
+  // Delete state variables
+  const [deletingId, setDeletingId] = useState(null);
+  const [deleteSuccess, setDeleteSuccess] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+
   const handleSyncContent = async () => {
     setSyncing(true);
     setSyncSuccess('');
@@ -91,6 +97,25 @@ const Contents = () => {
       setTimeout(() => setDiscoverError(''), 4000);
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const handleDeleteContent = async (id, title) => {
+    if (!window.confirm(`Hapus video ini?\n\n"${title.substring(0, 80)}..."\n\nAksi ini tidak bisa dibatalkan.`)) return;
+    setDeletingId(id);
+    setDeleteSuccess('');
+    setDeleteError('');
+    try {
+      await api.delete(`/content/${id}`);
+      setDeleteSuccess('Video berhasil dihapus dari Content Library.');
+      fetchData();
+      setTimeout(() => setDeleteSuccess(''), 4000);
+    } catch (err) {
+      console.error('Error deleting content:', err);
+      setDeleteError(err.response?.data?.message || 'Gagal menghapus video.');
+      setTimeout(() => setDeleteError(''), 4000);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -268,10 +293,17 @@ const Contents = () => {
           <span>{discoverSuccess}</span>
         </div>
       )}
-      {discoverError && (
+      {/* Delete Status Notifications */}
+      {deleteSuccess && (
+        <div className="bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
+          <CheckCircle2 className="h-4.5 w-4.5 shrink-0" />
+          <span>{deleteSuccess}</span>
+        </div>
+      )}
+      {deleteError && (
         <div className="bg-rose-500/15 border border-rose-500/30 text-rose-400 px-4 py-3 rounded-xl text-xs flex items-center gap-2 animate-fadeIn">
           <X className="h-4.5 w-4.5 shrink-0" />
-          <span>{discoverError}</span>
+          <span>{deleteError}</span>
         </div>
       )}
 
@@ -398,16 +430,17 @@ const Contents = () => {
                     <th className="py-3 px-3 text-right">Likes</th>
                     <th className="py-3 px-3 text-right">Comments</th>
                     <th className="py-3 px-4 text-center">Link</th>
+                    <th className="py-3 px-3 text-center">Del</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark-border/40 text-xs text-gray-300">
                   {loading ? (
                     <tr>
-                      <td colSpan="6" className="py-8 text-center text-indigo-400 font-semibold">Updating library...</td>
+                      <td colSpan="7" className="py-8 text-center text-indigo-400 font-semibold">Updating library...</td>
                     </tr>
                   ) : contents.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="py-8 text-center text-gray-500">No content matches found.</td>
+                      <td colSpan="7" className="py-8 text-center text-gray-500">No content matches found.</td>
                     </tr>
                   ) : (
                     contents.map((item) => (
@@ -435,6 +468,16 @@ const Contents = () => {
                               <ExternalLink className="h-3.5 w-3.5" />
                             </a>
                           ) : '-'}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <button
+                            onClick={() => handleDeleteContent(item.id, item.title)}
+                            disabled={deletingId === item.id}
+                            title="Hapus video ini"
+                            className="inline-flex p-1.5 rounded hover:bg-rose-500/10 text-gray-500 hover:text-rose-400 border border-transparent hover:border-rose-500/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
                         </td>
                       </tr>
                     ))
