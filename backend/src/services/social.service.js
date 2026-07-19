@@ -142,13 +142,15 @@ const fetchTikTokVideosFromTikWM = async (cleanUsername) => {
       const vId = v.video_id || v.id;
       if (!vId) continue;
 
-      const rawTitle = v.title || v.desc || `Video by @${cleanUsername}`;
-      const title = rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle;
-
       const createTime = v.create_time;
       const uploadDate = createTime
         ? new Date(createTime * 1000).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
+
+      const rawTitle = v.title || v.desc || '';
+      const title = rawTitle.length > 0
+        ? (rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle)
+        : `TikTok Video (${uploadDate})`;
 
       videos.push({
         title,
@@ -280,12 +282,15 @@ const fetchTikTokRssVideos = async (username, accountLink) => {
       const vId = v.id || v.video_id;
       if (!vId) continue;
 
-      const rawTitle = v.desc || v.title || `Video by @${cleanUsername}`;
-      const title = rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle;
       const createTime = v.createTime || v.create_time;
       const uploadDate = createTime
         ? new Date(createTime * 1000).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0];
+
+      const rawTitle = v.desc || v.title || '';
+      const title = rawTitle.length > 0
+        ? (rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle)
+        : `TikTok Video (${uploadDate})`;
 
       const playCount = v.stats?.playCount || v.play_count || 0;
       const diggCount = v.stats?.diggCount || v.digg_count || 0;
