@@ -303,7 +303,7 @@ Raw Statistics:
                 }]
               }]
             }),
-            signal: AbortSignal.timeout(5000)
+            signal: AbortSignal.timeout(25000)
           }
         );
 

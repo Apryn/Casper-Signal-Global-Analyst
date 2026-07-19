@@ -37,7 +37,7 @@ Do not wrap it in markdown code blocks like \`\`\`json. Return only the raw JSON
           body: JSON.stringify({
             contents: [{ parts: [{ text: textPrompt }] }]
           }),
-          signal: AbortSignal.timeout(8000)
+          signal: AbortSignal.timeout(25000)
         }
       );
       
@@ -360,7 +360,7 @@ Response:
         body: JSON.stringify({
           contents: [{ parts: [{ text: textPrompt }] }]
         }),
-        signal: AbortSignal.timeout(12000)
+        signal: AbortSignal.timeout(25000)
       }
     );
 
