@@ -84,81 +84,197 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
 };
 
 /**
- * Fetches latest video uploads for a TikTok user profile using RapidAPI tiktok-api23
+/**
+ * Attempts to resolve secUid from TikWM as a fallback when RapidAPI returns 204.
+ * TikWM is free and doesn't require an API key for user info lookups.
+ */
+const resolveSecUidFromTikWM = async (cleanUsername) => {
+  try {
+    const url = `https://www.tikwm.com/api/user/info?unique_id=${cleanUsername}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const secUid = data?.data?.user?.secUid;
+    if (secUid) {
+      console.log(`[Social Service]: Resolved secUid from TikWM for ${cleanUsername}: ${secUid}`);
+      return secUid;
+    }
+  } catch (error) {
+    console.warn(`[Social Service]: TikWM secUid lookup failed for ${cleanUsername}: ${error.message}`);
+  }
+  return null;
+};
+
+/**
+ * Attempts to fetch latest posts from TikWM as a fallback when Lundehund RapidAPI returns empty data.
+ */
+const fetchTikTokVideosFromTikWM = async (cleanUsername) => {
+  try {
+    const url = `https://www.tikwm.com/api/user/posts?unique_id=${cleanUsername}&count=20&cursor=0`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*'
+      },
+      signal: AbortSignal.timeout(20000)
+    });
+    if (!res.ok) {
+      console.warn(`[Social Service]: TikWM posts request failed for ${cleanUsername}. Status: ${res.status}`);
+      return [];
+    }
+    const data = await res.json();
+    if (data?.code !== 0 || !data?.data?.videos) {
+      console.warn(`[Social Service]: TikWM returned no videos for ${cleanUsername}. Response code: ${data?.code}`);
+      return [];
+    }
+
+    const videosArray = data.data.videos;
+    console.log(`[Social Service]: TikWM returned ${videosArray.length} videos for ${cleanUsername}`);
+
+    const videos = [];
+    for (const v of videosArray) {
+      const vId = v.video_id || v.id;
+      if (!vId) continue;
+
+      const rawTitle = v.title || v.desc || `Video by @${cleanUsername}`;
+      const title = rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle;
+
+      const createTime = v.create_time;
+      const uploadDate = createTime
+        ? new Date(createTime * 1000).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+
+      videos.push({
+        title,
+        link: `https://www.tiktok.com/@${cleanUsername}/video/${vId}`,
+        uploadDate,
+        views: parseInt(v.play_count, 10) || 0,
+        likes: parseInt(v.digg_count, 10) || 0,
+        comments: parseInt(v.comment_count, 10) || 0,
+        shares: parseInt(v.share_count, 10) || 0
+      });
+    }
+    return videos;
+  } catch (error) {
+    console.warn(`[Social Service]: TikWM posts fetch failed for ${cleanUsername}: ${error.message}`);
+  }
+  return [];
+};
+
+/**
+ * Fetches latest video uploads for a TikTok user profile.
+ * Strategy:
+ *   1. Extract secUid from account link (if available).
+ *   2. Resolve secUid via Lundehund RapidAPI /api/user/info.
+ *   3. Fallback: resolve secUid via TikWM /api/user/info (free, no key needed).
+ *   4. Fetch posts via Lundehund RapidAPI /api/user/posts.
+ *   5. Fallback: fetch posts via TikWM /api/user/posts if Lundehund returns empty.
  */
 const fetchTikTokRssVideos = async (username, accountLink) => {
   const apiKey = process.env.RAPIDAPI_KEY;
-  if (!apiKey || apiKey === 'YOUR_RAPIDAPI_KEY') {
-    return [];
-  }
-
-  // Remove '@' prefix if present
   const cleanUsername = username.replace(/^@/, '');
 
   try {
     let secUid = null;
 
-    // Check if secUid is provided in the account link query params
+    // Step 1: Extract secUid from account link query param
     if (accountLink && accountLink.includes('secUid=')) {
       try {
         const urlObj = new URL(accountLink);
         secUid = urlObj.searchParams.get('secUid');
         if (secUid) {
-          console.log(`[Social Service]: Extracted secUid directly from account link: ${secUid}`);
+          console.log(`[Social Service]: Extracted secUid from account link for ${cleanUsername}: ${secUid}`);
         }
       } catch (e) {
-        console.warn(`[Social Service]: Failed to parse URL from link ${accountLink}: ${e.message}`);
+        console.warn(`[Social Service]: Failed to parse account link URL: ${e.message}`);
       }
     }
 
-    // If not provided, try to resolve via info endpoint (fallback)
-    if (!secUid) {
-      console.log(`[Social Service]: secUid not found in link. Resolving TikTok username ${cleanUsername} to secUid via API...`);
-      const infoUrl = `https://tiktok-api23.p.rapidapi.com/api/user/info?uniqueId=${cleanUsername}`;
-      const infoRes = await fetch(infoUrl, {
-        headers: {
-          'x-rapidapi-key': apiKey,
-          'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
-        },
-        signal: AbortSignal.timeout(25000)
-      });
-
-      if (infoRes.ok) {
-        const text = await infoRes.text();
-        if (text) {
-          const infoResult = JSON.parse(text);
-          secUid = infoResult?.userInfo?.user?.secUid || infoResult?.data?.secUid || infoResult?.data?.user?.secUid;
+    // Step 2: Resolve via Lundehund RapidAPI if no secUid
+    if (!secUid && apiKey && apiKey !== 'YOUR_RAPIDAPI_KEY') {
+      console.log(`[Social Service]: Resolving secUid via Lundehund API for ${cleanUsername}...`);
+      try {
+        const infoUrl = `https://tiktok-api23.p.rapidapi.com/api/user/info?uniqueId=${cleanUsername}`;
+        const infoRes = await fetch(infoUrl, {
+          headers: {
+            'x-rapidapi-key': apiKey,
+            'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
+          },
+          signal: AbortSignal.timeout(20000)
+        });
+        if (infoRes.status === 200) {
+          const text = await infoRes.text();
+          if (text) {
+            const infoResult = JSON.parse(text);
+            secUid = infoResult?.userInfo?.user?.secUid
+              || infoResult?.data?.secUid
+              || infoResult?.data?.user?.secUid;
+            if (secUid) {
+              console.log(`[Social Service]: Resolved secUid via Lundehund for ${cleanUsername}: ${secUid}`);
+            }
+          }
+        } else {
+          console.warn(`[Social Service]: Lundehund /api/user/info returned ${infoRes.status} for ${cleanUsername}. Trying fallback...`);
         }
+      } catch (e) {
+        console.warn(`[Social Service]: Lundehund secUid resolve error for ${cleanUsername}: ${e.message}`);
       }
     }
 
+    // Step 3: Fallback — resolve via TikWM (no API key required)
     if (!secUid) {
-      console.warn(`[Social Service]: Could not resolve secUid for TikTok user ${cleanUsername}. Skipping.`);
-      return [];
+      console.log(`[Social Service]: Falling back to TikWM to resolve secUid for ${cleanUsername}...`);
+      secUid = await resolveSecUidFromTikWM(cleanUsername);
     }
 
-    console.log(`[Social Service]: Using secUid for ${cleanUsername}: ${secUid}`);
-
-    // 2. Fetch posts via /api/user/posts
-    const postsUrl = `https://tiktok-api23.p.rapidapi.com/api/user/posts?secUid=${secUid}&count=10&cursor=0`;
-    const postsRes = await fetch(postsUrl, {
-      headers: {
-        'x-rapidapi-key': apiKey,
-        'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
-      },
-      signal: AbortSignal.timeout(25000)
-    });
-
-    if (!postsRes.ok) {
-      console.warn(`[Social Service]: Failed to get TikTok posts for ${cleanUsername}. Status: ${postsRes.status}`);
-      return [];
+    // If still no secUid, try fetching posts directly via TikWM using username
+    if (!secUid) {
+      console.log(`[Social Service]: No secUid found for ${cleanUsername}. Attempting TikWM posts fetch directly by username...`);
+      return await fetchTikTokVideosFromTikWM(cleanUsername);
     }
 
-    const postsResult = await postsRes.json();
-    const videosArray = postsResult?.itemList || postsResult?.data?.videos || postsResult?.data?.itemList || [];
-    
-    console.log(`[Social Service]: TikTok API returned ${videosArray.length} items for ${cleanUsername}`);
+    // Step 4: Fetch posts via Lundehund RapidAPI
+    let videosArray = [];
+    if (apiKey && apiKey !== 'YOUR_RAPIDAPI_KEY') {
+      console.log(`[Social Service]: Fetching posts via Lundehund for ${cleanUsername} (secUid: ${secUid})...`);
+      try {
+        const postsUrl = `https://tiktok-api23.p.rapidapi.com/api/user/posts?secUid=${secUid}&count=20&cursor=0`;
+        const postsRes = await fetch(postsUrl, {
+          headers: {
+            'x-rapidapi-key': apiKey,
+            'x-rapidapi-host': 'tiktok-api23.p.rapidapi.com'
+          },
+          signal: AbortSignal.timeout(25000)
+        });
 
+        if (postsRes.ok) {
+          const postsResult = await postsRes.json();
+          videosArray = postsResult?.itemList
+            || postsResult?.data?.videos
+            || postsResult?.data?.itemList
+            || [];
+          console.log(`[Social Service]: Lundehund returned ${videosArray.length} posts for ${cleanUsername}.`);
+        } else {
+          console.warn(`[Social Service]: Lundehund posts request failed for ${cleanUsername}. Status: ${postsRes.status}`);
+        }
+      } catch (e) {
+        console.warn(`[Social Service]: Lundehund posts fetch error for ${cleanUsername}: ${e.message}`);
+      }
+    }
+
+    // Step 5: Fallback — fetch posts via TikWM if Lundehund returned nothing
+    if (videosArray.length === 0) {
+      console.log(`[Social Service]: Lundehund returned 0 posts for ${cleanUsername}. Falling back to TikWM posts...`);
+      return await fetchTikTokVideosFromTikWM(cleanUsername);
+    }
+
+    // Build the video list from Lundehund response format
     const videos = [];
     for (const v of videosArray) {
       const vId = v.id || v.video_id;
@@ -167,8 +283,10 @@ const fetchTikTokRssVideos = async (username, accountLink) => {
       const rawTitle = v.desc || v.title || `Video by @${cleanUsername}`;
       const title = rawTitle.length > 255 ? rawTitle.substring(0, 250) + '...' : rawTitle;
       const createTime = v.createTime || v.create_time;
-      const uploadDate = createTime ? new Date(createTime * 1000).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-      
+      const uploadDate = createTime
+        ? new Date(createTime * 1000).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0];
+
       const playCount = v.stats?.playCount || v.play_count || 0;
       const diggCount = v.stats?.diggCount || v.digg_count || 0;
       const commentCount = v.stats?.commentCount || v.comment_count || 0;
@@ -187,7 +305,7 @@ const fetchTikTokRssVideos = async (username, accountLink) => {
 
     return videos;
   } catch (error) {
-    console.warn(`[Social Service]: Failed to fetch TikTok videos via RapidAPI for ${cleanUsername}: ${error.message}`);
+    console.warn(`[Social Service]: Failed to fetch TikTok videos for ${cleanUsername}: ${error.message}`);
   }
   return [];
 };
