@@ -189,7 +189,40 @@ const launchBot = () => {
         ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)
         : null;
 
-      bot.start((ctx) => {
+      bot.start(async (ctx) => {
+        const senderUsername = ctx.message?.from?.username;
+        const chatId = ctx.message?.chat?.id;
+        const isPrivate = ctx.message?.chat?.type === 'private';
+
+        if (isPrivate && senderUsername) {
+          try {
+            // Cek apakah username telegram terdaftar di DB
+            const checkRes = await import('./config/db.js').then(m =>
+              m.query(
+                `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
+                [senderUsername]
+              )
+            );
+
+            if (checkRes.rows.length > 0) {
+              const streamer = checkRes.rows[0];
+              // Simpan telegram_chat_id ke DB
+              await import('./config/db.js').then(m =>
+                m.query(
+                  `UPDATE streamers SET telegram_chat_id = $1 WHERE id = $2`,
+                  [String(chatId), streamer.id]
+                )
+              );
+              return ctx.reply(
+                `👋 *Halo ${streamer.nama}!* \n\nAkun Telegram kamu berhasil terhubung dengan sistem Casper Signal. Mulai sekarang, kamu akan menerima reminder jadwal live dan pengumpulan konten secara langsung di chat pribadi ini. \n\nSemangat! 🚀`,
+                { parse_mode: 'Markdown' }
+              );
+            }
+          } catch (err) {
+            console.error('[Bot Start] Error updating chat ID:', err.message);
+          }
+        }
+
         ctx.reply(
           '👋 *Halo! Saya CasperSignal Bot.*\n\nKirimkan laporan harian di topik *REKAP HARIAN* dan saya akan otomatis memprosesnya ke dashboard. Ketik /template atau /format untuk melihat contoh format laporan.',
           { parse_mode: 'Markdown' }

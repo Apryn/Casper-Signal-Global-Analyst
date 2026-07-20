@@ -606,20 +606,34 @@ const Dashboard = () => {
           {summary?.todayReportsStatus?.map((item) => (
             <div 
               key={item.streamerId}
-              className={`p-3.5 rounded-lg border-2 transition-all duration-200 ${
-                item.hasSubmitted 
-                  ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm' 
-                  : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
+              className={`p-3.5 rounded-lg border-2 transition-all duration-200 relative overflow-hidden ${
+                item.isCurrentlyLive
+                  ? 'bg-rose-950/20 border-rose-600 shadow-rose-900/35 shadow-[0_0_15px_rgba(225,29,72,0.15)] animate-pulse-border'
+                  : item.hasSubmitted 
+                    ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm' 
+                    : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
               }`}
             >
+              {item.isCurrentlyLive && (
+                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-bl uppercase tracking-wider animate-pulse flex items-center gap-1 select-none">
+                  <span className="h-1.5 w-1.5 rounded-full bg-white inline-block animate-ping" />
+                  <span>LIVE</span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-white">{item.nama}</span>
+                <div className="flex flex-col">
+                  <span className="font-bold text-sm text-white flex items-center gap-1.5">
+                    {item.nama}
+                  </span>
+                </div>
                 <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide ${
-                  item.hasSubmitted 
-                    ? 'bg-emerald-500 text-black border-black shadow-tactile-sm' 
-                    : 'bg-rose-500 text-white border-black shadow-tactile-sm'
+                  item.isCurrentlyLive
+                    ? 'bg-rose-600 text-white border-black shadow-tactile-sm'
+                    : item.hasSubmitted 
+                      ? 'bg-emerald-500 text-black border-black shadow-tactile-sm' 
+                      : 'bg-rose-500 text-white border-black shadow-tactile-sm'
                 }`}>
-                  {item.hasSubmitted ? 'Sudah' : 'Belum'}
+                  {item.isCurrentlyLive ? 'LIVE' : item.hasSubmitted ? 'Sudah' : 'Belum'}
                 </span>
               </div>
               <div className="mt-2.5 text-[10px] text-slate-400 flex items-center justify-between">

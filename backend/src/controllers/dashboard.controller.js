@@ -93,7 +93,13 @@ export const getDashboardSummary = async (req, res) => {
         s.platform,
         CASE WHEN r.id IS NOT NULL THEN TRUE ELSE FALSE END as has_submitted,
         r.live_duration,
-        r.ftd_count
+        r.ftd_count,
+        CASE WHEN EXISTS (
+          SELECT 1 FROM schedule sc
+          WHERE sc.streamer_id = s.id
+            AND sc.status = 'Live'
+            AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+        ) THEN TRUE ELSE FALSE END as is_currently_live
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal = $1
        ORDER BY s.nama ASC`,
@@ -105,7 +111,8 @@ export const getDashboardSummary = async (req, res) => {
       platform: row.platform,
       hasSubmitted: row.has_submitted,
       liveDuration: row.live_duration ? parseFloat(row.live_duration) : 0,
-      ftdCount: row.ftd_count ? parseInt(row.ftd_count, 10) : 0
+      ftdCount: row.ftd_count ? parseInt(row.ftd_count, 10) : 0,
+      isCurrentlyLive: row.is_currently_live
     }));
 
     res.json({

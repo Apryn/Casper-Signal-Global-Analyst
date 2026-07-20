@@ -43,40 +43,23 @@ const getWibHourAndDate = () => {
 };
 
 // Helper to push Telegram message if bot is active
-const sendTelegramNotification = async (message) => {
+const sendTelegramNotification = async (message, targetChatId = null) => {
   console.log(`[Notification Engine]: ${message}`);
   
   if (!bot) return;
 
-  let chatId = process.env.TELEGRAM_GROUP_CHAT_ID || process.env.TELEGRAM_GROUP_ID;
-
-  if (!chatId) {
-    try {
-      const chatRulesRes = await query("SELECT value FROM config WHERE key = 'telegram_group_id'");
-      chatId = chatRulesRes.rows[0]?.value;
-    } catch (err) {
-      console.warn(`[Notification Engine]: Config table query failed: ${err.message}`);
-    }
-  }
+  const chatId = targetChatId;
 
   if (chatId) {
     try {
-      const threadId = process.env.TELEGRAM_REPORT_THREAD_ID
-        ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)
-        : null;
-
       const options = { parse_mode: 'Markdown' };
-      if (threadId) {
-        options.message_thread_id = threadId;
-      }
-
       await bot.telegram.sendMessage(chatId, message, options);
-      console.log(`[Notification Sent to Telegram Chat ${chatId} (Thread: ${threadId || 'none'})]: Success`);
+      console.log(`[Notification Sent to Telegram Chat ID ${chatId} (PC/Japri)]: Success`);
     } catch (err) {
-      console.error(`[Notification Telegram Error]: Failed to dispatch message: ${err.message}`);
+      console.error(`[Notification Telegram Error]: Failed to dispatch private message to ${chatId}: ${err.message}`);
     }
   } else {
-    console.error('[Notification Telegram Error]: No telegram group ID configured.');
+    console.log('[Notification Engine]: No targetChatId specified, skipped sending to group.');
   }
 };
 
@@ -110,7 +93,7 @@ export const sendManualReportReminder = async () => {
 
   // Get active streamers who have not sent report today
   const missingStreamersRes = await query(`
-    SELECT id, nama, telegram_username 
+    SELECT id, nama, telegram_username, telegram_chat_id 
     FROM streamers 
     WHERE id NOT IN (
       SELECT streamer_id 
@@ -121,32 +104,13 @@ export const sendManualReportReminder = async () => {
   `, [dateStr]);
   const missingStreamers = missingStreamersRes.rows;
 
-  let chatId = process.env.TELEGRAM_GROUP_CHAT_ID || process.env.TELEGRAM_GROUP_ID;
-
-  if (!chatId) {
-    try {
-      const chatRulesRes = await query("SELECT value FROM config WHERE key = 'telegram_group_id'");
-      chatId = chatRulesRes.rows[0]?.value;
-    } catch (err) {
-      console.warn(`[Notification Engine]: Config table query failed: ${err.message}`);
-    }
-  }
-
-  if (!chatId) {
-    throw new Error('Telegram Group ID is not configured.');
-  }
-
-  const threadId = process.env.TELEGRAM_REPORT_THREAD_ID
-    ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)
-    : null;
-
-  const options = { parse_mode: 'Markdown' };
-  if (threadId) {
-    options.message_thread_id = threadId;
-  }
-
   if (missingStreamers.length > 0) {
     for (const streamer of missingStreamers) {
+      if (!streamer.telegram_chat_id) {
+        console.log(`[Manual Notification Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (has not initiated private chat with bot)`);
+        continue;
+      }
+
       const mention = streamer.telegram_username
         ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
         : `*${streamer.nama}*`;
@@ -154,7 +118,7 @@ export const sendManualReportReminder = async () => {
       const message = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\n\nStreamer ${mention} belum mengirimkan rekap harian untuk hari ini (*${formattedDate}*). Mohon segera dikirim ya! 🙏`;
 
       try {
-        await bot.telegram.sendMessage(chatId, message, options);
+        await bot.telegram.sendMessage(streamer.telegram_chat_id, message, { parse_mode: 'Markdown' });
 
         // Log to database
         await query(
@@ -163,7 +127,7 @@ export const sendManualReportReminder = async () => {
           [streamer.id, message]
         );
 
-        console.log(`[Manual Notification Sent to Streamer ${streamer.nama} in Telegram Chat ${chatId} (Thread: ${threadId || 'none'})]: Success`);
+        console.log(`[Manual Notification Sent to Streamer ${streamer.nama} (Japri)]: Success`);
       } catch (err) {
         console.error(`[Manual Notification Error for Streamer ${streamer.nama}]: ${err.message}`);
       }
@@ -171,16 +135,12 @@ export const sendManualReportReminder = async () => {
       // Small delay to avoid spamming / rate limiting
       await new Promise(resolve => setTimeout(resolve, 300));
     }
-  } else {
-    // If everyone submitted
-    const message = `✅ *LAPORAN HARIAN SELESAI* ✅\nTanggal: *${formattedDate}*\n\nLuar biasa! Semua streamer sudah mengirimkan laporan harian untuk hari ini. Terima kasih atas kerja samanya! 🚀`;
-    await bot.telegram.sendMessage(chatId, message, options);
   }
 
   return {
     success: true,
-    message: 'Report reminder sent to Telegram!',
-    recipientCount: missingStreamers.length,
+    message: 'Report reminder processed!',
+    recipientCount: missingStreamers.filter(s => s.telegram_chat_id).length,
     missingStreamers: missingStreamers.map(s => s.nama)
   };
 };
@@ -193,11 +153,16 @@ export const checkMissingReports = async (wibDateStr) => {
   
   try {
     // Get all streamers
-    const streamersRes = await query('SELECT id, nama, telegram_username FROM streamers');
+    const streamersRes = await query('SELECT id, nama, telegram_username, telegram_chat_id FROM streamers');
     const streamers = streamersRes.rows;
 
     for (const streamer of streamers) {
       try {
+        if (!streamer.telegram_chat_id) {
+          console.log(`[Missing Report Check]: Streamer ${streamer.nama} has no telegram_chat_id, skipped.`);
+          continue;
+        }
+
         // Check if report exists for today
         const reportCheck = await query(
           'SELECT id FROM daily_reports WHERE tanggal = $1 AND streamer_id = $2',
@@ -227,8 +192,8 @@ export const checkMissingReports = async (wibDateStr) => {
             [streamer.id, message]
           );
 
-          // Dispatch Telegram
-          await sendTelegramNotification(message);
+          // Dispatch Telegram Japri
+          await sendTelegramNotification(message, streamer.telegram_chat_id);
         }
       } catch (streamerError) {
         console.error(`Error checking missing report for streamer ${streamer.nama}:`, streamerError);
@@ -501,7 +466,7 @@ export const checkPreLiveReminders = async () => {
 
     const result = await query(
       `SELECT sc.id, sc.start_time, sc.platform, sc.streamer_id,
-              s.nama, s.telegram_username
+              s.nama, s.telegram_username, s.telegram_chat_id
        FROM schedule sc
        JOIN streamers s ON sc.streamer_id = s.id
        WHERE sc.status = 'Scheduled'
@@ -511,6 +476,11 @@ export const checkPreLiveReminders = async () => {
     );
 
     for (const row of result.rows) {
+      if (!row.telegram_chat_id) {
+        console.log(`[Pre-Live Reminder Skipped]: Streamer ${row.nama} has no telegram_chat_id, skipped.`);
+        continue;
+      }
+
       const startWib = new Date(row.start_time).toLocaleTimeString('id-ID', {
         timeZone: 'Asia/Jakarta',
         hour: '2-digit',
@@ -526,7 +496,7 @@ export const checkPreLiveReminders = async () => {
         `📢 Sudah share promo atau analisa singkat ke grup belum?\n` +
         `Kalau sudah, ketik */promo [link_post]* untuk mencatatnya. Semangat! 🚀`;
 
-      await sendTelegramNotification(message);
+      await sendTelegramNotification(message, row.telegram_chat_id);
 
       // Tandai sudah terkirim agar tidak double-send
       await query(
@@ -559,7 +529,7 @@ export const checkContentRecapReminders = async (wibDateStr) => {
   try {
     // Cari streamer yang sudah kirim laporan harian tapi belum submit content recap
     const result = await query(
-      `SELECT dr.streamer_id, s.nama, s.telegram_username
+      `SELECT dr.streamer_id, s.nama, s.telegram_username, s.telegram_chat_id
        FROM daily_reports dr
        JOIN streamers s ON dr.streamer_id = s.id
        WHERE dr.tanggal = $1
@@ -573,6 +543,11 @@ export const checkContentRecapReminders = async (wibDateStr) => {
     }
 
     for (const row of result.rows) {
+      if (!row.telegram_chat_id) {
+        console.log(`[Content Recap Reminder Skipped]: Streamer ${row.nama} has no telegram_chat_id, skipped.`);
+        continue;
+      }
+
       const mention = row.telegram_username
         ? `@${row.telegram_username.trim()}`
         : `*${row.nama}*`;
@@ -584,7 +559,7 @@ export const checkContentRecapReminders = async (wibDateStr) => {
         `*/rekap [link_postingan]*\n\n` +
         `_Rekap konten wajib dikirim sebelum jam 22:00 WIB agar hari kerja dianggap penuh._ ⚠️`;
 
-      await sendTelegramNotification(message);
+      await sendTelegramNotification(message, row.telegram_chat_id);
 
       await query(
         `INSERT INTO notifications (streamer_id, message, status, type)

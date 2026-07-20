@@ -171,14 +171,16 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
     [now.toISOString(), latenessMinutes, schedule.id]
   );
 
-  // Ambil nama streamer untuk notifikasi
-  const streamerRes = await query('SELECT nama, telegram_username FROM streamers WHERE id = $1', [streamer_id]);
+  // Ambil nama streamer & telegram_chat_id untuk notifikasi
+  const streamerRes = await query('SELECT nama, telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [streamer_id]);
   const streamer = streamerRes.rows[0];
   if (!streamer) return;
 
   const mention = streamer.telegram_username
     ? `@${streamer.telegram_username.trim()}`
     : `*${streamer.nama}*`;
+
+  const targetChatId = streamer.telegram_chat_id || null;
 
   if (latenessMinutes > LATENESS_ALERT_THRESHOLD_MINUTES) {
     // Kirim alert keterlambatan
@@ -189,7 +191,11 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       `• Aktual: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n\n` +
       `_Keterlambatan ini dicatat dalam sistem._`;
 
-    await sendNotification(msg);
+    if (targetChatId) {
+      await sendNotification(msg, targetChatId);
+    } else {
+      console.log(`[YouTube Service Alert Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (cannot send lateness japri)`);
+    }
 
     // Log ke tabel notifications
     await query(
@@ -207,7 +213,11 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       `• Platform: YouTube\n` +
       `• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*${latenessMinutes > 0 ? ` _(terlambat ${latenessMinutes} mnt)_` : ' ✅ ontime'}`;
 
-    await sendNotification(msg);
+    if (targetChatId) {
+      await sendNotification(msg, targetChatId);
+    } else {
+      console.log(`[YouTube Service Notification Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (cannot send live status japri)`);
+    }
 
     console.log(`[YouTube Service] 🔴 ${streamer.nama} mulai live${latenessMinutes > 0 ? ` (terlambat ${latenessMinutes} mnt)` : ' (ontime)'}`);
   }
