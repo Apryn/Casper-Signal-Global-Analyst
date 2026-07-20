@@ -10,13 +10,15 @@ export const login = async (req, res) => {
     return res.status(400).json({ message: 'Activation code is required' });
   }
 
-  const validCode = process.env.ACTIVATION_CODE;
+  const cleanInput = activationCode.trim();
+  const validCode = process.env.ACTIVATION_CODE ? process.env.ACTIVATION_CODE.trim() : null;
+
   if (!validCode) {
     console.error('ACTIVATION_CODE is not set in environment variables!');
     return res.status(500).json({ message: 'Server configuration error' });
   }
 
-  if (activationCode !== validCode) {
+  if (cleanInput !== validCode) {
     return res.status(401).json({ message: 'Invalid activation code' });
   }
 
