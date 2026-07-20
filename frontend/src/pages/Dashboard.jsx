@@ -606,29 +606,35 @@ const Dashboard = () => {
           {summary?.todayReportsStatus?.map((item) => (
             <div 
               key={item.streamerId}
-              className={`p-3.5 rounded-lg border-2 transition-all duration-200 relative overflow-hidden ${
+              className={`p-3.5 rounded-lg border-2 transition-all duration-300 relative overflow-hidden ${
                 item.isCurrentlyLive
-                  ? 'bg-rose-950/20 border-rose-600 shadow-rose-900/35 shadow-[0_0_15px_rgba(225,29,72,0.15)] animate-pulse-border'
+                  ? 'bg-gradient-to-br from-rose-950/45 via-slate-900 to-slate-950 border-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.35)] shadow-tactile-sm animate-pulse-gentle'
                   : item.hasSubmitted 
                     ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm' 
                     : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
               }`}
             >
               {item.isCurrentlyLive && (
-                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[8px] font-black px-2 py-0.5 rounded-bl uppercase tracking-wider animate-pulse flex items-center gap-1 select-none">
+                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[8px] font-black px-2.5 py-0.5 rounded-bl uppercase tracking-widest flex items-center gap-1 select-none border-l border-b border-black shadow-tactile-sm">
                   <span className="h-1.5 w-1.5 rounded-full bg-white inline-block animate-ping" />
-                  <span>LIVE</span>
+                  <span>ON AIR</span>
                 </div>
               )}
               <div className="flex items-center justify-between">
                 <div className="flex flex-col">
-                  <span className="font-bold text-sm text-white flex items-center gap-1.5">
+                  <span className="font-bold text-sm text-white flex items-center gap-2">
+                    {item.isCurrentlyLive && (
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
+                      </span>
+                    )}
                     {item.nama}
                   </span>
                 </div>
-                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide ${
+                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide transition-all ${
                   item.isCurrentlyLive
-                    ? 'bg-rose-600 text-white border-black shadow-tactile-sm'
+                    ? 'bg-rose-600 text-white border-black shadow-[0_0_10px_rgba(244,63,94,0.5)] shadow-tactile-sm font-black'
                     : item.hasSubmitted 
                       ? 'bg-emerald-500 text-black border-black shadow-tactile-sm' 
                       : 'bg-rose-500 text-white border-black shadow-tactile-sm'

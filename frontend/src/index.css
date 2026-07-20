@@ -286,3 +286,20 @@ body {
   animation: crt-flicker 0.15s infinite;
 }
 
+@keyframes pulse-gentle {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 18px rgba(244, 63, 94, 0.25), 4px 4px 0px 0px #000000;
+  }
+  50% {
+    transform: scale(1.015);
+    box-shadow: 0 0 28px rgba(244, 63, 94, 0.45), 5px 5px 0px 0px #000000;
+    border-color: #f43f5e;
+  }
+}
+
+.animate-pulse-gentle {
+  animation: pulse-gentle 2s infinite ease-in-out;
+}
+
+
