@@ -465,10 +465,14 @@ export const checkPreLiveReminders = async () => {
     const windowEnd   = new Date(now.getTime() + 20 * 60 * 1000);
 
     const result = await query(
-      `SELECT sc.id, sc.start_time, sc.platform, sc.streamer_id,
-              s.nama, s.telegram_username, s.telegram_chat_id
+      `SELECT sc.id, sc.start_time, sc.platform, sc.streamer_id, sc.substitute_streamer_id,
+              s.nama as original_name,
+              target.nama as target_name,
+              target.telegram_username as target_tg_username,
+              target.telegram_chat_id as target_tg_chat_id
        FROM schedule sc
        JOIN streamers s ON sc.streamer_id = s.id
+       JOIN streamers target ON target.id = COALESCE(sc.substitute_streamer_id, sc.streamer_id)
        WHERE sc.status = 'Scheduled'
          AND sc.pre_live_submitted = FALSE
          AND sc.start_time BETWEEN $1 AND $2`,
@@ -476,8 +480,8 @@ export const checkPreLiveReminders = async () => {
     );
 
     for (const row of result.rows) {
-      if (!row.telegram_chat_id) {
-        console.log(`[Pre-Live Reminder Skipped]: Streamer ${row.nama} has no telegram_chat_id, skipped.`);
+      if (!row.target_tg_chat_id) {
+        console.log(`[Pre-Live Reminder Skipped]: Streamer ${row.target_name} has no telegram_chat_id, skipped.`);
         continue;
       }
 
@@ -486,17 +490,20 @@ export const checkPreLiveReminders = async () => {
         hour: '2-digit',
         minute: '2-digit',
       });
-      const mention = row.telegram_username
-        ? `@${row.telegram_username.trim()}`
-        : `*${row.nama}*`;
+      const mention = row.target_tg_username
+        ? `@${row.target_tg_username.trim()}`
+        : `*${row.target_name}*`;
+
+      const isSubstituting = !!row.substitute_streamer_id;
+      const substituteText = isSubstituting ? ` menggantikan *${row.original_name}*` : '';
 
       const message =
-        `⏰ *REMINDER PRE-LIVE — ${row.nama}*\n\n` +
-        `Halo ${mention}! Live kamu di *${row.platform}* dimulai pukul *${startWib} WIB* (kurang lebih 15 menit lagi).\n\n` +
+        `⏰ *REMINDER PRE-LIVE — ${row.target_name}*${isSubstituting ? ' (Pengganti)' : ''}\n\n` +
+        `Halo ${mention}! Live kamu${substituteText} di *${row.platform}* dimulai pukul *${startWib} WIB* (kurang lebih 15 menit lagi).\n\n` +
         `📢 Sudah share promo, tren, atau analisa singkat ke grup belum?\n` +
         `Ketik */promo [link_post]* atau cukup */promo done* jika kamu membagikan screenshot. Semangat! 🚀`;
 
-      await sendTelegramNotification(message, row.telegram_chat_id);
+      await sendTelegramNotification(message, row.target_tg_chat_id);
 
       // Tandai sudah terkirim agar tidak double-send
       await query(
@@ -504,14 +511,15 @@ export const checkPreLiveReminders = async () => {
         [row.id]
       );
 
-      // Log ke notifikasi
+      // Log ke notifikasi untuk target streamer
+      const logStreamerId = row.substitute_streamer_id || row.streamer_id;
       await query(
         `INSERT INTO notifications (streamer_id, message, status, type)
          VALUES ($1, $2, 'Sent', 'Report Reminder')`,
-        [row.streamer_id, message]
+        [logStreamerId, message]
       );
 
-      console.log(`[Pre-Live Reminder] Sent to ${row.nama} for ${startWib} WIB`);
+      console.log(`[Pre-Live Reminder] Sent to ${row.target_name}${isSubstituting ? ' (substitute)' : ''} for ${startWib} WIB`);
       await new Promise(r => setTimeout(r, 300));
     }
   } catch (error) {

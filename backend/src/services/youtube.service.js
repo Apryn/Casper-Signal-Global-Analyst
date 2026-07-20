@@ -129,7 +129,7 @@ const findMatchingSchedule = async (streamerId) => {
 
   const result = await query(
     `SELECT * FROM schedule
-     WHERE streamer_id = $1
+     WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
        AND status IN ('Scheduled', 'Live')
        AND start_time BETWEEN $2 AND $3
      ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $4))) ASC
@@ -171,21 +171,33 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
     [now.toISOString(), latenessMinutes, schedule.id]
   );
 
-  // Ambil nama streamer & telegram_chat_id untuk notifikasi
-  const streamerRes = await query('SELECT nama, telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [streamer_id]);
+  // Tentukan streamer target (pengganti atau asli)
+  const targetStreamerId = schedule.substitute_streamer_id || streamer_id;
+  const isSubstituting = !!schedule.substitute_streamer_id;
+
+  // Ambil nama streamer target & telegram_chat_id untuk notifikasi
+  const streamerRes = await query('SELECT nama, telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [targetStreamerId]);
   const streamer = streamerRes.rows[0];
   if (!streamer) return;
+
+  // Jika menggantikan, ambil nama streamer asli
+  let originalName = '';
+  if (isSubstituting) {
+    const origRes = await query('SELECT nama FROM streamers WHERE id = $1', [streamer_id]);
+    originalName = origRes.rows[0]?.nama || '';
+  }
 
   const mention = streamer.telegram_username
     ? `@${streamer.telegram_username.trim()}`
     : `*${streamer.nama}*`;
 
   const targetChatId = streamer.telegram_chat_id || null;
+  const substituteText = isSubstituting ? ` *(menggantikan ${originalName})*` : '';
 
   if (latenessMinutes > LATENESS_ALERT_THRESHOLD_MINUTES) {
     // Kirim alert keterlambatan
     const msg =
-      `⏰ *LIVE TERLAMBAT — ${streamer.nama}*\n\n` +
+      `⏰ *LIVE TERLAMBAT — ${streamer.nama}*${substituteText}\n\n` +
       `${mention} terdeteksi mulai live *${formatDuration(latenessMinutes)} terlambat*\n` +
       `• Jadwal: *${scheduledStart.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n` +
       `• Aktual: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n\n` +
@@ -197,18 +209,18 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       console.log(`[YouTube Service Alert Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (cannot send lateness japri)`);
     }
 
-    // Log ke tabel notifications
+    // Log ke tabel notifications untuk target streamer
     await query(
       `INSERT INTO notifications (streamer_id, message, status, type)
        VALUES ($1, $2, 'Sent', 'Alert')`,
-      [streamer_id, msg]
+      [targetStreamerId, msg]
     );
 
-    console.log(`[YouTube Service] ⚠️  ${streamer.nama} terlambat ${latenessMinutes} menit`);
+    console.log(`[YouTube Service] ⚠️  ${streamer.nama}${substituteText} terlambat ${latenessMinutes} menit`);
   } else {
     // Live tepat waktu atau dalam toleransi → notif positif
     const msg =
-      `🔴 *LIVE DIMULAI — ${streamer.nama}*\n\n` +
+      `🔴 *LIVE DIMULAI — ${streamer.nama}*${substituteText}\n\n` +
       `${mention} sudah mulai live!\n` +
       `• Platform: YouTube\n` +
       `• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*${latenessMinutes > 0 ? ` _(terlambat ${latenessMinutes} mnt)_` : ' ✅ ontime'}`;
@@ -219,7 +231,7 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       console.log(`[YouTube Service Notification Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (cannot send live status japri)`);
     }
 
-    console.log(`[YouTube Service] 🔴 ${streamer.nama} mulai live${latenessMinutes > 0 ? ` (terlambat ${latenessMinutes} mnt)` : ' (ontime)'}`);
+    console.log(`[YouTube Service] 🔴 ${streamer.nama}${substituteText} mulai live${latenessMinutes > 0 ? ` (terlambat ${latenessMinutes} mnt)` : ' (ontime)'}`);
   }
 };
 
@@ -227,10 +239,10 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
 const handleChannelOffline = async (account) => {
   const { streamer_id } = account;
 
-  // Cari jadwal yang sedang berstatus Live
+  // Cari jadwal yang sedang berstatus Live (bisa streamer asli atau pengganti)
   const result = await query(
     `SELECT * FROM schedule
-     WHERE streamer_id = $1
+     WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
        AND status = 'Live'
        AND actual_start_time IS NOT NULL
        AND actual_end_time IS NULL
@@ -256,17 +268,21 @@ const handleChannelOffline = async (account) => {
     [now.toISOString(), schedule.id]
   );
 
-  // Update live_duration di daily_reports untuk tanggal hari ini
+  // Catat live_duration di daily_reports milik target streamer (asli atau pengganti)
+  const targetReportStreamerId = schedule.substitute_streamer_id || schedule.streamer_id;
   const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
+  
+  // Pastikan daily report untuk target streamer hari ini ada sebelum update
   await query(
-    `UPDATE daily_reports
-     SET live_duration = COALESCE(live_duration, 0) + $1
-     WHERE streamer_id = $2 AND tanggal = $3`,
-    [durationHours, streamer_id, dateStr]
+    `INSERT INTO daily_reports (streamer_id, tanggal, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
+     VALUES ($1, $2, $3, 0, 0, 0, 0, 0, 0, 0)
+     ON CONFLICT (streamer_id, tanggal) 
+     DO UPDATE SET live_duration = COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration`,
+    [targetReportStreamerId, dateStr, durationHours]
   );
 
-  const streamerRes = await query('SELECT nama FROM streamers WHERE id = $1', [streamer_id]);
-  const nama = streamerRes.rows[0]?.nama || `Streamer #${streamer_id}`;
+  const streamerRes = await query('SELECT nama FROM streamers WHERE id = $1', [targetReportStreamerId]);
+  const nama = streamerRes.rows[0]?.nama || `Streamer #${targetReportStreamerId}`;
 
   console.log(`[YouTube Service] ✅ ${nama} selesai live — durasi: ${formatDuration(durationMs / 60000)}`);
 };
