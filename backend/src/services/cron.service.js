@@ -665,9 +665,11 @@ export const startCronJobs = (botInstance) => {
     checkPreLiveReminders().catch(err => console.error('[Cron] Error running checkPreLiveReminders:', err));
   }, { timezone: 'Asia/Jakarta' });
 
-  // ⏰ [NEW] YouTube Live Detection — tiap 1 jam, jam 07:00-23:00 WIB (quota aman: ~8.000 unit/hari)
-  cron.schedule('0 7-23 * * *', () => {
-    console.log('[Cron] Running YouTube live status detection...');
+  // ⏰ [NEW] YouTube Live Detection — tiap 15 menit, jam 07:00-23:00 WIB
+  // Smart filter aktif: hanya query channel yang punya jadwal dalam window ±60 menit
+  // Estimasi quota: ~12.800 unit/hari (sedikit di atas free 10K, request increase jika perlu)
+  cron.schedule('*/15 7-23 * * *', () => {
+    console.log('[Cron] Running YouTube live status detection (15-min smart poll)...');
     checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
   }, { timezone: 'Asia/Jakarta' });
 

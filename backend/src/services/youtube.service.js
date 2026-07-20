@@ -43,6 +43,32 @@ const getApiKey = () => {
   return key.trim();
 };
 
+// ── Helper: cek apakah channel punya jadwal aktif sekarang atau 30 menit ke depan ────
+/**
+ * Hanya query YouTube API jika channel ini punya streamer yang:
+ * - Sedang dalam sesi live (status = 'Live'), ATAU
+ * - Jadwalnya mulai dalam 30 menit ke depan, ATAU
+ * - Jadwalnya baru mulai dalam 60 menit terakhir (toleransi terlambat)
+ */
+const isChannelScheduleActive = async (streamerIds) => {
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - 60 * 60 * 1000);  // 60 menit lalu
+  const windowEnd   = new Date(now.getTime() + 30 * 60 * 1000);  // 30 menit ke depan
+
+  const result = await query(
+    `SELECT id FROM schedule
+     WHERE streamer_id = ANY($1)
+       AND (
+         status = 'Live'
+         OR (status = 'Scheduled' AND start_time BETWEEN $2 AND $3)
+       )
+     LIMIT 1`,
+    [streamerIds, windowStart.toISOString(), windowEnd.toISOString()]
+  );
+
+  return result.rows.length > 0;
+};
+
 // ── Core: Cek satu channel apakah sedang live ─────────────────────────────
 /**
  * @param {string} channelId - YouTube Channel ID (UCxxxxx)
@@ -273,6 +299,16 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
 
   for (const account of uniqueChannels) {
     try {
+      // ── SMART FILTER: skip jika tidak ada jadwal aktif untuk channel ini ──
+      const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
+      const streamerIds = channelAccounts.map(a => a.streamer_id);
+      const hasActiveSchedule = await isChannelScheduleActive(streamerIds);
+
+      if (!hasActiveSchedule) {
+        console.log(`[YouTube Service] ⏭️  Channel ${account.channel_id.substring(0,12)}... — tidak ada jadwal aktif, skip.`);
+        continue;
+      }
+
       const liveInfo = await checkChannelLiveStatus(account.channel_id, apiKey);
 
       if (liveInfo.isLive) {
