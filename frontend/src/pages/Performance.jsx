@@ -32,6 +32,7 @@ const Performance = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [penaltyData, setPenaltyData] = useState(null);
   const [penaltyLoading, setPenaltyLoading] = useState(false);
+  const [basicSalary, setBasicSalary] = useState(3000000); // Gaji Pokok default 3 Juta
 
   // Rate settings for penalties
   const [rateLate, setRateLate] = useState(2000);     // Rp 2.000 / mnt
@@ -349,10 +350,19 @@ const Performance = () => {
         <div className="space-y-6">
           
           {/* Rate Configuration and Month Selector Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 border-b-2 border-black/30 pb-5">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 border-b-2 border-black/30 pb-5">
             
             {/* Form Setting Parameter Denda */}
-            <form onSubmit={handleApplyRates} className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl border-2 border-black bg-dark-panel">
+            <form onSubmit={handleApplyRates} className="lg:col-span-3 grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl border-2 border-black bg-dark-panel">
+              <div>
+                <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Gaji Pokok (Rp)</label>
+                <input
+                  type="number"
+                  value={basicSalary}
+                  onChange={(e) => setBasicSalary(Math.max(0, parseInt(e.target.value, 10)))}
+                  className="w-full p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none"
+                />
+              </div>
               <div>
                 <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Late Rate (Rp/Min)</label>
                 <input
@@ -438,12 +448,15 @@ const Performance = () => {
                       <th className="py-3 px-4 text-right">Potongan Telat</th>
                       <th className="py-3 px-4 text-right">Potongan Bolos</th>
                       <th className="py-3 px-4 text-right">Bonus Ganti</th>
-                      <th className="py-3 px-4 text-right text-white font-extrabold">Net Potongan</th>
+                      <th className="py-3 px-4 text-right text-rose-450 font-black">Total Denda</th>
+                      <th className="py-3 px-4 text-right text-emerald-400 font-black">Gaji Pokok</th>
+                      <th className="py-3 px-4 text-right text-white font-extrabold">Gaji Diterima</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-black/30 font-bold">
                     {penaltyData.report.map((row) => {
                       const netPotongan = row.financials.netDeduction;
+                      const takeHomePay = Math.max(0, basicSalary - netPotongan);
                       const hasImpact = netPotongan !== 0 || row.stats.lateMinutes > 0 || row.stats.absentCount > 0;
 
                       return (
@@ -491,14 +504,18 @@ const Performance = () => {
                           <td className="py-3.5 px-4 text-right text-emerald-400 font-mono">
                             {row.financials.bonusSubstitute > 0 ? `+${formatIDR(row.financials.bonusSubstitute)}` : '-'}
                           </td>
-                          <td className={`py-3.5 px-4 text-right font-mono text-sm font-black ${
+                          <td className={`py-3.5 px-4 text-right font-mono text-sm font-bold ${
                             netPotongan > 0 
-                              ? 'text-rose-500 text-shadow-rose' 
+                              ? 'text-rose-500' 
                               : netPotongan < 0 
-                                ? 'text-emerald-400 text-shadow-emerald' 
+                                ? 'text-emerald-400' 
                                 : 'text-slate-400'
                           }`}>
                             {netPotongan !== 0 ? formatIDR(netPotongan) : 'Rp 0'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-slate-400 font-mono">{formatIDR(basicSalary)}</td>
+                          <td className="py-3.5 px-4 text-right font-mono text-sm font-black text-emerald-400 text-shadow-emerald bg-emerald-950/5">
+                            {formatIDR(takeHomePay)}
                           </td>
                         </tr>
                       );
