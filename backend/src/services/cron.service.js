@@ -150,6 +150,13 @@ export const sendManualReportReminder = async () => {
  */
 export const checkMissingReports = async (wibDateStr) => {
   const todayStr = wibDateStr || getWibHourAndDate().dateStr;
+  const dayOfWeek = new Date(todayStr + 'T12:00:00+07:00').getDay();
+
+  // Hari Minggu libur -> tidak perlu ingatkan/cari laporan kosong
+  if (dayOfWeek === 0) {
+    console.log(`[Missing Report Check] Hari ini adalah hari Minggu (Libur). Lewati pengingat setoran.`);
+    return;
+  }
   
   try {
     // Get all streamers
@@ -337,24 +344,35 @@ export const checkTargetAchievements = async () => {
  */
 export const checkMinLiveViolations = async (wibDateStr) => {
   const todayStr = wibDateStr || getWibHourAndDate().dateStr;
+  const dayOfWeek = new Date(todayStr + 'T12:00:00+07:00').getDay();
+
+  // Hari Minggu libur -> tidak ada pelanggaran minimal live di hari Minggu
+  if (dayOfWeek === 0) {
+    console.log(`[Min Live Check] Hari ini adalah hari Minggu (Libur). Lewati pengecekan minimal live.`);
+    return;
+  }
   
   // Calculate yesterday's date in WIB to capture late reports
   const todayDate = new Date();
   const yesterdayDate = new Date(todayDate);
   yesterdayDate.setDate(yesterdayDate.getDate() - 1);
   const yesterdayStr = formatWibDate(yesterdayDate);
+  const yesterdayDay = new Date(yesterdayStr + 'T12:00:00+07:00').getDay();
 
-  const targetDates = [yesterdayStr, todayStr];
+  // Hanya periksa tanggal yang bukan hari Minggu
+  const targetDates = [];
+  if (yesterdayDay !== 0) targetDates.push(yesterdayStr);
+  targetDates.push(todayStr);
   
   try {
     const result = await query(
       `SELECT r.*, s.nama 
        FROM daily_reports r
        JOIN streamers s ON r.streamer_id = s.id
-       WHERE r.tanggal IN ($1, $2) 
+       WHERE r.tanggal = ANY($1) 
          AND r.kategori = 'Streaming' 
          AND r.live_duration < 4.0`,
-      [targetDates[0], targetDates[1]]
+      [targetDates]
     );
 
     for (const row of result.rows) {
@@ -395,6 +413,12 @@ export const generateDailySchedules = async (wibDateStr) => {
   const todayStr = wibDateStr || getWibHourAndDate().dateStr;
   // day of week: 0=Sunday, 1=Monday, ..., 6=Saturday
   const dayOfWeek = new Date(todayStr + 'T12:00:00+07:00').getDay();
+
+  // Hari Minggu libur -> tidak ada auto-generate jadwal
+  if (dayOfWeek === 0) {
+    console.log(`[Schedule Generator] Hari ini adalah hari Minggu (Libur). Lewati proses auto-generate.`);
+    return;
+  }
 
   try {
     // Ambil semua template aktif yang berlaku hari ini
