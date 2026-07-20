@@ -3,7 +3,8 @@ import {
   getStreamerPerformance, 
   getLeaderboardWithScores, 
   getAiAnalystReport,
-  getMonthlyPenaltyReport
+  getMonthlyPenaltyReport,
+  getViewerHistory
 } from '../controllers/analytics.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
@@ -15,5 +16,6 @@ router.get('/streamer/:streamerId', getStreamerPerformance);
 router.get('/leaderboard', getLeaderboardWithScores);
 router.get('/ai-report', getAiAnalystReport);
 router.get('/monthly-penalty', getMonthlyPenaltyReport);
+router.get('/viewer-history', getViewerHistory);
 
 export default router;

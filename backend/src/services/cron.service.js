@@ -371,7 +371,13 @@ export const checkMinLiveViolations = async (wibDateStr) => {
        JOIN streamers s ON r.streamer_id = s.id
        WHERE r.tanggal = ANY($1) 
          AND r.kategori = 'Streaming' 
-         AND r.live_duration < 4.0`,
+         AND r.live_duration < 4.0
+         AND EXISTS (
+           SELECT 1 FROM schedule sc
+           WHERE (sc.streamer_id = r.streamer_id OR sc.substitute_streamer_id = r.streamer_id)
+             AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = r.tanggal
+             AND sc.platform = 'YouTube'
+         )`,
       [targetDates]
     );
 

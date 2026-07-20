@@ -17,7 +17,8 @@ import {
   UserX,
   PlusCircle,
   FileSpreadsheet,
-  X
+  X,
+  Users
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 
@@ -29,7 +30,7 @@ const Performance = () => {
   const [range, setRange] = useState('30days');
 
   // New states for Penalty Report
-  const [activeTab, setActiveTab] = useState('funnel'); // 'funnel' | 'penalty'
+  const [activeTab, setActiveTab] = useState('funnel'); // 'funnel' | 'penalty' | 'viewer'
   const [selectedMonth, setSelectedMonth] = useState('');
   const [penaltyData, setPenaltyData] = useState(null);
   const [penaltyLoading, setPenaltyLoading] = useState(false);
@@ -37,6 +38,12 @@ const Performance = () => {
 
   // State for detail history modal (Opsi 2)
   const [selectedStreamerDetail, setSelectedStreamerDetail] = useState(null);
+
+  // State for Viewer History analysis (Opsi 3)
+  const [viewerHistoryData, setViewerHistoryData] = useState([]);
+  const [viewerLoading, setViewerLoading] = useState(false);
+  const [viewerDate, setViewerDate] = useState('');
+  const [viewerStreamerId, setViewerStreamerId] = useState('all');
 
   // Rate settings for penalties
   const [rateLate, setRateLate] = useState(2000);     // Rp 2.000 / mnt
@@ -62,6 +69,10 @@ const Performance = () => {
     const today = new Date();
     const curMonth = today.toISOString().slice(0, 7);
     setSelectedMonth(curMonth);
+
+    // Set default date for viewer analysis to today YYYY-MM-DD
+    const curDate = today.toISOString().split('T')[0];
+    setViewerDate(curDate);
   }, []);
 
   // Fetch performance details when streamer or range changes
@@ -108,6 +119,29 @@ const Performance = () => {
     fetchPenaltyReport();
   }, [selectedMonth, activeTab]);
 
+  // Fetch viewer history data
+  const fetchViewerHistory = async () => {
+    if (!viewerDate || activeTab !== 'viewer') return;
+    setViewerLoading(true);
+    try {
+      const res = await api.get('/analytics/viewer-history', {
+        params: {
+          date: viewerDate,
+          streamerId: viewerStreamerId === 'all' ? undefined : viewerStreamerId
+        }
+      });
+      setViewerHistoryData(res.data);
+    } catch (err) {
+      console.error('Error fetching viewer history:', err);
+    } finally {
+      setViewerLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchViewerHistory();
+  }, [viewerDate, viewerStreamerId, activeTab]);
+
   const handleApplyRates = (e) => {
     e.preventDefault();
     fetchPenaltyReport();
@@ -121,7 +155,7 @@ const Performance = () => {
     );
   }
 
-  // Setup Chart configs
+  // Setup Chart configs for conversion funnel
   const getLineChartData = () => {
     if (!performance || !performance.dailyTrend) return { labels: [], datasets: [] };
     const points = performance.dailyTrend;
@@ -163,6 +197,46 @@ const Performance = () => {
           borderColor: '#06b6d4',
           borderWidth: 1.5,
           data: points.map(p => p.chats)
+        }
+      ]
+    };
+  };
+
+  // Setup Chart configs for Viewer History per platform
+  const getViewerChartData = () => {
+    if (viewerHistoryData.length === 0) return { labels: [], datasets: [] };
+
+    // Format timestamps to HH:MM WIB
+    const labels = viewerHistoryData.map(h => {
+      const d = new Date(h.recorded_at);
+      return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+    });
+
+    const ytData = viewerHistoryData.map(h => h.platform === 'YouTube' ? h.viewer_count : null);
+    const ttData = viewerHistoryData.map(h => h.platform === 'TikTok' ? h.viewer_count : null);
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: 'YouTube Viewers',
+          borderColor: '#10b981',
+          backgroundColor: 'rgba(16, 185, 129, 0.1)',
+          borderWidth: 3.5,
+          tension: 0.3,
+          pointBackgroundColor: '#10b981',
+          spanGaps: true, // Biarkan tersambung jika ada jeda platform
+          data: ytData
+        },
+        {
+          label: 'TikTok Viewers',
+          borderColor: '#f43f5e',
+          backgroundColor: 'rgba(244, 63, 94, 0.1)',
+          borderWidth: 3.5,
+          tension: 0.3,
+          pointBackgroundColor: '#f43f5e',
+          spanGaps: true,
+          data: ttData
         }
       ]
     };
@@ -264,15 +338,15 @@ const Performance = () => {
       {/* Top Header and Page Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-black text-white tracking-wide uppercase">Performance & Accountability</h2>
-          <p className="text-sm text-gray-400">Monitor conversion funnels and monthly penalty reports for late and absent streamer logs.</p>
+          <h2 className="text-2xl font-black text-white tracking-wide uppercase">Performance & Analytics</h2>
+          <p className="text-sm text-gray-400">Monitor conversion funnels, monthly denda/payroll reports, and real-time live viewer history.</p>
         </div>
 
         {/* Tab Buttons */}
-        <div className="flex p-1 rounded-xl bg-slate-950 border-2 border-black shadow-tactile-sm shrink-0 self-start sm:self-center">
+        <div className="flex p-1 rounded-xl bg-slate-950 border-2 border-black shadow-tactile-sm shrink-0 self-start sm:self-center overflow-x-auto">
           <button
             onClick={() => setActiveTab('funnel')}
-            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'funnel' 
                 ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
                 : 'text-slate-400 hover:text-white border-2 border-transparent'
@@ -282,13 +356,24 @@ const Performance = () => {
           </button>
           <button
             onClick={() => setActiveTab('penalty')}
-            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+            className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'penalty' 
                 ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
                 : 'text-slate-400 hover:text-white border-2 border-transparent'
             }`}
           >
-            Rapor Denda & Absensi
+            Rapor Denda &amp; Absensi
+          </button>
+          <button
+            onClick={() => setActiveTab('viewer')}
+            className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+              activeTab === 'viewer' 
+                ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
+                : 'text-slate-400 hover:text-white border-2 border-transparent'
+            }`}
+          >
+            <Users className="h-3.5 w-3.5" />
+            <span>Viewer Tracker</span>
           </button>
         </div>
       </div>
@@ -343,7 +428,7 @@ const Performance = () => {
                   { title: 'FTD Count', value: (stats?.totalFtds || 0).toLocaleString('id-ID'), desc: 'First time depositors', color: 'text-emerald-400' }
                 ].map((item, idx) => (
                   <div key={idx} className="tactile-card p-5 border-2 border-black bg-dark-card">
-                    <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest block">{item.title}</span>
+                    <span className="text-[10px] font-black text-slate-455 uppercase tracking-widest block">{item.title}</span>
                     <strong className="text-2xl font-black text-white block mt-2">{item.value}</strong>
                     <span className={`text-[9px] font-extrabold ${item.color} mt-1.5 block uppercase tracking-wide`}>{item.desc}</span>
                   </div>
@@ -363,7 +448,7 @@ const Performance = () => {
                     <div className="text-right">
                       <span className="text-[10px] text-indigo-400 font-extrabold uppercase block font-mono">Target: 30%</span>
                       <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
-                        (stats?.registrationRate || 0) >= 30 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
+                        (stats?.registrationRate || 0) >= 30 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-455 border-rose-500/20'
                       } inline-block mt-2`}>
                         {(stats?.registrationRate || 0) >= 30 ? 'Good Conversion' : 'Needs attention'}
                       </span>
@@ -378,7 +463,7 @@ const Performance = () => {
                     <div className="text-right">
                       <span className="text-[10px] text-indigo-400 font-extrabold uppercase block font-mono">Target: 10%</span>
                       <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
-                        (stats?.ftdConversion || 0) >= 10 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
+                        (stats?.ftdConversion || 0) >= 10 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-455 border-rose-500/20'
                       } inline-block mt-2`}>
                         {(stats?.ftdConversion || 0) >= 10 ? 'Good Conversion' : 'Needs attention'}
                       </span>
@@ -497,7 +582,7 @@ const Performance = () => {
                 <div className="flex items-center gap-2">
                   <Info className="h-4 w-4 text-slate-400" />
                   <span className="text-[10px] font-bold text-slate-400 uppercase">
-                    Klik nama streamer untuk melihat rincian detail tanggal kejadian
+                    Klik nama streamer untuk melihat rincian detail tanggal kejadian (TikTok bebas KPI denda)
                   </span>
                 </div>
 
@@ -537,7 +622,7 @@ const Performance = () => {
                       <th className="py-3 px-4 text-right">Potongan Bolos</th>
                       <th className="py-3 px-4 text-right">Bonus Ganti</th>
                       <th className="py-3 px-4 text-right text-rose-450 font-black">Total Denda</th>
-                      <th className="py-3 px-4 text-right text-emerald-400 font-black">Gaji Pokok</th>
+                      <th className="py-3 px-4 text-right text-slate-450 font-black">Gaji Pokok</th>
                       <th className="py-3 px-4 text-right text-white font-extrabold">Gaji Diterima</th>
                     </tr>
                   </thead>
@@ -634,6 +719,117 @@ const Performance = () => {
         </div>
       )}
 
+      {/* RENDER TAB 3: VIEWER TRACKER (Opsi Analisis Jam Ramai) */}
+      {activeTab === 'viewer' && (
+        <div className="space-y-6">
+          
+          {/* Filter Bar */}
+          <div className="flex flex-wrap items-center gap-4 bg-dark-panel p-4 rounded-xl border-2 border-black">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-4.5 w-4.5 text-indigo-400" />
+              <span className="text-xs font-black uppercase text-slate-400">Pilih Tanggal:</span>
+              <input
+                type="date"
+                value={viewerDate}
+                onChange={(e) => setViewerDate(e.target.value)}
+                className="p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Users className="h-4.5 w-4.5 text-indigo-400" />
+              <span className="text-xs font-black uppercase text-slate-400">Streamer:</span>
+              <select
+                value={viewerStreamerId}
+                onChange={(e) => setViewerStreamerId(e.target.value)}
+                className="p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
+              >
+                <option value="all">-- Semua Streamer --</option>
+                {streamers.map(s => (
+                  <option key={s.id} value={s.id}>{s.nama}</option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={fetchViewerHistory}
+              className="py-2 px-4 ml-auto rounded-lg bg-slate-900 border-2 border-black hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider cursor-pointer shadow-tactile-sm"
+            >
+              Refresh Data
+            </button>
+          </div>
+
+          {viewerLoading ? (
+            <div className="flex h-72 items-center justify-center text-indigo-400">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
+              <span className="ml-3 text-xs">Memetakan data history penonton...</span>
+            </div>
+          ) : viewerHistoryData.length === 0 ? (
+            <div className="tactile-card p-12 text-center text-slate-500 border-2 border-black bg-dark-card flex flex-col items-center justify-center">
+              <Users className="h-10 w-10 text-slate-700 mb-2" />
+              <p className="text-xs font-bold uppercase tracking-wider">Tidak ada data penonton tercatat.</p>
+              <p className="text-[10px] text-slate-500 mt-1">Data penonton otomatis terekam setiap 15 menit oleh sistem ketika terdeteksi sedang live.</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              
+              {/* Line Chart */}
+              <div className="tactile-card p-6 border-2 border-black bg-dark-card">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 border-b-2 border-black pb-2.5 flex items-center justify-between">
+                  <span>Grafik Perbandingan Penonton YouTube vs TikTok</span>
+                  <span className="text-[10px] text-slate-400 normal-case">Waktu Indonesia Barat (WIB)</span>
+                </h3>
+                <div className="h-80">
+                  <Line data={getViewerChartData()} options={chartOptions} />
+                </div>
+              </div>
+
+              {/* Data Table */}
+              <div className="tactile-card overflow-x-auto border-2 border-black bg-dark-card p-4">
+                <h4 className="text-xs font-black text-white uppercase tracking-wider mb-3">Log Detil Penonton</h4>
+                <table className="w-full border-collapse text-left text-xs text-slate-300">
+                  <thead>
+                    <tr className="border-b-2 border-black text-slate-450 uppercase tracking-widest text-[9px] font-black">
+                      <th className="py-2.5 px-4">Recorded At</th>
+                      <th className="py-2.5 px-4">Nama Streamer</th>
+                      <th className="py-2.5 px-4">Platform</th>
+                      <th className="py-2.5 px-4 text-right">Viewer Count</th>
+                      <th className="py-2.5 px-4 text-center">Jadwal Sesi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/30 font-bold font-mono">
+                    {viewerHistoryData.map((row) => {
+                      const dateObj = new Date(row.recorded_at);
+                      const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+                      const startStr = new Date(row.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                      const endStr = new Date(row.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <tr key={row.id} className="hover:bg-slate-950/20">
+                          <td className="py-2.5 px-4 text-slate-400">{timeStr}</td>
+                          <td className="py-2.5 px-4 font-black text-white">{row.streamer_name}</td>
+                          <td className="py-2.5 px-4">
+                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
+                              row.platform === 'TikTok' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}>
+                              {row.platform}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-4 text-right text-white font-black text-sm">{row.viewer_count.toLocaleString('id-ID')} views</td>
+                          <td className="py-2.5 px-4 text-center text-slate-405">{startStr} - {endStr}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          )}
+
+        </div>
+      )}
+
       {/* Opsi 2: Modal Detail Riwayat Pelanggaran (Pop-up Modal) */}
       {selectedStreamerDetail && (
         <div className="fixed inset-0 z-55 flex items-center justify-center p-4">
@@ -690,7 +886,7 @@ const Performance = () => {
                       </div>
 
                       <div className="text-right sm:text-right shrink-0">
-                        <span className="text-[9px] text-slate-450 block uppercase tracking-wider font-bold">Jam Sesi</span>
+                        <span className="text-[9px] text-slate-455 block uppercase tracking-wider font-bold">Jam Sesi</span>
                         <strong className="text-xs text-slate-200 font-mono block mt-0.5">{h.time} WIB</strong>
                       </div>
                     </div>
@@ -702,7 +898,7 @@ const Performance = () => {
             {/* Footer */}
             <div className="border-t-2 border-black pt-4 mt-5 flex items-center justify-between">
               <div>
-                <span className="text-[9px] text-slate-450 block uppercase tracking-widest font-black">Net Potongan Gaji</span>
+                <span className="text-[9px] text-slate-455 block uppercase tracking-widest font-black">Net Potongan Gaji</span>
                 <strong className={`text-base font-black font-mono ${
                   selectedStreamerDetail.financials.netDeduction > 0 ? 'text-rose-500' : selectedStreamerDetail.financials.netDeduction < 0 ? 'text-emerald-405' : 'text-slate-400'
                 }`}>

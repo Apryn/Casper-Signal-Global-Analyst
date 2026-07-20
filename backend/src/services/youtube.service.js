@@ -70,11 +70,33 @@ const isChannelScheduleActive = async (streamerIds) => {
   return result.rows.length > 0;
 };
 
+// ── Core: Mengambil Jumlah Penonton Aktif Youtube (Concurrent Viewers) ─────
+export const getYouTubeConcurrentViewers = async (videoId, apiKey) => {
+  try {
+    const url = new URL(`${YOUTUBE_API_BASE}/videos`);
+    url.searchParams.set('part', 'liveStreamingDetails');
+    url.searchParams.set('id', videoId);
+    url.searchParams.set('key', apiKey);
+
+    const response = await fetch(url.toString(), { signal: AbortSignal.timeout(5000) });
+    if (!response.ok) return 0;
+    const data = await response.json();
+    if (data.items && data.items.length > 0) {
+      const viewers = data.items[0].liveStreamingDetails?.concurrentViewers;
+      return viewers ? parseInt(viewers, 10) : 0;
+    }
+    return 0;
+  } catch (err) {
+    console.error(`[YouTube Service] Error fetching concurrent viewers for ${videoId}:`, err.message);
+    return 0;
+  }
+};
+
 // ── Core: Cek satu channel apakah sedang live ─────────────────────────────
 /**
  * @param {string} channelId - YouTube Channel ID (UCxxxxx)
  * @param {string} apiKey
- * @returns {{ isLive: boolean, videoId: string|null, title: string|null, actualStartTime: Date|null }}
+ * @returns {{ isLive: boolean, videoId: string|null, title: string|null, actualStartTime: Date|null, viewerCount: number }}
  */
 export const checkChannelLiveStatus = async (channelId, apiKey) => {
   try {
@@ -98,23 +120,31 @@ export const checkChannelLiveStatus = async (channelId, apiKey) => {
     const data = await response.json();
 
     if (!data.items || data.items.length === 0) {
-      return { isLive: false, videoId: null, title: null, actualStartTime: null };
+      return { isLive: false, videoId: null, title: null, actualStartTime: null, viewerCount: 0 };
     }
 
     const liveItem = data.items[0];
+    const videoId = liveItem.id?.videoId || null;
     const publishedAt = liveItem.snippet?.publishedAt
       ? new Date(liveItem.snippet.publishedAt)
       : new Date();
 
+    // Ambil jumlah penonton aktif Youtube
+    let viewerCount = 0;
+    if (videoId) {
+      viewerCount = await getYouTubeConcurrentViewers(videoId, apiKey);
+    }
+
     return {
       isLive: true,
-      videoId: liveItem.id?.videoId || null,
+      videoId,
       title: liveItem.snippet?.title || null,
       actualStartTime: publishedAt,
+      viewerCount
     };
   } catch (err) {
     console.error(`[YouTube Service] Error checking channel ${channelId}: ${err.message}`);
-    return { isLive: false, videoId: null, title: null, actualStartTime: null };
+    return { isLive: false, videoId: null, title: null, actualStartTime: null, viewerCount: 0 };
   }
 };
 
@@ -138,31 +168,38 @@ const findMatchingSchedule = async (streamerId) => {
     [streamerId, windowStart.toISOString(), windowEnd.toISOString(), now.toISOString()]
   );
 
-  return result.rows[0] || null;
+  return result.rows[0];
 };
 
-// ── Core: Handle channel yang live ────────────────────────────────────────
+// ── Core: Catat aktivitas live ke DB (actual_start_time, lateness) & kirim tele ──
 const handleChannelLive = async (account, liveInfo, sendNotification) => {
-  const { streamer_id, channel_id } = account;
-
-  // Cari jadwal yang cocok
+  const { streamer_id } = account;
   const schedule = await findMatchingSchedule(streamer_id);
+
   if (!schedule) {
-    console.log(`[YouTube Service] Channel ${channel_id} live tapi tidak ada jadwal matching untuk streamer_id ${streamer_id}`);
+    console.log(`[YouTube/TikTok Service] Terdeteksi live untuk streamer ID ${streamer_id}, tapi tidak ada jadwal matching.`);
     return;
   }
 
-  // Sudah tercatat sebagai Live → skip (tidak update ulang)
-  if (schedule.status === 'Live' && schedule.actual_start_time) {
+  // Jika sudah status Live di DB, kita hanya log history penonton secara periodik
+  if (schedule.status === 'Live') {
+    const targetStreamerId = schedule.substitute_streamer_id || streamer_id;
+    const currentViewers = liveInfo.viewerCount || 0;
+    
+    await query(
+      `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
+       VALUES ($1, $2, $3, $4)`,
+      [schedule.id, targetStreamerId, account.platform || 'YouTube', currentViewers]
+    );
     return;
   }
 
+  // Jika masih Scheduled, ubah status ke Live
   const now = new Date();
   const scheduledStart = new Date(schedule.start_time);
-  const latenessMs = now.getTime() - scheduledStart.getTime();
-  const latenessMinutes = Math.max(0, Math.round(latenessMs / 60000));
+  const diffMs = now.getTime() - scheduledStart.getTime();
+  const latenessMinutes = Math.max(0, Math.floor(diffMs / 60000));
 
-  // Update schedule: catat actual_start_time, lateness, status
   await query(
     `UPDATE schedule
      SET actual_start_time = $1,
@@ -175,6 +212,14 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
   // Tentukan streamer target (pengganti atau asli)
   const targetStreamerId = schedule.substitute_streamer_id || streamer_id;
   const isSubstituting = !!schedule.substitute_streamer_id;
+
+  // Catat data penonton awal (live_viewer_history)
+  const initialViewers = liveInfo.viewerCount || 0;
+  await query(
+    `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
+     VALUES ($1, $2, $3, $4)`,
+    [schedule.id, targetStreamerId, account.platform || 'YouTube', initialViewers]
+  );
 
   // Ambil nama streamer target & telegram_chat_id untuk notifikasi
   const streamerRes = await query('SELECT nama, telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [targetStreamerId]);
@@ -201,6 +246,7 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       `⏰ *LIVE TERLAMBAT — ${streamer.nama}*${substituteText}\n\n` +
       `${mention} terdeteksi mulai live *${formatDuration(latenessMinutes)} terlambat*\n` +
       `• Jadwal: *${scheduledStart.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n` +
+      `• Platform: ${account.platform || 'YouTube'}\n` +
       `• Aktual: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n\n` +
       `_Keterlambatan ini dicatat dalam sistem._`;
 
@@ -217,13 +263,13 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       [targetStreamerId, msg]
     );
 
-    console.log(`[YouTube Service] ⚠️  ${streamer.nama}${substituteText} terlambat ${latenessMinutes} menit`);
+    console.log(`[YouTube/TikTok Service] ⚠️  ${streamer.nama}${substituteText} terlambat ${latenessMinutes} menit`);
   } else {
     // Live tepat waktu atau dalam toleransi → notif positif
     const msg =
       `🔴 *LIVE DIMULAI — ${streamer.nama}*${substituteText}\n\n` +
       `${mention} sudah mulai live!\n` +
-      `• Platform: YouTube\n` +
+      `• Platform: ${account.platform || 'YouTube'}\n` +
       `• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*${latenessMinutes > 0 ? ` _(terlambat ${latenessMinutes} mnt)_` : ' ✅ ontime'}`;
 
     if (targetChatId) {
@@ -232,7 +278,7 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
       console.log(`[YouTube Service Notification Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (cannot send live status japri)`);
     }
 
-    console.log(`[YouTube Service] 🔴 ${streamer.nama}${substituteText} mulai live${latenessMinutes > 0 ? ` (terlambat ${latenessMinutes} mnt)` : ' (ontime)'}`);
+    console.log(`[YouTube/TikTok Service] 🔴 ${streamer.nama}${substituteText} mulai live${latenessMinutes > 0 ? ` (terlambat ${latenessMinutes} mnt)` : ' (ontime)'}`);
   }
 };
 
@@ -405,16 +451,19 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
         if (liveInfo.isLive) {
           const schedule = await findMatchingSchedule(account.streamer_id);
           if (schedule) {
-            // Mock liveInfo structure for compatibility
+            // Pasang platform untuk log
+            const ttAccount = { ...account, platform: 'TikTok' };
             const ttLiveInfo = {
               isLive: true,
+              viewerCount: liveInfo.viewerCount,
               liveLink: `https://www.tiktok.com/@${account.username.trim().replace(/^@/, '')}/live`
             };
-            await handleChannelLive(account, ttLiveInfo, sendNotification);
+            await handleChannelLive(ttAccount, ttLiveInfo, sendNotification);
           }
         } else {
           // Jika offline, cek dan tutup sesi live yang aktif
-          await handleChannelOffline(account);
+          const ttAccount = { ...account, platform: 'TikTok' };
+          await handleChannelOffline(ttAccount);
         }
  
         // Delay 1 detik antar check TikTok agar tidak dicurigai bot oleh Cloudflare

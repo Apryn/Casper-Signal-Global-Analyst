@@ -388,12 +388,12 @@ export const getMonthlyPenaltyReport = async (req, res) => {
       // 1. Sesi terjadwal milik dia (asli)
       const originalSessions = schedules.filter(sc => sc.streamer_id === s.id);
       
-      // 2. Menit terlambat
+      // 2. Menit terlambat (Hanya wajib YouTube yang didenda)
       const totalLateMinutes = originalSessions
-        .filter(sc => sc.substitute_streamer_id === null) // Hanya jika dia sendiri yang live
+        .filter(sc => sc.substitute_streamer_id === null && sc.platform === 'YouTube') 
         .reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
 
-      // 3. Sesi bolos: status Scheduled, start_time sudah lewat > 2 jam, tapi actual_start_time NULL, substitute_streamer_id NULL, DAN bukan sakit (is_sick = false)
+      // 3. Sesi bolos: status Scheduled, start_time sudah lewat > 2 jam, tapi actual_start_time NULL, substitute_streamer_id NULL, DAN bukan sakit (is_sick = false). Hanya wajib YouTube yang didenda bolos.
       const now = new Date();
       const absentSessions = originalSessions.filter(sc => {
         const isScheduled = sc.status === 'Scheduled';
@@ -401,21 +401,23 @@ export const getMonthlyPenaltyReport = async (req, res) => {
         const noStart = sc.actual_start_time === null;
         const noSub = sc.substitute_streamer_id === null;
         const notSick = sc.is_sick !== true; // Jika sakit, bukan bolos
-        return isScheduled && isPassed && noStart && noSub && notSick;
+        const isYouTube = sc.platform === 'YouTube';
+        return isScheduled && isPassed && noStart && noSub && notSick && isYouTube;
       });
 
-      // 4. Sesi izin:
-      // a) Izin biasa (ada pengganti, dan tidak sakit)
-      const leaveSessions = originalSessions.filter(sc => sc.substitute_streamer_id !== null && !sc.is_sick);
+      // 4. Sesi izin biasa (ada pengganti, dan tidak sakit) - Hanya wajib YouTube yang dipotong
+      const leaveSessions = originalSessions.filter(sc => sc.substitute_streamer_id !== null && !sc.is_sick && sc.platform === 'YouTube');
       
-      // b) Sesi Sakit (baik ada pengganti maupun tidak)
+      // Sesi Sakit (baik ada pengganti maupun tidak)
       const sickSessions = originalSessions.filter(sc => sc.is_sick === true);
 
       // 5. Sesi menggantikan orang lain: jadwal milik orang lain yang diisi oleh dia
       const substituteSessions = schedules.filter(sc => sc.substitute_streamer_id === s.id);
 
-      // Sesi terlambat saat menggantikan orang lain (juga dicatat sebagai keterlambatan dia)
-      const substituteLateMinutes = substituteSessions.reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
+      // Sesi terlambat saat menggantikan orang lain (juga dicatat sebagai keterlambatan dia, hanya untuk YouTube)
+      const substituteLateMinutes = substituteSessions
+        .filter(sc => sc.platform === 'YouTube')
+        .reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
       const totalAccumulatedLateMinutes = totalLateMinutes + substituteLateMinutes;
 
       // 6. Kumpulkan Rincian History Kejadian untuk Pop-up Modal Detail
@@ -425,12 +427,15 @@ export const getMonthlyPenaltyReport = async (req, res) => {
       originalSessions
         .filter(sc => sc.substitute_streamer_id === null && (sc.lateness_minutes || 0) > 0)
         .forEach(sc => {
+          const isTiktok = sc.platform === 'TikTok';
           history.push({
             id: sc.id,
             date: sc.start_time.split('T')[0],
-            type: 'Late',
+            type: isTiktok ? 'Late (TikTok)' : 'Late',
             time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
-            description: `Terlambat live selama ${sc.lateness_minutes} menit (Denda: ${formatIDR(sc.lateness_minutes * rateLate)})`
+            description: isTiktok 
+              ? `Terlambat live TikTok selama ${sc.lateness_minutes} menit (Bebas Denda - Opsional)`
+              : `Terlambat live selama ${sc.lateness_minutes} menit (Denda: ${formatIDR(sc.lateness_minutes * rateLate)})`
           });
         });
 
@@ -438,35 +443,51 @@ export const getMonthlyPenaltyReport = async (req, res) => {
       substituteSessions
         .filter(sc => (sc.lateness_minutes || 0) > 0)
         .forEach(sc => {
+          const isTiktok = sc.platform === 'TikTok';
           history.push({
             id: sc.id,
             date: sc.start_time.split('T')[0],
-            type: 'Late (Substitute)',
+            type: isTiktok ? 'Late (Substitute - TikTok)' : 'Late (Substitute)',
             time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
-            description: `Terlambat saat menggantikan ${sc.original_streamer_name} selama ${sc.lateness_minutes} menit (Denda: ${formatIDR(sc.lateness_minutes * rateLate)})`
+            description: isTiktok
+              ? `Terlambat saat menggantikan ${sc.original_streamer_name} di TikTok selama ${sc.lateness_minutes} menit (Bebas Denda)`
+              : `Terlambat saat menggantikan ${sc.original_streamer_name} selama ${sc.lateness_minutes} menit (Denda: ${formatIDR(sc.lateness_minutes * rateLate)})`
           });
         });
 
-      // Sesi Bolos
-      absentSessions.forEach(sc => {
+      // Sesi Bolos (YouTube didenda, TikTok bebas denda)
+      originalSessions.filter(sc => {
+        const isScheduled = sc.status === 'Scheduled';
+        const isPassed = new Date(sc.end_time).getTime() + (2 * 60 * 60 * 1000) < now.getTime();
+        const noStart = sc.actual_start_time === null;
+        const noSub = sc.substitute_streamer_id === null;
+        const notSick = sc.is_sick !== true;
+        return isScheduled && isPassed && noStart && noSub && notSick;
+      }).forEach(sc => {
+        const isTiktok = sc.platform === 'TikTok';
         history.push({
           id: sc.id,
           date: sc.start_time.split('T')[0],
-          type: 'Absent',
+          type: isTiktok ? 'Absent (TikTok)' : 'Absent',
           time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
-          description: `Tidak live tanpa kabar pengganti / Bolos (Denda: ${formatIDR(rateAbsent)})`
+          description: isTiktok
+            ? `Tidak live TikTok / Bolos (Bebas Denda - Opsional)`
+            : `Tidak live tanpa kabar pengganti / Bolos (Denda: ${formatIDR(rateAbsent)})`
         });
       });
 
-      // Izin Biasa (Denda Potong Swap)
-      leaveSessions.forEach(sc => {
+      // Izin Biasa (YouTube didenda, TikTok bebas denda)
+      originalSessions.filter(sc => sc.substitute_streamer_id !== null && !sc.is_sick).forEach(sc => {
+        const isTiktok = sc.platform === 'TikTok';
         const substituteName = streamers.find(st => st.id === sc.substitute_streamer_id)?.nama || 'Streamer';
         history.push({
           id: sc.id,
           date: sc.start_time.split('T')[0],
-          type: 'Leave',
+          type: isTiktok ? 'Leave (TikTok)' : 'Leave',
           time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
-          description: `Izin swap jadwal, digantikan oleh ${substituteName} (Denda Potong: ${formatIDR(rateSwap)})`
+          description: isTiktok
+            ? `Izin swap jadwal TikTok, digantikan oleh ${substituteName} (Bebas Denda)`
+            : `Izin swap jadwal, digantikan oleh ${substituteName} (Denda Potong: ${formatIDR(rateSwap)})`
         });
       });
 
@@ -538,7 +559,39 @@ export const getMonthlyPenaltyReport = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error generating monthly penalty report:', error);
+    console.error('Error generating monthly monthly penalty report:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+/**
+ * GET /analytics/viewer-history
+ * Mengambil history data penonton (YouTube vs TikTok) untuk dianalisa
+ */
+export const getViewerHistory = async (req, res) => {
+  const { date, streamerId } = req.query;
+
+  try {
+    let sql = `
+      SELECT h.*, s.nama as streamer_name, sc.start_time, sc.end_time
+      FROM live_viewer_history h
+      JOIN streamers s ON h.streamer_id = s.id
+      JOIN schedule sc ON h.schedule_id = sc.id
+      WHERE DATE(h.recorded_at AT TIME ZONE 'Asia/Jakarta') = $1
+    `;
+    const params = [date || new Date().toISOString().split('T')[0]];
+
+    if (streamerId) {
+      sql += ` AND h.streamer_id = $2`;
+      params.push(parseInt(streamerId, 10));
+    }
+
+    sql += ` ORDER BY h.recorded_at ASC`;
+
+    const result = await query(sql, params);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching live viewer history:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
