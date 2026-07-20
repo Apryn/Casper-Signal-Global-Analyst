@@ -424,14 +424,13 @@ const Performance = () => {
             </div>
           ) : penaltyData?.report ? (
             <div className="space-y-4">
-              
               {/* Info Banner */}
               <div className="p-3.5 rounded-xl border-2 border-yellow-500/20 bg-yellow-500/5 text-xs text-slate-350 flex items-center gap-2">
                 <Info className="h-4.5 w-4.5 text-yellow-500 shrink-0" />
                 <span>
-                  Sesi **Bolos** adalah jadwal *Scheduled* yang jam selesainya lewat > 2 jam tanpa ada rekaman durasi live/start.
-                  Sesi **Izin biasa** memotong gajinya **{formatIDR(rateSwap)}** & otomatis dikirim ke Streamer Pengganti sebagai bonus.
-                  Sesi **Sakit (Sick Leave)** **BEBAS DENDA (Rp 0)** bagi streamer asli, namun Streamer Pengganti tetap dapat bonus **{formatIDR(rateSwap)}** dari kas.
+                  Sesi <strong>Bolos</strong> adalah jadwal Scheduled yang jam selesainya lewat dari 2 jam tanpa ada rekaman durasi live/start.
+                  Sesi <strong>Izin biasa</strong> memotong gajinya {formatIDR(rateSwap)} &amp; otomatis dikirim ke Streamer Pengganti sebagai bonus.
+                  Sesi <strong>Sakit (Sick Leave)</strong> <strong>BEBAS DENDA (Rp 0)</strong> bagi streamer asli (baik ada pengganti maupun tidak), namun Streamer Pengganti tetap dapat bonus {formatIDR(rateSwap)} dari kas.
                 </span>
               </div>
 
