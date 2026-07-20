@@ -226,6 +226,224 @@ const launchBot = () => {
         ctx.reply(templateText, replyOptions);
       });
 
+      // ── [NEW] Command: /promo [link] ─────────────────────────────────────────
+      // Streamer kirim setelah share promo pre-live ke grup/komunitas
+      bot.command('promo', async (ctx) => {
+        const replyOptions = { parse_mode: 'Markdown', reply_parameters: { message_id: ctx.message.message_id } };
+        const senderUsername = ctx.message?.from?.username;
+        const senderName = ctx.message?.from?.first_name || 'Unknown';
+        const args = ctx.message.text.split(' ').slice(1).join(' ').trim();
+
+        try {
+          // Cari streamer berdasarkan telegram_username
+          const streamerRes = await import('./config/db.js').then(m =>
+            m.query(
+              `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
+              [senderUsername || '']
+            )
+          );
+
+          if (!streamerRes.rows || streamerRes.rows.length === 0) {
+            return ctx.reply(
+              `❌ *Username Telegram kamu tidak terdaftar.*\n_Hubungi admin untuk mendaftarkan @${senderUsername || senderName}._`,
+              replyOptions
+            );
+          }
+
+          const streamer = streamerRes.rows[0];
+
+          // Cari jadwal terdekat hari ini yang belum live
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+          const todayStart = `${dateStr}T00:00:00+07:00`;
+          const todayEnd   = `${dateStr}T23:59:59+07:00`;
+
+          const scheduleRes = await import('./config/db.js').then(m =>
+            m.query(
+              `SELECT id FROM schedule
+               WHERE streamer_id = $1
+                 AND status = 'Scheduled'
+                 AND start_time BETWEEN $2 AND $3
+               ORDER BY start_time ASC LIMIT 1`,
+              [streamer.id, todayStart, todayEnd]
+            )
+          );
+
+          if (scheduleRes.rows.length > 0) {
+            await import('./config/db.js').then(m =>
+              m.query(
+                `UPDATE schedule SET pre_live_submitted = TRUE WHERE id = $1`,
+                [scheduleRes.rows[0].id]
+              )
+            );
+          }
+
+          const linkInfo = args ? `\n📎 Link: ${args}` : '';
+          await ctx.reply(
+            `✅ *Promo pre-live ${streamer.nama} berhasil dicatat!* 🚀${linkInfo}\n\n_Semangat live-nya! Audiens sudah nunggu. 💪_`,
+            replyOptions
+          );
+        } catch (err) {
+          console.error('[Bot /promo] Error:', err.message);
+          await ctx.reply(`❌ Error: ${err.message}`, replyOptions);
+        }
+      });
+
+      // ── [NEW] Command: /startlive ─────────────────────────────────────────────
+      // Manual fallback — dipakai jika YouTube Auto-detection tidak tersedia
+      bot.command('startlive', async (ctx) => {
+        const replyOptions = { parse_mode: 'Markdown', reply_parameters: { message_id: ctx.message.message_id } };
+        const senderUsername = ctx.message?.from?.username;
+        const senderName = ctx.message?.from?.first_name || 'Unknown';
+
+        try {
+          const streamerRes = await import('./config/db.js').then(m =>
+            m.query(
+              `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
+              [senderUsername || '']
+            )
+          );
+
+          if (!streamerRes.rows || streamerRes.rows.length === 0) {
+            return ctx.reply(
+              `❌ *Username Telegram kamu tidak terdaftar.*\n_Hubungi admin untuk mendaftarkan @${senderUsername || senderName}._`,
+              replyOptions
+            );
+          }
+
+          const streamer = streamerRes.rows[0];
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+          const todayStart = `${dateStr}T00:00:00+07:00`;
+          const todayEnd   = `${dateStr}T23:59:59+07:00`;
+
+          // Cari jadwal yang paling cocok (terdekat sekarang, belum live)
+          const scheduleRes = await import('./config/db.js').then(m =>
+            m.query(
+              `SELECT * FROM schedule
+               WHERE streamer_id = $1
+                 AND status = 'Scheduled'
+                 AND start_time BETWEEN $2 AND $3
+               ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $4))) ASC
+               LIMIT 1`,
+              [streamer.id, todayStart, todayEnd, now.toISOString()]
+            )
+          );
+
+          if (scheduleRes.rows.length === 0) {
+            return ctx.reply(
+              `⚠️ *Tidak ada jadwal live terdaftar untuk hari ini.*\n_Pastikan jadwal kamu sudah di-input ke sistem oleh admin._`,
+              replyOptions
+            );
+          }
+
+          const schedule = scheduleRes.rows[0];
+          const scheduledStart = new Date(schedule.start_time);
+          const latenessMs = now.getTime() - scheduledStart.getTime();
+          const latenessMinutes = Math.max(0, Math.round(latenessMs / 60000));
+
+          await import('./config/db.js').then(m =>
+            m.query(
+              `UPDATE schedule
+               SET actual_start_time = $1,
+                   lateness_minutes = $2,
+                   status = 'Live'
+               WHERE id = $3`,
+              [now.toISOString(), latenessMinutes, schedule.id]
+            )
+          );
+
+          const startWib = now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+          const latenessText = latenessMinutes > 0
+            ? `⚠️ Terlambat *${latenessMinutes} menit* dari jadwal.`
+            : `✅ *Ontime!*`;
+
+          await ctx.reply(
+            `🔴 *${streamer.nama} mulai live!*\n\n` +
+            `• Jam aktual: *${startWib} WIB*\n` +
+            `• ${latenessText}\n\n` +
+            `_Live kamu sudah tercatat. Semangat! 💪_`,
+            replyOptions
+          );
+        } catch (err) {
+          console.error('[Bot /startlive] Error:', err.message);
+          await ctx.reply(`❌ Error: ${err.message}`, replyOptions);
+        }
+      });
+
+      // ── [NEW] Command: /rekap [link] ──────────────────────────────────────────
+      // Streamer kirim link postingan konten harian sebagai bukti
+      bot.command('rekap', async (ctx) => {
+        const replyOptions = { parse_mode: 'Markdown', reply_parameters: { message_id: ctx.message.message_id } };
+        const senderUsername = ctx.message?.from?.username;
+        const senderName = ctx.message?.from?.first_name || 'Unknown';
+        const args = ctx.message.text.split(' ').slice(1).join(' ').trim();
+
+        if (!args) {
+          return ctx.reply(
+            `⚠️ *Format salah!*\n\nGunakan: */rekap [link_postingan]*\n\nContoh:\n\`/rekap https://www.tiktok.com/@nama/video/xxx\``,
+            replyOptions
+          );
+        }
+
+        try {
+          const streamerRes = await import('./config/db.js').then(m =>
+            m.query(
+              `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
+              [senderUsername || '']
+            )
+          );
+
+          if (!streamerRes.rows || streamerRes.rows.length === 0) {
+            return ctx.reply(
+              `❌ *Username Telegram kamu tidak terdaftar.*\n_Hubungi admin untuk mendaftarkan @${senderUsername || senderName}._`,
+              replyOptions
+            );
+          }
+
+          const streamer = streamerRes.rows[0];
+          const now = new Date();
+          const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+
+          // Cek apakah ada laporan harian hari ini
+          const reportRes = await import('./config/db.js').then(m =>
+            m.query(
+              `SELECT id FROM daily_reports WHERE streamer_id = $1 AND tanggal = $2`,
+              [streamer.id, dateStr]
+            )
+          );
+
+          if (reportRes.rows.length === 0) {
+            return ctx.reply(
+              `⚠️ *Laporan harian untuk hari ini belum ditemukan.*\n_Kirim laporan harian terlebih dahulu sebelum submit rekap konten._`,
+              replyOptions
+            );
+          }
+
+          // Update daily_report: tandai content_submitted + simpan link
+          await import('./config/db.js').then(m =>
+            m.query(
+              `UPDATE daily_reports
+               SET content_submitted = TRUE, content_link = $1
+               WHERE streamer_id = $2 AND tanggal = $3`,
+              [args, streamer.id, dateStr]
+            )
+          );
+
+          await ctx.reply(
+            `✅ *Rekap konten ${streamer.nama} berhasil dicatat!* 📝\n\n` +
+            `📎 Link: ${args}\n\n` +
+            `_Hari kerja kamu dinyatakan *PENUH* untuk hari ini. Kerja bagus! 🏆_`,
+            replyOptions
+          );
+        } catch (err) {
+          console.error('[Bot /rekap] Error:', err.message);
+          await ctx.reply(`❌ Error: ${err.message}`, replyOptions);
+        }
+      });
+
+
+
       
       bot.on('text', async (ctx) => {
         const messageText = ctx.message?.text;
