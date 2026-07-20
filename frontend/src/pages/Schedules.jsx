@@ -177,11 +177,25 @@ const Schedules = () => {
         /* Rolling weekly layout columns grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
           {weeklyDates.map((dateObj, idx) => {
-            const dateStr = dateObj.toISOString().split('T')[0];
-            const isToday = new Date().toISOString().split('T')[0] === dateStr;
+            // Gunakan locale en-CA untuk YYYY-MM-DD lokal agar tidak bergeser karena UTC
+            const dateStr = new Intl.DateTimeFormat('en-CA', {
+              year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(dateObj);
+            
+            const todayStr = new Intl.DateTimeFormat('en-CA', {
+              year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(new Date());
 
-            // Filter schedules for this specific day
-            const daySchedules = schedules.filter(sc => sc.start_time.split('T')[0] === dateStr);
+            const isToday = todayStr === dateStr;
+
+            // Filter schedules for this specific day (menggunakan konversi zona Jakarta/lokal)
+            const daySchedules = schedules.filter(sc => {
+              const scDateStr = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Jakarta',
+                year: 'numeric', month: '2-digit', day: '2-digit'
+              }).format(new Date(sc.start_time));
+              return scDateStr === dateStr;
+            });
 
             return (
               <div 
