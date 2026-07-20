@@ -104,7 +104,7 @@ npm install --silent
 npm run build
 
 echo '-> Restart backend dengan PM2...'
-pm2 restart casper-api
+pm2 restart casper-api --update-env
 
 echo ''
 echo '[OK] Update selesai!'
