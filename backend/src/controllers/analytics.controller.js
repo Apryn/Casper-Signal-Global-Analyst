@@ -350,3 +350,109 @@ Raw Statistics:
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
+/**
+ * [NEW] Generates monthly accountability & penalty report for streamers
+ */
+export const getMonthlyPenaltyReport = async (req, res) => {
+  const { month } = req.query; // format YYYY-MM
+  const rateLate = parseInt(req.query.rateLate, 10) || 2000;    // Rp 2.000 / menit
+  const rateAbsent = parseInt(req.query.rateAbsent, 10) || 100000; // Rp 100.000 / bolos
+  const rateSwap = parseInt(req.query.rateSwap, 10) || 50000;     // Rp 50.000 / swap izin
+
+  if (!month) {
+    return res.status(400).json({ message: 'month parameter (YYYY-MM) is required' });
+  }
+
+  const startOfMonth = `${month}-01T00:00:00+07:00`;
+  const nextMonthDate = new Date(`${month}-01T12:00:00+07:00`);
+  nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+  const endOfMonth = nextMonthDate.toISOString();
+
+  try {
+    // Ambil list semua streamer
+    const streamersRes = await query('SELECT id, nama, platform FROM streamers ORDER BY nama ASC');
+    const streamers = streamersRes.rows;
+
+    // Ambil semua jadwal dalam bulan tersebut
+    const schedulesRes = await query(
+      `SELECT sc.*, s.nama as original_streamer_name
+       FROM schedule sc
+       JOIN streamers s ON sc.streamer_id = s.id
+       WHERE sc.start_time >= $1 AND sc.start_time < $2`,
+      [startOfMonth, endOfMonth]
+    );
+    const schedules = schedulesRes.rows;
+
+    const report = streamers.map(s => {
+      // 1. Sesi terjadwal milik dia (asli)
+      const originalSessions = schedules.filter(sc => sc.streamer_id === s.id);
+      
+      // 2. Menit terlambat
+      const totalLateMinutes = originalSessions
+        .filter(sc => sc.substitute_streamer_id === null) // Hanya jika dia sendiri yang live
+        .reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
+
+      // 3. Sesi bolos: status Scheduled, start_time sudah lewat > 2 jam, tapi actual_start_time NULL, dan substitute_streamer_id NULL
+      const now = new Date();
+      const absentSessions = originalSessions.filter(sc => {
+        const isScheduled = sc.status === 'Scheduled';
+        const isPassed = new Date(sc.end_time).getTime() + (2 * 60 * 60 * 1000) < now.getTime();
+        const noStart = sc.actual_start_time === null;
+        const noSub = sc.substitute_streamer_id === null;
+        return isScheduled && isPassed && noStart && noSub;
+      });
+
+      // 4. Sesi izin: jadwal milik dia yang diisi oleh substitute_streamer_id
+      const leaveSessions = originalSessions.filter(sc => sc.substitute_streamer_id !== null);
+
+      // 5. Sesi menggantikan orang lain: jadwal milik orang lain yang diisi oleh dia
+      const substituteSessions = schedules.filter(sc => sc.substitute_streamer_id === s.id);
+
+      // Sesi terlambat saat menggantikan orang lain (juga dicatat sebagai keterlambatan dia)
+      const substituteLateMinutes = substituteSessions.reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
+      const totalAccumulatedLateMinutes = totalLateMinutes + substituteLateMinutes;
+
+      // 6. Kalkulasi Keuangan
+      const dendaLate = totalAccumulatedLateMinutes * rateLate;
+      const dendaAbsent = absentSessions.length * rateAbsent;
+      const dendaLeave = leaveSessions.length * rateSwap; // potongan karena izin
+      const bonusSubstitute = substituteSessions.length * rateSwap; // insentif karena menggantikan
+
+      const totalPenalty = dendaLate + dendaAbsent + dendaLeave;
+      const netDeduction = totalPenalty - bonusSubstitute;
+
+      return {
+        streamerId: s.id,
+        nama: s.nama,
+        platform: s.platform,
+        stats: {
+          totalScheduled: originalSessions.length,
+          lateMinutes: totalAccumulatedLateMinutes,
+          absentCount: absentSessions.length,
+          leaveCount: leaveSessions.length,
+          substituteCount: substituteSessions.length
+        },
+        financials: {
+          dendaLate,
+          dendaAbsent,
+          dendaLeave,
+          bonusSubstitute,
+          totalPenalty,
+          netDeduction
+        }
+      };
+    });
+
+    res.json({
+      month,
+      rates: { rateLate, rateAbsent, rateSwap },
+      report
+    });
+
+  } catch (error) {
+    console.error('Error generating monthly penalty report:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+

@@ -10,7 +10,13 @@ import {
   Sparkles,
   ArrowRight,
   TrendingDown,
-  Info
+  Info,
+  Calendar,
+  AlertOctagon,
+  Clock,
+  UserX,
+  PlusCircle,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 
@@ -20,6 +26,17 @@ const Performance = () => {
   const [performance, setPerformance] = useState(null);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState('30days');
+
+  // New states for Penalty Report
+  const [activeTab, setActiveTab] = useState('funnel'); // 'funnel' | 'penalty'
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [penaltyData, setPenaltyData] = useState(null);
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+
+  // Rate settings for penalties
+  const [rateLate, setRateLate] = useState(2000);     // Rp 2.000 / mnt
+  const [rateAbsent, setRateAbsent] = useState(100000); // Rp 100.000 / bolos
+  const [rateSwap, setRateSwap] = useState(50000);      // Rp 50.000 / swap izin
 
   // Fetch streamers list
   useEffect(() => {
@@ -35,11 +52,16 @@ const Performance = () => {
       }
     };
     fetchStreamers();
+
+    // Set default month to current month (YYYY-MM)
+    const today = new Date();
+    const curMonth = today.toISOString().slice(0, 7);
+    setSelectedMonth(curMonth);
   }, []);
 
   // Fetch performance details when streamer or range changes
   useEffect(() => {
-    if (!selectedStreamerId) return;
+    if (!selectedStreamerId || activeTab !== 'funnel') return;
 
     const fetchPerformance = async () => {
       setLoading(true);
@@ -54,7 +76,37 @@ const Performance = () => {
     };
 
     fetchPerformance();
-  }, [selectedStreamerId, range]);
+  }, [selectedStreamerId, range, activeTab]);
+
+  // Fetch monthly penalty report when month or rates change
+  const fetchPenaltyReport = async () => {
+    if (!selectedMonth || activeTab !== 'penalty') return;
+    setPenaltyLoading(true);
+    try {
+      const res = await api.get(`/analytics/monthly-penalty`, {
+        params: {
+          month: selectedMonth,
+          rateLate,
+          rateAbsent,
+          rateSwap
+        }
+      });
+      setPenaltyData(res.data);
+    } catch (err) {
+      console.error('Error fetching penalty report:', err);
+    } finally {
+      setPenaltyLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPenaltyReport();
+  }, [selectedMonth, activeTab]);
+
+  const handleApplyRates = (e) => {
+    e.preventDefault();
+    fetchPenaltyReport();
+  };
 
   if (streamers.length === 0) {
     return (
@@ -133,179 +185,334 @@ const Performance = () => {
 
   const stats = performance?.summary;
 
+  // Format currency helpers (IDR)
+  const formatIDR = (num) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+  };
+
   return (
     <div className="space-y-6">
       
-      {/* Selector and filters */}
+      {/* Top Header and Page Tabs */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-wide">Streamer Performance Analytics</h2>
-          <p className="text-sm text-gray-400">Drill down into individual conversion funnels and tracking curves.</p>
+          <h2 className="text-2xl font-black text-white tracking-wide uppercase">Performance & Accountability</h2>
+          <p className="text-sm text-gray-400">Monitor conversion funnels and monthly penalty reports for late and absent streamer logs.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Streamer Dropdown */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 rounded-xl border border-dark-border">
-            <span className="text-xs font-bold text-indigo-400 uppercase">Streamer:</span>
-            <select
-              value={selectedStreamerId}
-              onChange={(e) => setSelectedStreamerId(e.target.value)}
-              className="bg-transparent text-sm text-gray-300 font-semibold focus:outline-none border-none cursor-pointer"
-            >
-              {streamers.map(s => (
-                <option key={s.id} value={s.id} className="bg-slate-950">{s.nama} ({s.platform})</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date range filter */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-slate-900/60 rounded-xl border border-dark-border">
-            <select
-              value={range}
-              onChange={(e) => setRange(e.target.value)}
-              className="bg-transparent text-sm text-gray-300 focus:outline-none border-none cursor-pointer"
-            >
-              <option value="7days" className="bg-slate-950">Last 7 Days</option>
-              <option value="30days" className="bg-slate-950">Last 30 Days</option>
-              <option value="thisMonth" className="bg-slate-950">This Month</option>
-            </select>
-          </div>
+        {/* Tab Buttons */}
+        <div className="flex p-1 rounded-xl bg-slate-950 border-2 border-black shadow-tactile-sm shrink-0 self-start sm:self-center">
+          <button
+            onClick={() => setActiveTab('funnel')}
+            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === 'funnel' 
+                ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
+                : 'text-slate-400 hover:text-white border-2 border-transparent'
+            }`}
+          >
+            Performance Funnel
+          </button>
+          <button
+            onClick={() => setActiveTab('penalty')}
+            className={`px-4 py-2 rounded-lg text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === 'penalty' 
+                ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
+                : 'text-slate-400 hover:text-white border-2 border-transparent'
+            }`}
+          >
+            Rapor Denda & Absensi
+          </button>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex h-96 items-center justify-center text-indigo-400">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-400 border-t-transparent"></div>
-          <span className="ml-3 text-lg font-medium">Analyzing streamer statistics...</span>
-        </div>
-      ) : performance ? (
-        <div className="space-y-6">
-          
-          {/* Streamer stats cards grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
-            <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Total Hours Live</span>
-              <strong className="text-xl font-bold text-white block mt-1.5">{stats?.totalLiveHours.toFixed(1)} hrs</strong>
-              <span className="text-[10px] text-indigo-400 font-semibold mt-1 block">In selected range</span>
+      {/* RENDER TAB 1: PERFORMANCE FUNNEL */}
+      {activeTab === 'funnel' && (
+        <>
+          {/* Filters Row */}
+          <div className="flex flex-wrap items-center justify-end gap-3 pb-2 border-b-2 border-black/30">
+            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-dark-card border-2 border-black rounded-lg shadow-tactile-sm">
+              <span className="text-xs font-bold text-indigo-400 uppercase">Streamer:</span>
+              <select
+                value={selectedStreamerId}
+                onChange={(e) => setSelectedStreamerId(e.target.value)}
+                className="bg-transparent text-xs text-gray-300 font-extrabold focus:outline-none border-none cursor-pointer"
+              >
+                {streamers.map(s => (
+                  <option key={s.id} value={s.id} className="bg-slate-950">{s.nama}</option>
+                ))}
+              </select>
             </div>
 
-            <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Content Uploads</span>
-              <strong className="text-xl font-bold text-white block mt-1.5">{stats?.totalUploads} uploads</strong>
-              <span className="text-[10px] text-pink-400 font-semibold mt-1 block">Across all platforms</span>
-            </div>
-
-            <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Ingested Chats</span>
-              <strong className="text-xl font-bold text-white block mt-1.5">{stats?.totalChats.toLocaleString()}</strong>
-              <span className="text-[10px] text-cyan-400 font-semibold mt-1 block">Incoming messages</span>
-            </div>
-
-            <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Registrations</span>
-              <strong className="text-xl font-bold text-white block mt-1.5">{stats?.totalRegistrations}</strong>
-              <span className="text-[10px] text-amber-500 font-semibold mt-1 block">Registration conversion</span>
-            </div>
-
-            <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">FTD Acquisitions</span>
-              <strong className="text-xl font-bold text-white block mt-1.5">{stats?.totalFtds}</strong>
-              <span className="text-[10px] text-emerald-400 font-semibold mt-1 block">First Time Deposits</span>
+            <div className="flex items-center gap-2 px-3.5 py-1.5 bg-dark-card border-2 border-black rounded-lg shadow-tactile-sm">
+              <span className="text-xs font-bold text-indigo-400 uppercase font-mono">Range:</span>
+              <select
+                value={range}
+                onChange={(e) => setRange(e.target.value)}
+                className="bg-transparent text-xs text-gray-300 font-extrabold focus:outline-none border-none cursor-pointer"
+              >
+                <option value="7days" className="bg-slate-950">Last 7 Days</option>
+                <option value="30days" className="bg-slate-950">Last 30 Days</option>
+                <option value="thisMonth" className="bg-slate-950">This Month</option>
+              </select>
             </div>
           </div>
 
-          {/* Ratios & insights container */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            
-            {/* Conversion funnels */}
-            <div className="glass-panel p-6 rounded-2xl border bg-slate-950/30 flex flex-col justify-between">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-5 flex items-center gap-2">
-                <TrendingUp className="h-4.5 w-4.5 text-indigo-400" />
-                Conversion Funnel Rates
-              </h3>
-              
-              <div className="space-y-6">
-                {/* Reg rate */}
-                <div>
-                  <div className="flex justify-between text-xs text-gray-300 mb-1.5">
-                    <span>Registration Rate (Reg / Chat)</span>
-                    <strong className="text-indigo-400 text-sm">{stats?.registrationRate}%</strong>
-                  </div>
-                  <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                    <div 
-                      className="bg-indigo-500 h-full rounded-full transition-all duration-500" 
-                      style={{ width: `${Math.min(100, stats?.registrationRate || 0)}%` }}
-                    />
-                  </div>
-                </div>
-
-                {/* Ftd conversion */}
-                <div>
-                  <div className="flex justify-between text-xs text-gray-300 mb-1.5">
-                    <span>FTD Conversion (FTD / Reg)</span>
-                    <strong className="text-emerald-400 text-sm">{stats?.ftdConversion}%</strong>
-                  </div>
-                  <div className="w-full bg-slate-950 h-2.5 rounded-full overflow-hidden border border-white/5">
-                    <div 
-                      className="bg-emerald-500 h-full rounded-full transition-all duration-500" 
-                      style={{ width: `${Math.min(100, stats?.ftdConversion || 0)}%` }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Tips footer */}
-              <div className="mt-8 p-3 rounded-lg bg-indigo-950/10 border border-indigo-500/10 text-[11px] text-gray-400 flex items-start gap-2">
-                <Info className="h-4.5 w-4.5 text-indigo-400 shrink-0 mt-0.5" />
-                <span>Rasio konversi mengindikasikan tingkat efektivitas streamer mengarahkan chat penonton untuk melakukan pendaftaran dan deposit.</span>
-              </div>
+          {loading ? (
+            <div className="flex h-96 items-center justify-center text-indigo-400">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-indigo-400 border-t-transparent"></div>
+              <span className="ml-3 text-sm font-bold uppercase tracking-wider">Analyzing streamer stats...</span>
             </div>
-
-            {/* Rule-based insights card */}
-            <div className="lg:col-span-2 glass-panel p-6 rounded-2xl border bg-slate-950/30">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                <Sparkles className="h-4.5 w-4.5 text-cyan-400" />
-                Performance Insights
-              </h3>
-
-              <div className="space-y-4">
-                {performance.insights.map((insight, idx) => (
-                  <div key={idx} className="p-4 rounded-xl border border-dark-border bg-slate-900/30 text-sm text-gray-300 flex items-start gap-3">
-                    <div className="h-5 w-5 rounded-lg bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-bold text-xs mt-0.5">
-                      {idx + 1}
-                    </div>
-                    <p className="leading-relaxed">{insight}</p>
+          ) : performance ? (
+            <div className="space-y-6">
+              
+              {/* Stat Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                {[
+                  { title: 'Total Hours Live', value: `${stats?.totalLiveHours.toFixed(1)} hrs`, desc: 'Active stream time', color: 'text-indigo-400' },
+                  { title: 'Content Uploads', value: stats?.totalUploads, desc: 'Tiktok & YouTube shorts', color: 'text-pink-400' },
+                  { title: 'Chats Received', value: stats?.totalChats.toLocaleString('id-ID'), desc: 'Ingested chat records', color: 'text-cyan-400' },
+                  { title: 'Registrations', value: stats?.totalRegistrations.toLocaleString('id-ID'), desc: 'Affiliate registrations', color: 'text-yellow-400' },
+                  { title: 'FTD Count', value: stats?.totalFtds.toLocaleString('id-ID'), desc: 'First time depositors', color: 'text-emerald-400' }
+                ].map((item, idx) => (
+                  <div key={idx} className="tactile-card p-5 border-2 border-black bg-dark-card">
+                    <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest block">{item.title}</span>
+                    <strong className="text-2xl font-black text-white block mt-2">{item.value}</strong>
+                    <span className={`text-[9px] font-extrabold ${item.color} mt-1.5 block uppercase tracking-wide`}>{item.desc}</span>
                   </div>
                 ))}
               </div>
+
+              {/* Conversion funnel indicators bar */}
+              <div className="tactile-card p-6 border-2 border-black bg-dark-card">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 border-b-2 border-black pb-2.5">Conversion Rates Funnel</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  
+                  <div className="p-4 rounded-xl border border-dark-border/40 bg-slate-950/20 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Chat to Registration Rate</span>
+                      <strong className="text-2xl font-black text-white mt-1.5 block">{performance.summary.chatToRegRate.toFixed(1)}%</strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-indigo-400 font-extrabold uppercase block font-mono">Target: 30%</span>
+                      <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                        performance.summary.chatToRegRate >= 30 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
+                      } inline-block mt-2`}>
+                        {performance.summary.chatToRegRate >= 30 ? 'Good Conversion' : 'Needs attention'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-dark-border/40 bg-slate-950/20 flex items-center justify-between">
+                    <div>
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Registration to FTD Rate</span>
+                      <strong className="text-2xl font-black text-white mt-1.5 block">{performance.summary.regToFtdRate.toFixed(1)}%</strong>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-indigo-400 font-extrabold uppercase block font-mono">Target: 10%</span>
+                      <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
+                        performance.summary.regToFtdRate >= 10 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
+                      } inline-block mt-2`}>
+                        {performance.summary.regToFtdRate >= 10 ? 'Good Conversion' : 'Needs attention'}
+                      </span>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Conversion trend charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div className="tactile-card p-5 border-2 border-black bg-dark-card">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4">Registration and FTD Funnel Curve</h3>
+                  <div className="h-72">
+                    <Line data={getLineChartData()} options={chartOptions} />
+                  </div>
+                </div>
+
+                <div className="tactile-card p-5 border-2 border-black bg-dark-card">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4">Incoming Daily Ingested Chats</h3>
+                  <div className="h-72">
+                    <Bar data={getBarChartData()} options={chartOptions} />
+                  </div>
+                </div>
+              </div>
+
             </div>
+          ) : (
+            <div className="text-center py-12 text-slate-500">No performance records compiled for range.</div>
+          )}
+        </>
+      )}
 
-          </div>
-
-          {/* Charts grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* RENDER TAB 2: RAPOR DENDA & ABSENSI (PENALTY REPORT) */}
+      {activeTab === 'penalty' && (
+        <div className="space-y-6">
+          
+          {/* Rate Configuration and Month Selector Row */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 border-b-2 border-black/30 pb-5">
             
-            {/* Registrations and FTDs chart */}
-            <div className="glass-panel p-6 rounded-2xl border bg-slate-950/30">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Acquisition History</h3>
-              <div className="h-72 relative">
-                <Line data={getLineChartData()} options={chartOptions} />
+            {/* Form Setting Parameter Denda */}
+            <form onSubmit={handleApplyRates} className="lg:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 rounded-xl border-2 border-black bg-dark-panel">
+              <div>
+                <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Late Rate (Rp/Min)</label>
+                <input
+                  type="number"
+                  value={rateLate}
+                  onChange={(e) => setRateLate(Math.max(0, parseInt(e.target.value, 10)))}
+                  className="w-full p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none"
+                />
               </div>
-            </div>
+              <div>
+                <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Absent Rate (Rp/Sesi)</label>
+                <input
+                  type="number"
+                  value={rateAbsent}
+                  onChange={(e) => setRateAbsent(Math.max(0, parseInt(e.target.value, 10)))}
+                  className="w-full p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none"
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Swap Leave/Sub Rate (Rp)</label>
+                  <input
+                    type="number"
+                    value={rateSwap}
+                    onChange={(e) => setRateSwap(Math.max(0, parseInt(e.target.value, 10)))}
+                    className="w-full p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="py-2 px-3 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white border-2 border-black text-xs font-black uppercase tracking-wider active:translate-y-px shadow-tactile-sm"
+                >
+                  Apply
+                </button>
+              </div>
+            </form>
 
-            {/* Chats chart */}
-            <div className="glass-panel p-6 rounded-2xl border bg-slate-950/30">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4">Chat Engagement History</h3>
-              <div className="h-72 relative">
-                <Bar data={getBarChartData()} options={chartOptions} />
-              </div>
+            {/* Filter Bulan */}
+            <div className="p-4 rounded-xl border-2 border-black bg-dark-panel flex flex-col justify-center">
+              <label className="block text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1.5 flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-indigo-400" />
+                <span>Pilih Bulan Laporan</span>
+              </label>
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-full p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
+              />
             </div>
 
           </div>
+
+          {/* Penalty Data Table */}
+          {penaltyLoading ? (
+            <div className="flex h-64 items-center justify-center text-indigo-400">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
+              <span className="ml-3 text-xs">Menghitung akumulasi denda & absensi bulanan...</span>
+            </div>
+          ) : penaltyData?.report ? (
+            <div className="space-y-4">
+              
+              {/* Info Banner */}
+              <div className="p-3.5 rounded-xl border-2 border-yellow-500/20 bg-yellow-500/5 text-xs text-slate-350 flex items-center gap-2">
+                <Info className="h-4.5 w-4.5 text-yellow-500 shrink-0" />
+                <span>
+                  Sesi **Bolos** adalah jadwal berstatus *Scheduled* yang jam selesainya sudah terlewat lebih dari 2 jam tanpa ada rekaman durasi live/start.
+                  Sesi **Izin** memotong gaji ybs sebesar **{formatIDR(rateSwap)}** dan secara otomatis ditransfer ke **Streamer Pengganti** sebagai bonus.
+                </span>
+              </div>
+
+              {/* Main penalty table */}
+              <div className="tactile-card overflow-x-auto border-2 border-black bg-dark-card p-4">
+                <table className="w-full border-collapse text-left text-xs text-slate-300">
+                  <thead>
+                    <tr className="border-b-2 border-black text-slate-450 uppercase tracking-widest text-[9px] font-black">
+                      <th className="py-3 px-4">Nama Streamer</th>
+                      <th className="py-3 px-4 text-center">Total Sesi</th>
+                      <th className="py-3 px-4 text-center">Telat (Mnt)</th>
+                      <th className="py-3 px-4 text-center">Bolos</th>
+                      <th className="py-3 px-4 text-center">Izin</th>
+                      <th className="py-3 px-4 text-center">Menggantikan</th>
+                      <th className="py-3 px-4 text-right">Potongan Telat</th>
+                      <th className="py-3 px-4 text-right">Potongan Bolos</th>
+                      <th className="py-3 px-4 text-right">Bonus Ganti</th>
+                      <th className="py-3 px-4 text-right text-white font-extrabold">Net Potongan</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-black/30 font-bold">
+                    {penaltyData.report.map((row) => {
+                      const netPotongan = row.financials.netDeduction;
+                      const hasImpact = netPotongan !== 0 || row.stats.lateMinutes > 0 || row.stats.absentCount > 0;
+
+                      return (
+                        <tr 
+                          key={row.streamerId}
+                          className={`hover:bg-slate-950/20 transition-colors ${
+                            hasImpact ? 'bg-rose-950/5' : ''
+                          }`}
+                        >
+                          <td className="py-3.5 px-4 font-black text-white text-sm">{row.nama}</td>
+                          <td className="py-3.5 px-4 text-center font-mono">{row.stats.totalScheduled} sesi</td>
+                          <td className="py-3.5 px-4 text-center text-rose-450 font-mono">
+                            {row.stats.lateMinutes > 0 ? (
+                              <span className="flex items-center justify-center gap-1">
+                                <Clock className="h-3 w-3 shrink-0" />
+                                <span>{row.stats.lateMinutes}m</span>
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-rose-500 font-mono">
+                            {row.stats.absentCount > 0 ? (
+                              <span className="flex items-center justify-center gap-1 font-black bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded text-[10px]">
+                                <UserX className="h-3 w-3 shrink-0" />
+                                <span>{row.stats.absentCount}x</span>
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-slate-400 font-mono">
+                            {row.stats.leaveCount > 0 ? `${row.stats.leaveCount}x` : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-emerald-450 font-mono">
+                            {row.stats.substituteCount > 0 ? (
+                              <span className="flex items-center justify-center gap-1 font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
+                                <UserCheck className="h-3 w-3 shrink-0" />
+                                <span>{row.stats.substituteCount}x</span>
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-rose-450 font-mono">
+                            {row.financials.dendaLate > 0 ? formatIDR(row.financials.dendaLate) : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-rose-450 font-mono">
+                            {row.financials.dendaAbsent > 0 ? formatIDR(row.financials.dendaAbsent) : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-right text-emerald-400 font-mono">
+                            {row.financials.bonusSubstitute > 0 ? `+${formatIDR(row.financials.bonusSubstitute)}` : '-'}
+                          </td>
+                          <td className={`py-3.5 px-4 text-right font-mono text-sm font-black ${
+                            netPotongan > 0 
+                              ? 'text-rose-500 text-shadow-rose' 
+                              : netPotongan < 0 
+                                ? 'text-emerald-400 text-shadow-emerald' 
+                                : 'text-slate-400'
+                          }`}>
+                            {netPotongan !== 0 ? formatIDR(netPotongan) : 'Rp 0'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          ) : (
+            <div className="text-center py-12 text-slate-500">Tidak ada data absensi/denda untuk bulan terpilih.</div>
+          )}
 
         </div>
-      ) : (
-        <div className="text-center text-gray-500 py-12">Failed to load performance analytics.</div>
       )}
 
     </div>

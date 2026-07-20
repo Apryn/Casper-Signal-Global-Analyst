@@ -2,7 +2,8 @@ import express from 'express';
 import { 
   getStreamerPerformance, 
   getLeaderboardWithScores, 
-  getAiAnalystReport 
+  getAiAnalystReport,
+  getMonthlyPenaltyReport
 } from '../controllers/analytics.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
@@ -13,5 +14,6 @@ router.use(authenticateToken);
 router.get('/streamer/:streamerId', getStreamerPerformance);
 router.get('/leaderboard', getLeaderboardWithScores);
 router.get('/ai-report', getAiAnalystReport);
+router.get('/monthly-penalty', getMonthlyPenaltyReport);
 
 export default router;
