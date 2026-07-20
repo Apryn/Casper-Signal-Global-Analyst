@@ -14,6 +14,7 @@
  */
 
 import { query } from '../config/db.js';
+import { checkTikTokLiveStatus } from './tiktok.service.js';
 
 // ── Konstanta ──────────────────────────────────────────────────────────────
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
@@ -374,6 +375,56 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
       console.error(`[YouTube Service] Error processing channel ${account.channel_id}:`, err.message);
     }
   }
-
+ 
   console.log('[YouTube Service] Live status check complete.');
+ 
+  // ── NEW: DETEKSI LIVE TIKTOK (Smart HTML Scraping) ────────────────────────
+  try {
+    console.log('[TikTok Service] Running TikTok live status detection...');
+    // Ambil semua akun TikTok yang aktif dan punya username
+    const ttAccountsRes = await query(
+      `SELECT sa.id, sa.streamer_id, sa.username, s.nama
+       FROM streamer_accounts sa
+       JOIN streamers s ON sa.streamer_id = s.id
+       WHERE sa.platform = 'TikTok'
+         AND sa.username IS NOT NULL
+         AND sa.username <> ''`
+    );
+    const ttAccounts = ttAccountsRes.rows;
+ 
+    for (const account of ttAccounts) {
+      try {
+        // Cek apakah ada jadwal aktif hari ini untuk streamer ini
+        const hasActiveSchedule = await isChannelScheduleActive([account.streamer_id]);
+        if (!hasActiveSchedule) {
+          continue; // skip jika tidak ada jadwal aktif
+        }
+ 
+        const liveInfo = await checkTikTokLiveStatus(account.username);
+ 
+        if (liveInfo.isLive) {
+          const schedule = await findMatchingSchedule(account.streamer_id);
+          if (schedule) {
+            // Mock liveInfo structure for compatibility
+            const ttLiveInfo = {
+              isLive: true,
+              liveLink: `https://www.tiktok.com/@${account.username.trim().replace(/^@/, '')}/live`
+            };
+            await handleChannelLive(account, ttLiveInfo, sendNotification);
+          }
+        } else {
+          // Jika offline, cek dan tutup sesi live yang aktif
+          await handleChannelOffline(account);
+        }
+ 
+        // Delay 1 detik antar check TikTok agar tidak dicurigai bot oleh Cloudflare
+        await new Promise(r => setTimeout(r, 1500));
+      } catch (ttErr) {
+        console.error(`[TikTok Service] Error processing @${account.username}:`, ttErr.message);
+      }
+    }
+    console.log('[TikTok Service] TikTok live status check complete.');
+  } catch (ttGlobalErr) {
+    console.error('[TikTok Service] Global error in TikTok live status loop:', ttGlobalErr.message);
+  }
 };
