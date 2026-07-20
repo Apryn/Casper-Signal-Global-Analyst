@@ -42,7 +42,7 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true };
     } catch (err) {
-      const errMsg = err.response?.data?.message || `Koneksi ke server gagal (Network Error). Silakan periksa jaringan atau port VPS. Detail: ${err.message}`;
+      const errMsg = err.response?.data?.message || 'Kode aktivasi salah.';
       return { success: false, error: errMsg };
     }
   };

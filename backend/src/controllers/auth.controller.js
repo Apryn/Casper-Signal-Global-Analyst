@@ -19,9 +19,7 @@ export const login = async (req, res) => {
   }
 
   if (cleanInput !== validCode) {
-    return res.status(401).json({ 
-      message: `Kode aktivasi salah. (Input: ${cleanInput.length} karakter, Server: ${validCode ? validCode.length : 'null'} karakter)` 
-    });
+    return res.status(401).json({ message: 'Kode aktivasi salah.' });
   }
 
   const token = jwt.sign(
