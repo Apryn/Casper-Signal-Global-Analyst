@@ -354,8 +354,6 @@ const Schedules = () => {
                           ))}
                       </select>
 
-                      </select>
-
                       <div className="mt-2 flex items-center justify-between bg-slate-950/45 p-1.5 rounded-lg border border-black/25">
                         <label className="flex items-center gap-1.5 cursor-pointer select-none">
                           <input
