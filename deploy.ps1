@@ -90,6 +90,38 @@ cat << 'ENVEOF' > $APP_DIR/backend/.env
 $ENV_CONTENT
 ENVEOF
 
+echo '-> Update config Nginx...'
+cat << 'NGINXEOF' > /etc/nginx/sites-available/casper
+server {
+    listen $NGINX_PORT;
+    server_name _;
+
+    root $APP_DIR/frontend/dist;
+    index index.html;
+
+    # Frontend SPA routing
+    location / {
+        try_files `$uri `$uri/ /index.html;
+    }
+
+    # Backend API proxy ke port $BACKEND_PORT
+    location /api/ {
+        proxy_pass http://localhost:$BACKEND_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade `$http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host `$host;
+        proxy_set_header X-Real-IP `$remote_addr;
+        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
+        proxy_cache_bypass `$http_upgrade;
+        proxy_read_timeout 60s;
+    }
+}
+NGINXEOF
+
+ln -sf /etc/nginx/sites-available/casper /etc/nginx/sites-enabled/casper
+nginx -t && systemctl reload nginx
+
 echo '-> Pull kode terbaru...'
 cd $APP_DIR
 git pull origin master
@@ -106,7 +138,7 @@ npm run build
 echo '-> Memperbarui proses PM2...'
 pm2 delete casper-api 2>/dev/null || true
 cd $APP_DIR/backend
-PORT=5001 pm2 start src/index.js --name 'casper-api' --env production
+PORT=$BACKEND_PORT pm2 start src/index.js --name 'casper-api' --env production
 pm2 save
 
 echo ''
