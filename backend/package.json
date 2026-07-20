@@ -13,6 +13,7 @@
     "db:seed-real": "node src/db/seed_real_streamers.js"
   },
   "dependencies": {
+    "axios": "^1.7.9",
     "bcryptjs": "^2.4.3",
     "casper-signal-analytics": "file:..",
     "cors": "^2.8.5",
