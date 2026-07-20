@@ -16,7 +16,8 @@ import {
   Clock,
   UserX,
   PlusCircle,
-  FileSpreadsheet
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 
@@ -33,6 +34,9 @@ const Performance = () => {
   const [penaltyData, setPenaltyData] = useState(null);
   const [penaltyLoading, setPenaltyLoading] = useState(false);
   const [basicSalary, setBasicSalary] = useState(3000000); // Gaji Pokok default 3 Juta
+
+  // State for detail history modal (Opsi 2)
+  const [selectedStreamerDetail, setSelectedStreamerDetail] = useState(null);
 
   // Rate settings for penalties
   const [rateLate, setRateLate] = useState(2000);     // Rp 2.000 / mnt
@@ -189,6 +193,69 @@ const Performance = () => {
   // Format currency helpers (IDR)
   const formatIDR = (num) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(num);
+  };
+
+  // Opsi 1: Fungsi Ekspor Laporan Bulanan ke CSV
+  const handleExportCSV = () => {
+    if (!penaltyData?.report || penaltyData.report.length === 0) return;
+
+    // Define CSV Headers
+    const headers = [
+      'Nama Streamer',
+      'Platform',
+      'Total Sesi Terjadwal',
+      'Total Terlambat (Menit)',
+      'Jumlah Bolos (Sesi)',
+      'Jumlah Izin (Sesi)',
+      'Jumlah Sakit (Sesi)',
+      'Jumlah Menggantikan (Sesi)',
+      'Denda Telat (IDR)',
+      'Denda Bolos (IDR)',
+      'Denda Izin (IDR)',
+      'Bonus Menggantikan (IDR)',
+      'Total Net Potongan (IDR)',
+      'Gaji Pokok (IDR)',
+      'Gaji Akhir Diterima (IDR)'
+    ];
+
+    // Build Rows
+    const rows = penaltyData.report.map(row => {
+      const takeHomePay = Math.max(0, basicSalary - row.financials.netDeduction);
+      return [
+        `"${row.nama}"`,
+        `"${row.platform}"`,
+        row.stats.totalScheduled,
+        row.stats.lateMinutes,
+        row.stats.absentCount,
+        row.stats.leaveCount,
+        row.stats.sickCount,
+        row.stats.substituteCount,
+        row.financials.dendaLate,
+        row.financials.dendaAbsent,
+        row.financials.dendaLeave,
+        row.financials.bonusSubstitute,
+        row.financials.netDeduction,
+        basicSalary,
+        takeHomePay
+      ];
+    });
+
+    // Merge into single CSV string
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(e => e.join(','))
+    ].join('\n');
+
+    // Create file blob and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Laporan_Gaji_Denda_${selectedMonth}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   return (
@@ -424,6 +491,26 @@ const Performance = () => {
             </div>
           ) : penaltyData?.report ? (
             <div className="space-y-4">
+              
+              {/* Table Action Header */}
+              <div className="flex items-center justify-between pb-1 border-b border-black/25">
+                <div className="flex items-center gap-2">
+                  <Info className="h-4 w-4 text-slate-400" />
+                  <span className="text-[10px] font-bold text-slate-400 uppercase">
+                    Klik nama streamer untuk melihat rincian detail tanggal kejadian
+                  </span>
+                </div>
+
+                {/* Opsi 1: Tombol Download CSV */}
+                <button
+                  onClick={handleExportCSV}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase text-indigo-400 border-2 border-indigo-500/35 hover:bg-indigo-500/10 cursor-pointer shadow-tactile-sm active:translate-y-px transition-colors"
+                >
+                  <FileSpreadsheet className="h-4 w-4" />
+                  <span>Ekspor CSV (Excel)</span>
+                </button>
+              </div>
+
               {/* Info Banner */}
               <div className="p-3.5 rounded-xl border-2 border-yellow-500/20 bg-yellow-500/5 text-xs text-slate-350 flex items-center gap-2">
                 <Info className="h-4.5 w-4.5 text-yellow-500 shrink-0" />
@@ -467,7 +554,14 @@ const Performance = () => {
                             hasImpact ? 'bg-rose-950/5' : ''
                           }`}
                         >
-                          <td className="py-3.5 px-4 font-black text-white text-sm">{row.nama}</td>
+                          {/* Opsi 2: Klik nama streamer membuka Modal Detail */}
+                          <td 
+                            onClick={() => setSelectedStreamerDetail(row)}
+                            className="py-3.5 px-4 font-black text-indigo-400 text-sm cursor-pointer hover:text-indigo-300 hover:underline decoration-dotted transition-colors"
+                            title="Klik untuk detail rincian tanggal"
+                          >
+                            {row.nama}
+                          </td>
                           <td className="py-3.5 px-4 text-center font-mono">{row.stats.totalScheduled} sesi</td>
                           <td className="py-3.5 px-4 text-center text-rose-450 font-mono">
                             {row.stats.lateMinutes > 0 ? (
@@ -537,6 +631,94 @@ const Performance = () => {
             <div className="text-center py-12 text-slate-500">Tidak ada data absensi/denda untuk bulan terpilih.</div>
           )}
 
+        </div>
+      )}
+
+      {/* Opsi 2: Modal Detail Riwayat Pelanggaran (Pop-up Modal) */}
+      {selectedStreamerDetail && (
+        <div className="fixed inset-0 z-55 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/85 backdrop-blur-xs" onClick={() => setSelectedStreamerDetail(null)} />
+          
+          <div className="relative w-full max-w-2xl p-6 md:p-8 rounded-2xl border-3 border-black bg-dark-card shadow-tactile-lg z-10 animate-scale-up">
+            <button
+              onClick={() => setSelectedStreamerDetail(null)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-slate-900 text-gray-400 hover:text-white border-2 border-black cursor-pointer shadow-tactile-sm active:translate-y-px"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+
+            <div className="border-b-2 border-black pb-4 mb-5">
+              <h3 className="text-lg font-black text-white uppercase tracking-wide flex items-center gap-2">
+                <PlusCircle className="h-5 w-5 text-indigo-400" />
+                <span>Riwayat Detil Absensi &amp; Denda</span>
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                Streamer: <strong className="text-white text-sm">{selectedStreamerDetail.nama}</strong> ({selectedStreamerDetail.platform}) 
+                &bull; Periode: <strong className="text-white">{selectedMonth}</strong>
+              </p>
+            </div>
+
+            {/* List Riwayat */}
+            <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
+              {selectedStreamerDetail.history.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 font-bold uppercase border-2 border-dashed border-black/40 rounded-xl bg-slate-950/20">
+                  Bersih! Tidak ada riwayat keterlambatan, sakit, swap izin, atau bolos pada bulan ini.
+                </div>
+              ) : (
+                selectedStreamerDetail.history.map((h, index) => {
+                  // Style based on type
+                  let typeBadge = '';
+                  if (h.type.startsWith('Late')) typeBadge = 'bg-rose-500/10 text-rose-405 border-rose-500/20';
+                  else if (h.type === 'Absent') typeBadge = 'bg-rose-500 text-white border-rose-600 font-black';
+                  else if (h.type === 'Leave') typeBadge = 'bg-yellow-500/10 text-yellow-405 border-yellow-500/20';
+                  else if (h.type === 'Sick') typeBadge = 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                  else typeBadge = 'bg-emerald-500/10 text-emerald-450 border-emerald-500/20';
+
+                  return (
+                    <div 
+                      key={index} 
+                      className="p-3.5 rounded-xl border-2 border-black bg-slate-900/65 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-tactile-sm"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${typeBadge}`}>
+                            {h.type}
+                          </span>
+                          <span className="text-xs font-extrabold text-white font-mono">{h.date}</span>
+                        </div>
+                        <p className="text-[11px] text-slate-300 font-medium">{h.description}</p>
+                      </div>
+
+                      <div className="text-right sm:text-right shrink-0">
+                        <span className="text-[9px] text-slate-450 block uppercase tracking-wider font-bold">Jam Sesi</span>
+                        <strong className="text-xs text-slate-200 font-mono block mt-0.5">{h.time} WIB</strong>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="border-t-2 border-black pt-4 mt-5 flex items-center justify-between">
+              <div>
+                <span className="text-[9px] text-slate-450 block uppercase tracking-widest font-black">Net Potongan Gaji</span>
+                <strong className={`text-base font-black font-mono ${
+                  selectedStreamerDetail.financials.netDeduction > 0 ? 'text-rose-500' : selectedStreamerDetail.financials.netDeduction < 0 ? 'text-emerald-405' : 'text-slate-400'
+                }`}>
+                  {selectedStreamerDetail.financials.netDeduction !== 0 ? formatIDR(selectedStreamerDetail.financials.netDeduction) : 'Rp 0'}
+                </strong>
+              </div>
+
+              <button
+                onClick={() => setSelectedStreamerDetail(null)}
+                className="px-5 py-2 rounded-xl text-xs font-black uppercase bg-slate-900 border-2 border-black hover:bg-slate-800 text-white cursor-pointer active:translate-y-px shadow-tactile-sm"
+              >
+                Tutup Detail
+              </button>
+            </div>
+
+          </div>
         </div>
       )}
 

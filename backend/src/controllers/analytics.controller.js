@@ -418,7 +418,87 @@ export const getMonthlyPenaltyReport = async (req, res) => {
       const substituteLateMinutes = substituteSessions.reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
       const totalAccumulatedLateMinutes = totalLateMinutes + substituteLateMinutes;
 
-      // 6. Kalkulasi Keuangan
+      // 6. Kumpulkan Rincian History Kejadian untuk Pop-up Modal Detail
+      const history = [];
+
+      // Telat di jadwal sendiri
+      originalSessions
+        .filter(sc => sc.substitute_streamer_id === null && (sc.lateness_minutes || 0) > 0)
+        .forEach(sc => {
+          history.push({
+            id: sc.id,
+            date: sc.start_time.split('T')[0],
+            type: 'Late',
+            time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+            description: `Terlambat live selama ${sc.lateness_minutes} menit (Denda: ${formatIDR(sc.lateness_minutes * rateLate)})`
+          });
+        });
+
+      // Telat saat menggantikan orang lain
+      substituteSessions
+        .filter(sc => (sc.lateness_minutes || 0) > 0)
+        .forEach(sc => {
+          history.push({
+            id: sc.id,
+            date: sc.start_time.split('T')[0],
+            type: 'Late (Substitute)',
+            time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+            description: `Terlambat saat menggantikan ${sc.original_streamer_name} selama ${sc.lateness_minutes} menit (Denda: ${formatIDR(sc.lateness_minutes * rateLate)})`
+          });
+        });
+
+      // Sesi Bolos
+      absentSessions.forEach(sc => {
+        history.push({
+          id: sc.id,
+          date: sc.start_time.split('T')[0],
+          type: 'Absent',
+          time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+          description: `Tidak live tanpa kabar pengganti / Bolos (Denda: ${formatIDR(rateAbsent)})`
+        });
+      });
+
+      // Izin Biasa (Denda Potong Swap)
+      leaveSessions.forEach(sc => {
+        const substituteName = streamers.find(st => st.id === sc.substitute_streamer_id)?.nama || 'Streamer';
+        history.push({
+          id: sc.id,
+          date: sc.start_time.split('T')[0],
+          type: 'Leave',
+          time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+          description: `Izin swap jadwal, digantikan oleh ${substituteName} (Denda Potong: ${formatIDR(rateSwap)})`
+        });
+      });
+
+      // Sesi Sakit
+      sickSessions.forEach(sc => {
+        const subName = sc.substitute_streamer_id 
+          ? ` (digantikan oleh ${streamers.find(st => st.id === sc.substitute_streamer_id)?.nama || 'Streamer'})` 
+          : ' (tidak ada pengganti)';
+        history.push({
+          id: sc.id,
+          date: sc.start_time.split('T')[0],
+          type: 'Sick',
+          time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+          description: `Izin sakit terkonfirmasi${subName} (Bebas Denda: Rp 0)`
+        });
+      });
+
+      // Menggantikan orang lain (Bonus)
+      substituteSessions.forEach(sc => {
+        history.push({
+          id: sc.id,
+          date: sc.start_time.split('T')[0],
+          type: 'Substitute Incentive',
+          time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
+          description: `Menggantikan live untuk streamer ${sc.original_streamer_name} (Bonus: +${formatIDR(rateSwap)})`
+        });
+      });
+
+      // Sort history by date ascending
+      history.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+      // 7. Kalkulasi Keuangan
       const dendaLate = totalAccumulatedLateMinutes * rateLate;
       const dendaAbsent = absentSessions.length * rateAbsent;
       const dendaLeave = leaveSessions.length * rateSwap; // potongan hanya jika izin biasa (bukan sakit)
@@ -446,7 +526,8 @@ export const getMonthlyPenaltyReport = async (req, res) => {
           bonusSubstitute,
           totalPenalty,
           netDeduction
-        }
+        },
+        history
       };
     });
 
