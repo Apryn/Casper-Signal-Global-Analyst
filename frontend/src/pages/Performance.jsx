@@ -429,8 +429,9 @@ const Performance = () => {
               <div className="p-3.5 rounded-xl border-2 border-yellow-500/20 bg-yellow-500/5 text-xs text-slate-350 flex items-center gap-2">
                 <Info className="h-4.5 w-4.5 text-yellow-500 shrink-0" />
                 <span>
-                  Sesi **Bolos** adalah jadwal berstatus *Scheduled* yang jam selesainya sudah terlewat lebih dari 2 jam tanpa ada rekaman durasi live/start.
-                  Sesi **Izin** memotong gaji ybs sebesar **{formatIDR(rateSwap)}** dan secara otomatis ditransfer ke **Streamer Pengganti** sebagai bonus.
+                  Sesi **Bolos** adalah jadwal *Scheduled* yang jam selesainya lewat > 2 jam tanpa ada rekaman durasi live/start.
+                  Sesi **Izin biasa** memotong gajinya **{formatIDR(rateSwap)}** & otomatis dikirim ke Streamer Pengganti sebagai bonus.
+                  Sesi **Sakit (Sick Leave)** **BEBAS DENDA (Rp 0)** bagi streamer asli, namun Streamer Pengganti tetap dapat bonus **{formatIDR(rateSwap)}** dari kas.
                 </span>
               </div>
 
@@ -444,6 +445,7 @@ const Performance = () => {
                       <th className="py-3 px-4 text-center">Telat (Mnt)</th>
                       <th className="py-3 px-4 text-center">Bolos</th>
                       <th className="py-3 px-4 text-center">Izin</th>
+                      <th className="py-3 px-4 text-center">Sakit</th>
                       <th className="py-3 px-4 text-center">Menggantikan</th>
                       <th className="py-3 px-4 text-right">Potongan Telat</th>
                       <th className="py-3 px-4 text-right">Potongan Bolos</th>
@@ -486,6 +488,13 @@ const Performance = () => {
                           </td>
                           <td className="py-3.5 px-4 text-center text-slate-400 font-mono">
                             {row.stats.leaveCount > 0 ? `${row.stats.leaveCount}x` : '-'}
+                          </td>
+                          <td className="py-3.5 px-4 text-center text-rose-450 font-mono">
+                            {row.stats.sickCount > 0 ? (
+                              <span className="bg-rose-900/30 text-rose-350 border border-rose-800/35 px-1.5 py-0.5 rounded">
+                                {row.stats.sickCount}x
+                              </span>
+                            ) : '-'}
                           </td>
                           <td className="py-3.5 px-4 text-center text-emerald-450 font-mono">
                             {row.stats.substituteCount > 0 ? (

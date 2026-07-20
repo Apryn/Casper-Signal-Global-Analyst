@@ -132,10 +132,25 @@ const Schedules = () => {
     }
   };
 
+  const handleSickChange = async (scheduleId, checked) => {
+    try {
+      await api.put(`/schedule/${scheduleId}`, { is_sick: checked });
+      fetchSchedules();
+    } catch (err) {
+      console.error('Error updating sick status:', err);
+      alert(err.response?.data?.message || 'Failed to update sick status.');
+    }
+  };
+
   const handleSubstituteChange = async (scheduleId, substituteId) => {
     const parsedId = substituteId === '' ? null : parseInt(substituteId, 10);
     try {
-      await api.put(`/schedule/${scheduleId}`, { substitute_streamer_id: parsedId });
+      // Jika substitute di-reset, secara otomatis reset juga is_sick menjadi false
+      const payload = { substitute_streamer_id: parsedId };
+      if (parsedId === null) {
+        payload.is_sick = false;
+      }
+      await api.put(`/schedule/${scheduleId}`, payload);
       fetchSchedules();
     } catch (err) {
       console.error('Error updating substitute streamer:', err);
@@ -340,9 +355,22 @@ const Schedules = () => {
                       </select>
 
                       {sc.substitute_streamer_id && (
-                        <span className="block text-[8px] font-black text-emerald-450 uppercase tracking-widest mt-1.5">
-                          ⚠️ digantikan oleh pengganti terdaftar
-                        </span>
+                        <div className="mt-2 flex items-center justify-between bg-slate-950/45 p-1.5 rounded-lg border border-black/25">
+                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={sc.is_sick || false}
+                              onChange={(e) => handleSickChange(sc.id, e.target.checked)}
+                              className="h-3.5 w-3.5 rounded border-black bg-slate-900 text-indigo-650 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                            />
+                            <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider">
+                              Sakit (Bebas Denda)
+                            </span>
+                          </label>
+                          <span className="text-[7px] font-black text-slate-450 uppercase tracking-widest bg-slate-900 px-1 py-0.5 rounded">
+                            {sc.is_sick ? 'SICK LEAVE' : 'NORMAL SWAP'}
+                          </span>
+                        </div>
                       )}
                     </div>
 

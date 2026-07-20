@@ -140,15 +140,28 @@ export const updateSchedule = async (req, res) => {
       }
     }
 
+    const { substitute_streamer_id, is_sick } = req.body;
+
     const result = await query(
       `UPDATE schedule
        SET platform = COALESCE($1, platform),
            start_time = COALESCE($2, start_time),
            end_time = COALESCE($3, end_time),
-           status = COALESCE($4, status)
-       WHERE id = $5
+           status = COALESCE($4, status),
+           substitute_streamer_id = CASE WHEN $5 = TRUE THEN NULL ELSE COALESCE($6, substitute_streamer_id) END,
+           is_sick = COALESCE($7, is_sick)
+       WHERE id = $8
        RETURNING *`,
-      [platform, finalStart.toISOString(), finalEnd.toISOString(), status, id]
+      [
+        platform, 
+        finalStart.toISOString(), 
+        finalEnd.toISOString(), 
+        status, 
+        req.body.hasOwnProperty('substitute_streamer_id') && substitute_streamer_id === null, // isReset
+        substitute_streamer_id,
+        is_sick,
+        id
+      ]
     );
 
     res.json({
