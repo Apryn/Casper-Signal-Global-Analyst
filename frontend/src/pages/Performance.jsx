@@ -269,11 +269,11 @@ const Performance = () => {
               {/* Stat Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                 {[
-                  { title: 'Total Hours Live', value: `${stats?.totalLiveHours.toFixed(1)} hrs`, desc: 'Active stream time', color: 'text-indigo-400' },
-                  { title: 'Content Uploads', value: stats?.totalUploads, desc: 'Tiktok & YouTube shorts', color: 'text-pink-400' },
-                  { title: 'Chats Received', value: stats?.totalChats.toLocaleString('id-ID'), desc: 'Ingested chat records', color: 'text-cyan-400' },
-                  { title: 'Registrations', value: stats?.totalRegistrations.toLocaleString('id-ID'), desc: 'Affiliate registrations', color: 'text-yellow-400' },
-                  { title: 'FTD Count', value: stats?.totalFtds.toLocaleString('id-ID'), desc: 'First time depositors', color: 'text-emerald-400' }
+                  { title: 'Total Hours Live', value: `${(stats?.totalLiveHours || 0).toFixed(1)} hrs`, desc: 'Active stream time', color: 'text-indigo-400' },
+                  { title: 'Content Uploads', value: stats?.totalUploads || 0, desc: 'Tiktok & YouTube shorts', color: 'text-pink-400' },
+                  { title: 'Chats Received', value: (stats?.totalChats || 0).toLocaleString('id-ID'), desc: 'Ingested chat records', color: 'text-cyan-400' },
+                  { title: 'Registrations', value: (stats?.totalRegistrations || 0).toLocaleString('id-ID'), desc: 'Affiliate registrations', color: 'text-yellow-400' },
+                  { title: 'FTD Count', value: (stats?.totalFtds || 0).toLocaleString('id-ID'), desc: 'First time depositors', color: 'text-emerald-400' }
                 ].map((item, idx) => (
                   <div key={idx} className="tactile-card p-5 border-2 border-black bg-dark-card">
                     <span className="text-[10px] font-black text-slate-450 uppercase tracking-widest block">{item.title}</span>
@@ -291,14 +291,14 @@ const Performance = () => {
                   <div className="p-4 rounded-xl border border-dark-border/40 bg-slate-950/20 flex items-center justify-between">
                     <div>
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Chat to Registration Rate</span>
-                      <strong className="text-2xl font-black text-white mt-1.5 block">{performance.summary.chatToRegRate.toFixed(1)}%</strong>
+                      <strong className="text-2xl font-black text-white mt-1.5 block">{(stats?.registrationRate || 0).toFixed(1)}%</strong>
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] text-indigo-400 font-extrabold uppercase block font-mono">Target: 30%</span>
                       <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
-                        performance.summary.chatToRegRate >= 30 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
+                        (stats?.registrationRate || 0) >= 30 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
                       } inline-block mt-2`}>
-                        {performance.summary.chatToRegRate >= 30 ? 'Good Conversion' : 'Needs attention'}
+                        {(stats?.registrationRate || 0) >= 30 ? 'Good Conversion' : 'Needs attention'}
                       </span>
                     </div>
                   </div>
@@ -306,14 +306,14 @@ const Performance = () => {
                   <div className="p-4 rounded-xl border border-dark-border/40 bg-slate-950/20 flex items-center justify-between">
                     <div>
                       <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Registration to FTD Rate</span>
-                      <strong className="text-2xl font-black text-white mt-1.5 block">{performance.summary.regToFtdRate.toFixed(1)}%</strong>
+                      <strong className="text-2xl font-black text-white mt-1.5 block">{(stats?.ftdConversion || 0).toFixed(1)}%</strong>
                     </div>
                     <div className="text-right">
                       <span className="text-[10px] text-indigo-400 font-extrabold uppercase block font-mono">Target: 10%</span>
                       <span className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded border ${
-                        performance.summary.regToFtdRate >= 10 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
+                        (stats?.ftdConversion || 0) >= 10 ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-450 border-rose-500/20'
                       } inline-block mt-2`}>
-                        {performance.summary.regToFtdRate >= 10 ? 'Good Conversion' : 'Needs attention'}
+                        {(stats?.ftdConversion || 0) >= 10 ? 'Good Conversion' : 'Needs attention'}
                       </span>
                     </div>
                   </div>
