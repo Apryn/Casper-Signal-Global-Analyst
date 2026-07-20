@@ -110,7 +110,7 @@ export const getDashboardSummary = async (req, res) => {
         (
           SELECT sa.link FROM streamer_accounts sa
           WHERE sa.streamer_id = s.id
-            AND sa.platform = 'YouTube'
+            AND sa.platform = s.platform
           LIMIT 1
         ) as live_link
        FROM streamers s

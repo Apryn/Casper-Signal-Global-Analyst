@@ -429,7 +429,7 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
     console.log('[TikTok Service] Running TikTok live status detection...');
     // Ambil semua akun TikTok yang aktif dan punya username
     const ttAccountsRes = await query(
-      `SELECT sa.id, sa.streamer_id, sa.username, s.nama
+      `SELECT sa.id, sa.streamer_id, sa.username, s.nama, s.telegram_username
        FROM streamer_accounts sa
        JOIN streamers s ON sa.streamer_id = s.id
        WHERE sa.platform = 'TikTok'
@@ -440,16 +440,12 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
  
     for (const account of ttAccounts) {
       try {
-        // Cek apakah ada jadwal aktif hari ini untuk streamer ini
-        const hasActiveSchedule = await isChannelScheduleActive([account.streamer_id]);
-        if (!hasActiveSchedule) {
-          continue; // skip jika tidak ada jadwal aktif
-        }
- 
+        // Pengecekan TikTok live selalu berjalan tanpa perlu filter jadwal aktif (karena streamer live mandiri tanpa jadwal)
         const liveInfo = await checkTikTokLiveStatus(account.username);
  
         if (liveInfo.isLive) {
           const schedule = await findMatchingSchedule(account.streamer_id);
+          
           if (schedule) {
             // Pasang platform untuk log
             const ttAccount = { ...account, platform: 'TikTok' };
@@ -459,6 +455,38 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
               liveLink: `https://www.tiktok.com/@${account.username.trim().replace(/^@/, '')}/live`
             };
             await handleChannelLive(ttAccount, ttLiveInfo, sendNotification);
+          } else {
+            // Murni live mandiri tanpa jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
+            console.log(`[TikTok Service] 🔴 Streamer @${account.username} live mandiri tanpa jadwal. Membuat schedule instan...`);
+            const now = new Date();
+            const startTime = new Date(now.getTime() - 15 * 60 * 1000); // diasumsikan mulai 15 menit lalu
+            const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);  // estimasi selesai 2 jam lagi
+
+            const insertRes = await query(
+              `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time)
+               VALUES ($1, 'TikTok', $2, $3, 'Live', $4)
+               RETURNING id`,
+              [account.streamer_id, startTime.toISOString(), endTime.toISOString(), startTime.toISOString()]
+            );
+
+            // Rekam viewer count perdana untuk schedule instan ini
+            const newScheduleId = insertRes.rows[0].id;
+            await query(
+              `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
+               VALUES ($1, $2, 'TikTok', $3)`,
+              [newScheduleId, account.streamer_id, liveInfo.viewerCount || 0]
+            );
+
+            // Kirim notifikasi Telegram Japri
+            const mention = account.telegram_username ? `@${account.telegram_username.trim()}` : `*${account.nama}*`;
+            const msg = `🔴 *LIVE TIKTOK DIMULAI — ${account.nama}* (Self-development)\n\n${mention} sudah mulai live TikTok secara mandiri!\n• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n_Sesi ini dicatat otomatis untuk pengembangan channel._`;
+            
+            // Mengambil telegram_chat_id
+            const chatRes = await query('SELECT telegram_chat_id FROM streamers WHERE id = $1', [account.streamer_id]);
+            const targetChatId = chatRes.rows[0]?.telegram_chat_id;
+            if (targetChatId) {
+              await sendNotification(msg, targetChatId);
+            }
           }
         } else {
           // Jika offline, cek dan tutup sesi live yang aktif
@@ -466,8 +494,8 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
           await handleChannelOffline(ttAccount);
         }
  
-        // Delay 1 detik antar check TikTok agar tidak dicurigai bot oleh Cloudflare
-        await new Promise(r => setTimeout(r, 1500));
+        // Delay 2 detik antar check TikTok agar tidak dicurigai bot oleh Cloudflare
+        await new Promise(r => setTimeout(r, 2000));
       } catch (ttErr) {
         console.error(`[TikTok Service] Error processing @${account.username}:`, ttErr.message);
       }
