@@ -105,6 +105,7 @@ npm run build
 
 echo '-> Memperbarui proses PM2...'
 pm2 delete casper-api 2>/dev/null || true
+cd $APP_DIR/backend
 PORT=5001 pm2 start src/index.js --name 'casper-api' --env production
 pm2 save
 
