@@ -493,8 +493,8 @@ export const checkPreLiveReminders = async () => {
       const message =
         `⏰ *REMINDER PRE-LIVE — ${row.nama}*\n\n` +
         `Halo ${mention}! Live kamu di *${row.platform}* dimulai pukul *${startWib} WIB* (kurang lebih 15 menit lagi).\n\n` +
-        `📢 Sudah share promo atau analisa singkat ke grup belum?\n` +
-        `Kalau sudah, ketik */promo [link_post]* untuk mencatatnya. Semangat! 🚀`;
+        `📢 Sudah share promo, tren, atau analisa singkat ke grup belum?\n` +
+        `Ketik */promo [link_post]* atau cukup */promo done* jika kamu membagikan screenshot. Semangat! 🚀`;
 
       await sendTelegramNotification(message, row.telegram_chat_id);
 
@@ -516,62 +516,6 @@ export const checkPreLiveReminders = async () => {
     }
   } catch (error) {
     console.error('[Pre-Live Reminder] Error:', error.message);
-  }
-};
-
-/**
- * [NEW] Checks streamers who submitted a daily report but haven't submitted /rekap yet.
- * Sends reminder at 20:00 WIB.
- */
-export const checkContentRecapReminders = async (wibDateStr) => {
-  const todayStr = wibDateStr || getWibHourAndDate().dateStr;
-
-  try {
-    // Cari streamer yang sudah kirim laporan harian tapi belum submit content recap
-    const result = await query(
-      `SELECT dr.streamer_id, s.nama, s.telegram_username, s.telegram_chat_id
-       FROM daily_reports dr
-       JOIN streamers s ON dr.streamer_id = s.id
-       WHERE dr.tanggal = $1
-         AND dr.content_submitted = FALSE`,
-      [todayStr]
-    );
-
-    if (result.rows.length === 0) {
-      console.log(`[Content Recap Reminder] Semua streamer sudah submit rekap konten untuk ${todayStr}.`);
-      return;
-    }
-
-    for (const row of result.rows) {
-      if (!row.telegram_chat_id) {
-        console.log(`[Content Recap Reminder Skipped]: Streamer ${row.nama} has no telegram_chat_id, skipped.`);
-        continue;
-      }
-
-      const mention = row.telegram_username
-        ? `@${row.telegram_username.trim()}`
-        : `*${row.nama}*`;
-
-      const message =
-        `📝 *REMINDER REKAP KONTEN — ${row.nama}*\n\n` +
-        `Halo ${mention}! Kamu belum mengumpulkan rekap konten harian hari ini.\n\n` +
-        `Kirimkan bukti postingan kontenmu dengan format:\n` +
-        `*/rekap [link_postingan]*\n\n` +
-        `_Rekap konten wajib dikirim sebelum jam 22:00 WIB agar hari kerja dianggap penuh._ ⚠️`;
-
-      await sendTelegramNotification(message, row.telegram_chat_id);
-
-      await query(
-        `INSERT INTO notifications (streamer_id, message, status, type)
-         VALUES ($1, $2, 'Sent', 'Report Reminder')`,
-        [row.streamer_id, message]
-      );
-
-      console.log(`[Content Recap Reminder] Sent to ${row.nama}`);
-      await new Promise(r => setTimeout(r, 300));
-    }
-  } catch (error) {
-    console.error('[Content Recap Reminder] Error:', error.message);
   }
 };
 
@@ -646,12 +590,5 @@ export const startCronJobs = (botInstance) => {
   cron.schedule('*/15 7-23 * * *', () => {
     console.log('[Cron] Running YouTube live status detection (15-min smart poll)...');
     checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
-  }, { timezone: 'Asia/Jakarta' });
-
-  // ⏰ [NEW] Content recap reminder — tiap hari jam 20:00 WIB
-  cron.schedule('0 20 * * *', () => {
-    const { dateStr } = getWibHourAndDate();
-    console.log(`[Cron] Running content recap reminder for ${dateStr}`);
-    checkContentRecapReminders(dateStr).catch(err => console.error('[Cron] Error running checkContentRecapReminders:', err));
   }, { timezone: 'Asia/Jakarta' });
 };
