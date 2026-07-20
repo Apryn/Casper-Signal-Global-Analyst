@@ -354,24 +354,24 @@ const Schedules = () => {
                           ))}
                       </select>
 
-                      {sc.substitute_streamer_id && (
-                        <div className="mt-2 flex items-center justify-between bg-slate-950/45 p-1.5 rounded-lg border border-black/25">
-                          <label className="flex items-center gap-1.5 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={sc.is_sick || false}
-                              onChange={(e) => handleSickChange(sc.id, e.target.checked)}
-                              className="h-3.5 w-3.5 rounded border-black bg-slate-900 text-indigo-650 focus:ring-0 focus:ring-offset-0 cursor-pointer"
-                            />
-                            <span className="text-[9px] font-black text-rose-400 uppercase tracking-wider">
-                              Sakit (Bebas Denda)
-                            </span>
-                          </label>
-                          <span className="text-[7px] font-black text-slate-450 uppercase tracking-widest bg-slate-900 px-1 py-0.5 rounded">
-                            {sc.is_sick ? 'SICK LEAVE' : 'NORMAL SWAP'}
+                      </select>
+
+                      <div className="mt-2 flex items-center justify-between bg-slate-950/45 p-1.5 rounded-lg border border-black/25">
+                        <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={sc.is_sick || false}
+                            onChange={(e) => handleSickChange(sc.id, e.target.checked)}
+                            className="h-3.5 w-3.5 rounded border-black bg-slate-900 text-indigo-650 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                          />
+                          <span className="text-[9px] font-black text-rose-450 uppercase tracking-wider">
+                            Sakit (Bebas Denda)
                           </span>
-                        </div>
-                      )}
+                        </label>
+                        <span className="text-[7px] font-black text-slate-450 uppercase tracking-widest bg-slate-900 px-1 py-0.5 rounded font-mono">
+                          {sc.is_sick ? 'SICK LEAVE' : 'NORMAL'}
+                        </span>
+                      </div>
                     </div>
 
                   </div>

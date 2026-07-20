@@ -393,20 +393,23 @@ export const getMonthlyPenaltyReport = async (req, res) => {
         .filter(sc => sc.substitute_streamer_id === null) // Hanya jika dia sendiri yang live
         .reduce((sum, sc) => sum + (sc.lateness_minutes || 0), 0);
 
-      // 3. Sesi bolos: status Scheduled, start_time sudah lewat > 2 jam, tapi actual_start_time NULL, dan substitute_streamer_id NULL
+      // 3. Sesi bolos: status Scheduled, start_time sudah lewat > 2 jam, tapi actual_start_time NULL, substitute_streamer_id NULL, DAN bukan sakit (is_sick = false)
       const now = new Date();
       const absentSessions = originalSessions.filter(sc => {
         const isScheduled = sc.status === 'Scheduled';
         const isPassed = new Date(sc.end_time).getTime() + (2 * 60 * 60 * 1000) < now.getTime();
         const noStart = sc.actual_start_time === null;
         const noSub = sc.substitute_streamer_id === null;
-        return isScheduled && isPassed && noStart && noSub;
+        const notSick = sc.is_sick !== true; // Jika sakit, bukan bolos
+        return isScheduled && isPassed && noStart && noSub && notSick;
       });
 
-      // 4. Sesi izin: jadwal milik dia yang diisi oleh substitute_streamer_id
-      const leaveSessions = originalSessions.filter(sc => sc.substitute_streamer_id !== null);
-      const sickSessions = leaveSessions.filter(sc => sc.is_sick === true);
-      const normalLeaveSessions = leaveSessions.filter(sc => !sc.is_sick);
+      // 4. Sesi izin:
+      // a) Izin biasa (ada pengganti, dan tidak sakit)
+      const leaveSessions = originalSessions.filter(sc => sc.substitute_streamer_id !== null && !sc.is_sick);
+      
+      // b) Sesi Sakit (baik ada pengganti maupun tidak)
+      const sickSessions = originalSessions.filter(sc => sc.is_sick === true);
 
       // 5. Sesi menggantikan orang lain: jadwal milik orang lain yang diisi oleh dia
       const substituteSessions = schedules.filter(sc => sc.substitute_streamer_id === s.id);
@@ -418,7 +421,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
       // 6. Kalkulasi Keuangan
       const dendaLate = totalAccumulatedLateMinutes * rateLate;
       const dendaAbsent = absentSessions.length * rateAbsent;
-      const dendaLeave = normalLeaveSessions.length * rateSwap; // potongan hanya jika izin biasa (bukan sakit)
+      const dendaLeave = leaveSessions.length * rateSwap; // potongan hanya jika izin biasa (bukan sakit)
       const bonusSubstitute = substituteSessions.length * rateSwap; // insentif karena menggantikan tetap dapat bonus
 
       const totalPenalty = dendaLate + dendaAbsent + dendaLeave;
@@ -432,7 +435,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
           totalScheduled: originalSessions.length,
           lateMinutes: totalAccumulatedLateMinutes,
           absentCount: absentSessions.length,
-          leaveCount: normalLeaveSessions.length,
+          leaveCount: leaveSessions.length,
           sickCount: sickSessions.length,
           substituteCount: substituteSessions.length
         },
