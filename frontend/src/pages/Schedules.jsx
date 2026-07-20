@@ -11,7 +11,8 @@ import {
   RefreshCw,
   Trash2,
   UserCheck,
-  UserX
+  UserX,
+  Edit2
 } from 'lucide-react';
 
 const Schedules = () => {
@@ -22,7 +23,7 @@ const Schedules = () => {
   // Tab state: YYYY-MM-DD
   const [activeDateStr, setActiveDateStr] = useState('');
 
-  // Modal states
+  // Create Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedStreamerId, setSelectedStreamerId] = useState('');
   const [platform, setPlatform] = useState('YouTube');
@@ -30,6 +31,16 @@ const Schedules = () => {
   const [endTime, setEndTime] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
   const [formError, setFormError] = useState('');
+
+  // Edit Modal states (New Feature)
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingScheduleId, setEditingScheduleId] = useState(null);
+  const [editPlatform, setEditPlatform] = useState('YouTube');
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editFormSuccess, setEditFormSuccess] = useState('');
+  const [editFormError, setEditFormError] = useState('');
+  const [editStreamerName, setEditStreamerName] = useState('');
 
   // Generate rolling weekly list of dates (Yesterday, Today, and next 5 days)
   const getWeeklyDates = () => {
@@ -92,6 +103,31 @@ const Schedules = () => {
     setModalOpen(true);
   };
 
+  const handleOpenEditModal = (sc) => {
+    // Helper to format ISO to datetime-local local format (YYYY-MM-DDTHH:MM)
+    const formatToLocalDatetime = (isoString) => {
+      const d = new Date(isoString);
+      const pad = (n) => n.toString().padStart(2, '0');
+      
+      const year = d.getFullYear();
+      const month = pad(d.getMonth() + 1);
+      const day = pad(d.getDate());
+      const hours = pad(d.getHours());
+      const minutes = pad(d.getMinutes());
+      
+      return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
+    setEditingScheduleId(sc.id);
+    setEditStreamerName(sc.streamer_name);
+    setEditPlatform(sc.platform);
+    setEditStartTime(formatToLocalDatetime(sc.start_time));
+    setEditEndTime(formatToLocalDatetime(sc.end_time));
+    setEditFormSuccess('');
+    setEditFormError('');
+    setEditModalOpen(true);
+  };
+
   const handleCreateSchedule = async (e) => {
     e.preventDefault();
     setFormSuccess('');
@@ -122,6 +158,35 @@ const Schedules = () => {
     }
   };
 
+  const handleUpdateSchedule = async (e) => {
+    e.preventDefault();
+    setEditFormSuccess('');
+    setEditFormError('');
+
+    if (!editStartTime || !editEndTime) {
+      setEditFormError('Please fill in all fields.');
+      return;
+    }
+
+    try {
+      await api.put(`/schedule/${editingScheduleId}`, {
+        platform: editPlatform,
+        start_time: new Date(editStartTime).toISOString(),
+        end_time: new Date(editEndTime).toISOString()
+      });
+
+      setEditFormSuccess('Schedule updated successfully!');
+      fetchSchedules();
+
+      setTimeout(() => {
+        setEditModalOpen(false);
+      }, 1200);
+    } catch (err) {
+      console.error('Update schedule error:', err);
+      setEditFormError(err.response?.data?.message || 'Failed to update schedule.');
+    }
+  };
+
   const handleStatusChange = async (id, newStatus) => {
     try {
       await api.put(`/schedule/${id}`, { status: newStatus });
@@ -145,7 +210,6 @@ const Schedules = () => {
   const handleSubstituteChange = async (scheduleId, substituteId) => {
     const parsedId = substituteId === '' ? null : parseInt(substituteId, 10);
     try {
-      // Jika substitute di-reset, secara otomatis reset juga is_sick menjadi false
       const payload = { substitute_streamer_id: parsedId };
       if (parsedId === null) {
         payload.is_sick = false;
@@ -312,6 +376,15 @@ const Schedules = () => {
                           <option value="Cancelled" className="bg-slate-950 text-slate-400">Cancelled</option>
                         </select>
 
+                        {/* Edit Schedule Button (New Feature) */}
+                        <button
+                          onClick={() => handleOpenEditModal(sc)}
+                          className="p-1.5 text-slate-500 hover:text-indigo-400 rounded-lg hover:bg-slate-900 border border-transparent hover:border-black transition-all cursor-pointer"
+                          title="Edit Schedule Time"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+
                         {/* Delete Schedule Button */}
                         <button
                           onClick={() => handleDeleteSchedule(sc.id)}
@@ -362,7 +435,7 @@ const Schedules = () => {
                             onChange={(e) => handleSickChange(sc.id, e.target.checked)}
                             className="h-3.5 w-3.5 rounded border-black bg-slate-900 text-indigo-650 focus:ring-0 focus:ring-offset-0 cursor-pointer"
                           />
-                          <span className="text-[9px] font-black text-rose-450 uppercase tracking-wider">
+                          <span className="text-[9px] font-black text-rose-455 uppercase tracking-wider">
                             Sakit (Bebas Denda)
                           </span>
                         </label>
@@ -380,7 +453,7 @@ const Schedules = () => {
         </div>
       )}
 
-      {/* Schedule Live Modal */}
+      {/* Create Schedule Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-black/75 backdrop-blur-xs" onClick={() => setModalOpen(false)} />
@@ -396,7 +469,7 @@ const Schedules = () => {
             <h3 className="text-lg font-black text-white mb-6 uppercase tracking-wide">Schedule Live Broadcast</h3>
 
             {formError && (
-              <div className="p-3.5 mb-4 rounded-xl text-xs bg-rose-500/10 text-rose-450 border-2 border-rose-500/20 flex items-start gap-1.5">
+              <div className="p-3.5 mb-4 rounded-xl text-xs bg-rose-500/10 text-rose-455 border-2 border-rose-500/20 flex items-start gap-1.5">
                 <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{formError}</span>
               </div>
@@ -425,7 +498,7 @@ const Schedules = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[9px] font-black text-gray-450 uppercase tracking-widest mb-1.5">Platform</label>
+                  <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">Platform</label>
                   <select
                     value={platform}
                     onChange={(e) => setPlatform(e.target.value)}
@@ -440,7 +513,7 @@ const Schedules = () => {
               </div>
 
               <div>
-                <label className="block text-[9px] font-black text-gray-450 uppercase tracking-widest mb-1.5">Start Time</label>
+                <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">Start Time</label>
                 <input
                   type="datetime-local"
                   value={startTime}
@@ -450,7 +523,7 @@ const Schedules = () => {
               </div>
 
               <div>
-                <label className="block text-[9px] font-black text-gray-450 uppercase tracking-widest mb-1.5">End Time</label>
+                <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">End Time</label>
                 <input
                   type="datetime-local"
                   value={endTime}
@@ -464,6 +537,93 @@ const Schedules = () => {
                 className="w-full py-2.5 mt-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-extrabold text-white tracking-wide border-2 border-black shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed transition-all duration-100 text-xs uppercase"
               >
                 Submit Schedule
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Schedule Modal (New Feature) */}
+      {editModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-xs" onClick={() => setEditModalOpen(false)} />
+          
+          <div className="relative w-full max-w-md p-6 md:p-8 rounded-2xl border-3 border-black bg-dark-card shadow-tactile-lg z-10 animate-scale-up">
+            <button
+              onClick={() => setEditModalOpen(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-lg hover:bg-slate-900 text-gray-400 hover:text-white border-2 border-black cursor-pointer shadow-tactile-sm active:translate-y-px"
+            >
+              <X className="h-4.5 w-4.5" />
+            </button>
+
+            <h3 className="text-lg font-black text-white mb-6 uppercase tracking-wide">Edit Schedule Time</h3>
+
+            {editFormError && (
+              <div className="p-3.5 mb-4 rounded-xl text-xs bg-rose-500/10 text-rose-455 border-2 border-rose-500/20 flex items-start gap-1.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{editFormError}</span>
+              </div>
+            )}
+
+            {editFormSuccess && (
+              <div className="p-3 mb-4 rounded-xl text-xs bg-emerald-500/10 text-emerald-450 border-2 border-emerald-500/20 flex items-center gap-1.5">
+                <CheckCircle2 className="h-4.5 w-4.5" />
+                {editFormSuccess}
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateSchedule} className="space-y-4 text-sm font-bold">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">Streamer</label>
+                  <input
+                    type="text"
+                    value={editStreamerName}
+                    disabled
+                    className="w-full p-2.5 rounded-xl border-2 border-black bg-slate-950 text-slate-500 opacity-60 cursor-not-allowed shadow-inset-screen"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">Platform</label>
+                  <select
+                    value={editPlatform}
+                    onChange={(e) => setEditPlatform(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border-2 border-black bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-inset-screen"
+                  >
+                    <option value="YouTube">YouTube</option>
+                    <option value="TikTok">TikTok</option>
+                    <option value="Instagram">Instagram</option>
+                    <option value="Facebook">Facebook</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">Start Time</label>
+                <input
+                  type="datetime-local"
+                  value={editStartTime}
+                  onChange={(e) => setEditStartTime(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border-2 border-black bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-inset-screen"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] font-black text-gray-455 uppercase tracking-widest mb-1.5">End Time</label>
+                <input
+                  type="datetime-local"
+                  value={editEndTime}
+                  onChange={(e) => setEditEndTime(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border-2 border-black bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer shadow-inset-screen"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-2.5 mt-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-extrabold text-white tracking-wide border-2 border-black shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed transition-all duration-100 text-xs uppercase"
+              >
+                Save Changes
               </button>
             </form>
           </div>
