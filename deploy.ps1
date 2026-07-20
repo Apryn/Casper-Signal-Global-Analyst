@@ -103,8 +103,10 @@ cd $APP_DIR/frontend
 npm install --silent
 npm run build
 
-echo '-> Restart backend dengan PM2...'
-pm2 restart casper-api --update-env
+echo '-> Memperbarui proses PM2...'
+pm2 delete casper-api 2>/dev/null || true
+PORT=5001 pm2 start src/index.js --name 'casper-api' --env production
+pm2 save
 
 echo ''
 echo '[OK] Update selesai!'
