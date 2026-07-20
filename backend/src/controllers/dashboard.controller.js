@@ -99,7 +99,20 @@ export const getDashboardSummary = async (req, res) => {
           WHERE sc.streamer_id = s.id
             AND sc.status = 'Live'
             AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
-        ) THEN TRUE ELSE FALSE END as is_currently_live
+        ) THEN TRUE ELSE FALSE END as is_currently_live,
+        (
+          SELECT sc.start_time FROM schedule sc
+          WHERE sc.streamer_id = s.id
+            AND sc.status = 'Live'
+            AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+          ORDER BY sc.start_time DESC LIMIT 1
+        ) as actual_start_time,
+        (
+          SELECT sa.link FROM streamer_accounts sa
+          WHERE sa.streamer_id = s.id
+            AND sa.platform = 'YouTube'
+          LIMIT 1
+        ) as live_link
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal = $1
        ORDER BY s.nama ASC`,
@@ -112,7 +125,9 @@ export const getDashboardSummary = async (req, res) => {
       hasSubmitted: row.has_submitted,
       liveDuration: row.live_duration ? parseFloat(row.live_duration) : 0,
       ftdCount: row.ftd_count ? parseInt(row.ftd_count, 10) : 0,
-      isCurrentlyLive: row.is_currently_live
+      isCurrentlyLive: row.is_currently_live,
+      actualStartTime: row.actual_start_time,
+      liveLink: row.live_link
     }));
 
     res.json({

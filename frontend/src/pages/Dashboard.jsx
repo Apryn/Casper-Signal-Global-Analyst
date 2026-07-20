@@ -590,6 +590,60 @@ const Dashboard = () => {
         ))}
       </div>
 
+      {/* Dedicated Section: Streamers Currently Live (Only rendered when there are active lives) */}
+      {summary?.todayReportsStatus?.some(item => item.isCurrentlyLive) && (
+        <div className="tactile-card p-6 border-2 border-rose-500 bg-gradient-to-br from-rose-950/20 via-dark-card to-dark-card shadow-[0_0_20px_rgba(244,63,94,0.15)] animate-pulse-gentle">
+          <div className="flex items-center gap-2 mb-4 border-b-2 border-rose-950 pb-3">
+            <span className="relative flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+            </span>
+            <h3 className="text-lg font-black text-white tracking-wide uppercase">🔴 Streamer Sedang Live Sekarang</h3>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {summary.todayReportsStatus
+              .filter(item => item.isCurrentlyLive)
+              .map(item => {
+                const startTimeText = item.actualStartTime 
+                  ? new Date(item.actualStartTime).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })
+                  : '';
+                return (
+                  <div 
+                    key={`live-${item.streamerId}`}
+                    className="p-4 rounded-lg border-2 border-rose-500 bg-rose-950/20 flex flex-col justify-between min-h-[120px]"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-bold text-sm text-white">{item.nama}</span>
+                        <span className="text-[8px] font-black px-2 py-0.5 rounded bg-rose-600 text-white uppercase tracking-wider">ON AIR</span>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Platform: <strong className="text-slate-300">{item.platform}</strong></p>
+                      {startTimeText && (
+                        <p className="text-[10px] text-slate-450 mt-1">Mulai: <strong className="text-rose-400">{startTimeText} WIB</strong></p>
+                      )}
+                    </div>
+                    {item.liveLink ? (
+                      <a 
+                        href={item.liveLink} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="mt-3 block text-center py-1.5 px-3 rounded text-[10px] font-extrabold uppercase bg-rose-600 hover:bg-rose-550 text-white border border-black shadow-tactile-sm transition-all duration-100 active:translate-y-0.5 active:shadow-tactile-pressed"
+                      >
+                        Cek Live Stream 🔗
+                      </a>
+                    ) : (
+                      <span className="mt-3 block text-center py-1.5 px-3 rounded text-[9px] font-bold uppercase bg-slate-900 text-slate-500 border border-slate-800">
+                        Link Belum Tersedia
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
       {/* Today's Streamer Submission Status */}
       <div className="tactile-card p-6 border-2 border-black bg-dark-card">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4 mb-5 border-b-2 border-black pb-3">
@@ -606,40 +660,20 @@ const Dashboard = () => {
           {summary?.todayReportsStatus?.map((item) => (
             <div 
               key={item.streamerId}
-              className={`p-3.5 rounded-lg border-2 transition-all duration-300 relative overflow-hidden ${
-                item.isCurrentlyLive
-                  ? 'bg-gradient-to-br from-rose-950/45 via-slate-900 to-slate-950 border-rose-500 shadow-[0_0_22px_rgba(244,63,94,0.35)] shadow-tactile-sm animate-pulse-gentle'
-                  : item.hasSubmitted 
-                    ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm' 
-                    : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
+              className={`p-3.5 rounded-lg border-2 transition-all duration-200 ${
+                item.hasSubmitted 
+                  ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm' 
+                  : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
               }`}
             >
-              {item.isCurrentlyLive && (
-                <div className="absolute top-0 right-0 bg-rose-600 text-white text-[8px] font-black px-2.5 py-0.5 rounded-bl uppercase tracking-widest flex items-center gap-1 select-none border-l border-b border-black shadow-tactile-sm">
-                  <span className="h-1.5 w-1.5 rounded-full bg-white inline-block animate-ping" />
-                  <span>ON AIR</span>
-                </div>
-              )}
               <div className="flex items-center justify-between">
-                <div className="flex flex-col">
-                  <span className="font-bold text-sm text-white flex items-center gap-2">
-                    {item.isCurrentlyLive && (
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500"></span>
-                      </span>
-                    )}
-                    {item.nama}
-                  </span>
-                </div>
-                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide transition-all ${
-                  item.isCurrentlyLive
-                    ? 'bg-rose-600 text-white border-black shadow-[0_0_10px_rgba(244,63,94,0.5)] shadow-tactile-sm font-black'
-                    : item.hasSubmitted 
-                      ? 'bg-emerald-500 text-black border-black shadow-tactile-sm' 
-                      : 'bg-rose-500 text-white border-black shadow-tactile-sm'
+                <span className="font-bold text-sm text-white">{item.nama}</span>
+                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide ${
+                  item.hasSubmitted 
+                    ? 'bg-emerald-500 text-black border-black shadow-tactile-sm' 
+                    : 'bg-rose-500 text-white border-black shadow-tactile-sm'
                 }`}>
-                  {item.isCurrentlyLive ? 'LIVE' : item.hasSubmitted ? 'Sudah' : 'Belum'}
+                  {item.hasSubmitted ? 'Sudah' : 'Belum'}
                 </span>
               </div>
               <div className="mt-2.5 text-[10px] text-slate-400 flex items-center justify-between">
