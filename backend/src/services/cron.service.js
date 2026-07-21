@@ -104,13 +104,20 @@ export const sendManualReportReminder = async () => {
   `, [dateStr]);
   const missingStreamers = missingStreamersRes.rows;
 
-  if (missingStreamers.length > 0) {
-    for (const streamer of missingStreamers) {
-      if (!streamer.telegram_chat_id) {
-        console.log(`[Manual Notification Skipped]: Streamer ${streamer.nama} has no telegram_chat_id (has not initiated private chat with bot)`);
-        continue;
-      }
+  const privateRecipients = [];
+  const groupRecipients = [];
 
+  for (const streamer of missingStreamers) {
+    if (streamer.telegram_chat_id) {
+      privateRecipients.push(streamer);
+    } else {
+      groupRecipients.push(streamer);
+    }
+  }
+
+  let sentPrivateCount = 0;
+  if (privateRecipients.length > 0) {
+    for (const streamer of privateRecipients) {
       const mention = streamer.telegram_username
         ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
         : `*${streamer.nama}*`;
@@ -119,6 +126,7 @@ export const sendManualReportReminder = async () => {
 
       try {
         await bot.telegram.sendMessage(streamer.telegram_chat_id, message, { parse_mode: 'Markdown' });
+        sentPrivateCount++;
 
         // Log to database
         await query(
@@ -137,10 +145,61 @@ export const sendManualReportReminder = async () => {
     }
   }
 
+  let sentToGroup = false;
+  if (groupRecipients.length > 0) {
+    let groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID || process.env.TELEGRAM_GROUP_ID;
+    if (!groupChatId) {
+      try {
+        const chatRulesRes = await query("SELECT value FROM config WHERE key = 'telegram_group_id'");
+        groupChatId = chatRulesRes.rows[0]?.value;
+      } catch (err) {
+        console.warn(`[Notification Engine]: Config table query failed: ${err.message}`);
+      }
+    }
+
+    if (groupChatId) {
+      const threadId = process.env.TELEGRAM_REPORT_THREAD_ID
+        ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)
+        : null;
+
+      const mentions = groupRecipients.map(streamer => {
+        return streamer.telegram_username
+          ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
+          : `*${streamer.nama}*`;
+      }).join(', ');
+
+      const groupMessage = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\n\nStreamer berikut belum mengirimkan rekap harian untuk hari ini (*${formattedDate}*):\n${mentions}\n\nMohon segera dikirim ya! 🙏\n\n_Catatan: Untuk menerima pengingat secara personal (Japri), silakan hubungi bot Telegram ini secara pribadi dan ketik /start._`;
+
+      const options = { parse_mode: 'Markdown' };
+      if (threadId) {
+        options.message_thread_id = threadId;
+      }
+
+      try {
+        await bot.telegram.sendMessage(groupChatId, groupMessage, options);
+        sentToGroup = true;
+        console.log(`[Manual Notification Sent to Group ${groupChatId}]: Success`);
+        
+        // Log to database for each group recipient
+        for (const streamer of groupRecipients) {
+          await query(
+            `INSERT INTO notifications (streamer_id, message, status, type) 
+             VALUES ($1, $2, 'Sent', 'Report Reminder (Group Fallback)')`,
+            [streamer.id, groupMessage]
+          );
+        }
+      } catch (err) {
+        console.error(`[Manual Notification Group Error]: ${err.message}`);
+      }
+    } else {
+      console.warn('[Manual Notification]: No Telegram Group ID configured for fallback message.');
+    }
+  }
+
   return {
     success: true,
     message: 'Report reminder processed!',
-    recipientCount: missingStreamers.filter(s => s.telegram_chat_id).length,
+    recipientCount: sentPrivateCount + (sentToGroup ? groupRecipients.length : 0),
     missingStreamers: missingStreamers.map(s => s.nama)
   };
 };
