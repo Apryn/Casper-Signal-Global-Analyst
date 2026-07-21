@@ -55,7 +55,7 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
     if (!videoIdMatch) return null;
     const videoId = videoIdMatch[1];
 
-    const url = `https://tiktok-api23.p.rapidapi.com/api/post/info?itemId=${videoId}`;
+    const url = `https://tiktok-api23.p.rapidapi.com/api/post/detail?videoId=${videoId}`;
     const res = await fetch(url, {
       headers: {
         'x-rapidapi-key': apiKey,
