@@ -30,7 +30,8 @@ const Streamers = () => {
   const [accountsModalOpen, setAccountsModalOpen] = useState(false);
   const [activeStreamer, setActiveStreamer] = useState(null);
   const [activeAccounts, setActiveAccounts] = useState([]);
-  const [newAccountForm, setNewAccountForm] = useState({ platform: 'TikTok', username: '', link: '' });
+  const [newAccountForm, setNewAccountForm] = useState({ platform: 'TikTok', username: '', link: '', channel_id: '' });
+  const [editingAccountId, setEditingAccountId] = useState(null);
   const [accountsError, setAccountsError] = useState('');
   const [accountsSuccess, setAccountsSuccess] = useState('');
 
@@ -45,7 +46,8 @@ const Streamers = () => {
 
   const handleOpenAccountsModal = (streamer) => {
     setActiveStreamer(streamer);
-    setNewAccountForm({ platform: 'TikTok', username: '', link: '' });
+    setNewAccountForm({ platform: 'TikTok', username: '', link: '', channel_id: '' });
+    setEditingAccountId(null);
     setAccountsError('');
     setAccountsSuccess('');
     fetchActiveAccounts(streamer.id);
@@ -63,13 +65,38 @@ const Streamers = () => {
     }
 
     try {
-      await api.post(`/accounts/streamers/${activeStreamer.id}/accounts`, newAccountForm);
-      setAccountsSuccess('Akun media sosial berhasil didaftarkan!');
-      setNewAccountForm({ platform: 'TikTok', username: '', link: '' });
+      if (editingAccountId) {
+        await api.put(`/accounts/accounts/${editingAccountId}`, newAccountForm);
+        setAccountsSuccess('Akun media sosial berhasil diperbarui!');
+        setEditingAccountId(null);
+      } else {
+        await api.post(`/accounts/streamers/${activeStreamer.id}/accounts`, newAccountForm);
+        setAccountsSuccess('Akun media sosial berhasil didaftarkan!');
+      }
+      setNewAccountForm({ platform: 'TikTok', username: '', link: '', channel_id: '' });
       fetchActiveAccounts(activeStreamer.id);
     } catch (err) {
-      setAccountsError(err.response?.data?.message || 'Gagal menambahkan akun.');
+      setAccountsError(err.response?.data?.message || 'Gagal menyimpan akun.');
     }
+  };
+
+  const handleEditAccountClick = (acc) => {
+    setEditingAccountId(acc.id);
+    setNewAccountForm({
+      platform: acc.platform,
+      username: acc.username,
+      link: acc.link || '',
+      channel_id: acc.channel_id || ''
+    });
+    setAccountsError('');
+    setAccountsSuccess('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingAccountId(null);
+    setNewAccountForm({ platform: 'TikTok', username: '', link: '', channel_id: '' });
+    setAccountsError('');
+    setAccountsSuccess('');
   };
 
   const handleDeleteAccount = async (accountId) => {
@@ -77,6 +104,9 @@ const Streamers = () => {
     try {
       await api.delete(`/accounts/accounts/${accountId}`);
       setAccountsSuccess('Akun berhasil dihapus.');
+      if (editingAccountId === accountId) {
+        handleCancelEdit();
+      }
       fetchActiveAccounts(activeStreamer.id);
     } catch (err) {
       setAccountsError('Gagal menghapus akun.');
@@ -406,31 +436,59 @@ const Streamers = () => {
                   activeAccounts.map((acc) => (
                     <div key={acc.id} className="flex justify-between items-center bg-slate-900/60 border border-slate-800/80 rounded-xl p-3 text-xs text-slate-200">
                       <div>
-                        <span className="font-bold text-indigo-400 mr-2">[{acc.platform}]</span>
-                        <span>{acc.username}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-indigo-400">[{acc.platform}]</span>
+                          <span>{acc.username}</span>
+                        </div>
                         {acc.link && (
-                          <a href={acc.link} target="_blank" rel="noreferrer" className="block text-[10px] text-gray-500 hover:underline mt-0.5">
-                            Buka Profil ↗
+                          <a href={acc.link} target="_blank" rel="noreferrer" className="block text-[10px] text-indigo-400/80 hover:text-indigo-400 hover:underline mt-0.5">
+                            Buka Link Live / Profil ↗
                           </a>
                         )}
+                        {acc.platform === 'YouTube' && acc.channel_id && (
+                          <span className="block text-[9px] text-slate-500 mt-0.5 font-mono">
+                            Channel ID: {acc.channel_id}
+                          </span>
+                        )}
                       </div>
-                      <button
-                        onClick={() => handleDeleteAccount(acc.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleEditAccountClick(acc)}
+                          className="p-1.5 text-gray-400 hover:text-indigo-400 rounded-lg hover:bg-indigo-500/10 transition-colors"
+                          title="Edit Akun"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAccount(acc.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors"
+                          title="Hapus Akun"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                   ))
                 )}
               </div>
             </div>
 
-            {/* Add account form */}
+            {/* Add/Edit account form */}
             <form onSubmit={handleAddAccountSubmit} className="border-t border-slate-800 pt-5 space-y-4">
-              <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                Tambah Akun Baru
-              </label>
+              <div className="flex justify-between items-center">
+                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                  {editingAccountId ? 'Edit Akun' : 'Tambah Akun Baru'}
+                </label>
+                {editingAccountId && (
+                  <button
+                    type="button"
+                    onClick={handleCancelEdit}
+                    className="text-[10px] font-semibold text-rose-400 hover:text-rose-350 transition-colors"
+                  >
+                    Batal Edit
+                  </button>
+                )}
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] text-gray-400 mb-1">Platform</label>
@@ -438,6 +496,7 @@ const Streamers = () => {
                     value={newAccountForm.platform}
                     onChange={(e) => setNewAccountForm({ ...newAccountForm, platform: e.target.value })}
                     className="w-full p-2 text-xs rounded-lg border border-dark-border bg-slate-900 text-white cursor-pointer"
+                    disabled={!!editingAccountId}
                   >
                     <option value="TikTok">TikTok</option>
                     <option value="YouTube">YouTube</option>
@@ -457,20 +516,38 @@ const Streamers = () => {
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] text-gray-400 mb-1">Link Profil (Opsional)</label>
+                <label className="block text-[10px] text-gray-400 mb-1">Link Live / Profil (Opsional)</label>
                 <input
                   type="text"
                   value={newAccountForm.link}
                   onChange={(e) => setNewAccountForm({ ...newAccountForm, link: e.target.value })}
-                  placeholder="https://tiktok.com/@dara_official"
+                  placeholder={newAccountForm.platform === 'YouTube' ? 'https://youtube.com/channel/UC...' : 'https://tiktok.com/@...'}
                   className="w-full p-2 text-xs rounded-lg border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
+
+              {newAccountForm.platform === 'YouTube' && (
+                <div>
+                  <label className="block text-[10px] text-gray-400 mb-1">YouTube Channel ID (Opsional untuk Autodetect Live)</label>
+                  <input
+                    type="text"
+                    value={newAccountForm.channel_id}
+                    onChange={(e) => setNewAccountForm({ ...newAccountForm, channel_id: e.target.value })}
+                    placeholder="Contoh: UCbCWUyYnUIpcXaV390r7QAA"
+                    className="w-full p-2 text-xs rounded-lg border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold text-xs transition-colors"
+                className={`w-full py-2 text-white rounded-lg font-semibold text-xs transition-colors ${
+                  editingAccountId 
+                    ? 'bg-amber-600 hover:bg-amber-500' 
+                    : 'bg-indigo-600 hover:bg-indigo-500'
+                }`}
               >
-                Tambahkan Akun
+                {editingAccountId ? 'Simpan Perubahan' : 'Tambahkan Akun'}
               </button>
             </form>
           </div>
