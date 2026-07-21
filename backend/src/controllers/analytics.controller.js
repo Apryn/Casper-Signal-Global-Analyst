@@ -364,6 +364,16 @@ export const getMonthlyPenaltyReport = async (req, res) => {
     return res.status(400).json({ message: 'month parameter (YYYY-MM) is required' });
   }
 
+  const getLocalDateString = (val) => {
+    if (!val) return '';
+    const dateObj = (val instanceof Date) ? val : new Date(val);
+    return dateObj.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+  };
+
+  const formatIDR = (num) => {
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num);
+  };
+
   const startOfMonth = `${month}-01T00:00:00+07:00`;
   const nextMonthDate = new Date(`${month}-01T12:00:00+07:00`);
   nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
@@ -430,7 +440,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
           const isTiktok = sc.platform === 'TikTok';
           history.push({
             id: sc.id,
-            date: sc.start_time.split('T')[0],
+            date: getLocalDateString(sc.start_time),
             type: isTiktok ? 'Late (TikTok)' : 'Late',
             time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
             description: isTiktok 
@@ -446,7 +456,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
           const isTiktok = sc.platform === 'TikTok';
           history.push({
             id: sc.id,
-            date: sc.start_time.split('T')[0],
+            date: getLocalDateString(sc.start_time),
             type: isTiktok ? 'Late (Substitute - TikTok)' : 'Late (Substitute)',
             time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
             description: isTiktok
@@ -467,7 +477,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
         const isTiktok = sc.platform === 'TikTok';
         history.push({
           id: sc.id,
-          date: sc.start_time.split('T')[0],
+          date: getLocalDateString(sc.start_time),
           type: isTiktok ? 'Absent (TikTok)' : 'Absent',
           time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
           description: isTiktok
@@ -482,7 +492,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
         const substituteName = streamers.find(st => st.id === sc.substitute_streamer_id)?.nama || 'Streamer';
         history.push({
           id: sc.id,
-          date: sc.start_time.split('T')[0],
+          date: getLocalDateString(sc.start_time),
           type: isTiktok ? 'Leave (TikTok)' : 'Leave',
           time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
           description: isTiktok
@@ -498,7 +508,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
           : ' (tidak ada pengganti)';
         history.push({
           id: sc.id,
-          date: sc.start_time.split('T')[0],
+          date: getLocalDateString(sc.start_time),
           type: 'Sick',
           time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
           description: `Izin sakit terkonfirmasi${subName} (Bebas Denda: Rp 0)`
@@ -509,7 +519,7 @@ export const getMonthlyPenaltyReport = async (req, res) => {
       substituteSessions.forEach(sc => {
         history.push({
           id: sc.id,
-          date: sc.start_time.split('T')[0],
+          date: getLocalDateString(sc.start_time),
           type: 'Substitute Incentive',
           time: `${new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} - ${new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`,
           description: `Menggantikan live untuk streamer ${sc.original_streamer_name} (Bonus: +${formatIDR(rateSwap)})`
