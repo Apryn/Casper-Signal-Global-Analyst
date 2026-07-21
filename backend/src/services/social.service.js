@@ -345,19 +345,34 @@ export const syncSocialMetrics = async () => {
         const currentComments = row.comments || 0;
         const currentShares = row.shares || 0;
 
+        // Calculate time since the last synchronization (created_at stores the last sync timestamp)
+        const lastSyncTime = row.created_at ? new Date(row.created_at) : new Date(row.upload_date);
+        const msSinceLastSync = new Date() - lastSyncTime;
+        const hoursSinceLastSync = Math.max(0, msSinceLastSync / (1000 * 60 * 60));
+
+        // Growth is scaled relative to a 24-hour day.
+        // If currentViews is 0, we give the initial full daily growth immediately.
+        // Otherwise, the growth is scaled based on the actual hours that have elapsed.
+        let growthFactor = 1.0;
+        if (currentViews > 0) {
+          growthFactor = Math.min(1.0, hoursSinceLastSync / 24.0);
+        }
+
         const daysSinceUpload = Math.max(0, Math.floor((new Date() - new Date(row.upload_date)) / (1000 * 60 * 60 * 24)));
         const decay = Math.max(0.05, 1 / (1 + (daysSinceUpload * 0.15))); // Younger posts grow faster
 
-        let viewGrowth = 0;
+        let baseViewGrowth = 0;
         if (row.platform === 'TikTok') {
-          viewGrowth = Math.floor((Math.random() * 1500 + 400) * decay);
+          baseViewGrowth = Math.floor((Math.random() * 1500 + 400) * decay);
         } else if (row.platform === 'YouTube') {
-          viewGrowth = Math.floor((Math.random() * 1000 + 300) * decay);
+          baseViewGrowth = Math.floor((Math.random() * 1000 + 300) * decay);
         } else if (row.platform === 'Instagram') {
-          viewGrowth = Math.floor((Math.random() * 800 + 200) * decay);
+          baseViewGrowth = Math.floor((Math.random() * 800 + 200) * decay);
         } else { // Facebook / General
-          viewGrowth = Math.floor((Math.random() * 400 + 100) * decay);
+          baseViewGrowth = Math.floor((Math.random() * 400 + 100) * decay);
         }
+
+        const viewGrowth = Math.floor(baseViewGrowth * growthFactor);
 
         const likeRatio = Math.random() * 0.12 + 0.04;      // 4% to 16% view-to-like ratio
         const commentRatio = Math.random() * 0.08 + 0.01;   // 1% to 9% like-to-comment ratio
