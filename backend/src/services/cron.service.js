@@ -162,34 +162,35 @@ export const sendManualReportReminder = async () => {
         ? parseInt(process.env.TELEGRAM_REPORT_THREAD_ID, 10)
         : null;
 
-      const mentions = groupRecipients.map(streamer => {
-        return streamer.telegram_username
-          ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
-          : `*${streamer.nama}*`;
-      }).join(', ');
-
-      const groupMessage = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\n\nStreamer berikut belum mengirimkan rekap harian untuk hari ini (*${formattedDate}*):\n${mentions}\n\nMohon segera dikirim ya! 🙏\n\n_Catatan: Untuk menerima pengingat secara personal (Japri), silakan hubungi bot Telegram ini secara pribadi dan ketik /start._`;
-
       const options = { parse_mode: 'Markdown' };
       if (threadId) {
         options.message_thread_id = threadId;
       }
 
-      try {
-        await bot.telegram.sendMessage(groupChatId, groupMessage, options);
-        sentToGroup = true;
-        console.log(`[Manual Notification Sent to Group ${groupChatId}]: Success`);
-        
-        // Log to database for each group recipient
-        for (const streamer of groupRecipients) {
+      for (const streamer of groupRecipients) {
+        const mention = streamer.telegram_username
+          ? `@${streamer.telegram_username.trim().replace(/([_*\[\]`])/g, '\\$1')}`
+          : `*${streamer.nama}*`;
+
+        const groupMessage = `⚠️ *PENGINGAT LAPORAN HARIAN* ⚠️\n\nStreamer ${mention} belum mengirimkan rekap harian untuk hari ini (*${formattedDate}*). Mohon segera dikirim ya! 🙏\n\n_Catatan: Untuk menerima pengingat secara personal (Japri), silakan hubungi bot Telegram ini secara pribadi dan ketik /start._`;
+
+        try {
+          await bot.telegram.sendMessage(groupChatId, groupMessage, options);
+          sentToGroup = true;
+          console.log(`[Manual Notification Sent to Group ${groupChatId} for ${streamer.nama}]: Success`);
+          
+          // Log to database
           await query(
             `INSERT INTO notifications (streamer_id, message, status, type) 
              VALUES ($1, $2, 'Sent', 'Report Reminder (Group Fallback)')`,
             [streamer.id, groupMessage]
           );
+        } catch (err) {
+          console.error(`[Manual Notification Group Error for ${streamer.nama}]: ${err.message}`);
         }
-      } catch (err) {
-        console.error(`[Manual Notification Group Error]: ${err.message}`);
+
+        // Small delay to avoid spamming / rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     } else {
       console.warn('[Manual Notification]: No Telegram Group ID configured for fallback message.');
