@@ -155,13 +155,27 @@ export const checkChannelLiveStatus = async (channelId, apiKey) => {
  */
 const findMatchingSchedule = async (streamerId) => {
   const now = new Date();
+
+  // 1. Prioritaskan jadwal yang statusnya memang sedang 'Live' saat ini
+  const liveRes = await query(
+    `SELECT * FROM schedule
+     WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
+       AND status = 'Live'
+     LIMIT 1`,
+    [streamerId]
+  );
+  if (liveRes.rows.length > 0) {
+    return liveRes.rows[0];
+  }
+
+  // 2. Jika tidak ada yang sedang Live, cari yang 'Scheduled' dalam window toleransi
   const windowStart = new Date(now.getTime() - SCHEDULE_MATCH_WINDOW_MINUTES * 60 * 1000);
   const windowEnd = new Date(now.getTime() + SCHEDULE_MATCH_WINDOW_MINUTES * 60 * 1000);
 
   const result = await query(
     `SELECT * FROM schedule
      WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
-       AND status IN ('Scheduled', 'Live')
+       AND status = 'Scheduled'
        AND start_time BETWEEN $2 AND $3
      ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $4))) ASC
      LIMIT 1`,
