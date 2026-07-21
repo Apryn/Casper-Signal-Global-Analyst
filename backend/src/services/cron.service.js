@@ -98,7 +98,7 @@ export const sendManualReportReminder = async () => {
     WHERE id NOT IN (
       SELECT streamer_id 
       FROM daily_reports 
-      WHERE tanggal = $1
+      WHERE tanggal = $1 AND raw_message IS NOT NULL
     )
     ORDER BY nama ASC
   `, [dateStr]);
@@ -190,9 +190,9 @@ export const checkMissingReports = async (wibDateStr) => {
           continue;
         }
 
-        // Check if report exists for today
+        // Check if report exists for today (must be a manually or telegram submitted report)
         const reportCheck = await query(
-          'SELECT id FROM daily_reports WHERE tanggal = $1 AND streamer_id = $2',
+          'SELECT id FROM daily_reports WHERE tanggal = $1 AND streamer_id = $2 AND raw_message IS NOT NULL',
           [todayStr, streamer.id]
         );
 
