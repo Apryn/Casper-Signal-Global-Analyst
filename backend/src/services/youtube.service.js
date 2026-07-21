@@ -413,6 +413,21 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
           // Live di luar jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
           const defaultAcc = channelAccounts[0]; // ambil streamer utama pemilik channel
           if (defaultAcc) {
+            // Cek apakah streamer ini baru saja menyelesaikan jadwal hari ini dalam 2 jam terakhir
+            const recentCompletion = await query(
+              `SELECT id FROM schedule
+               WHERE streamer_id = $1
+                 AND status = 'Completed'
+                 AND actual_end_time >= NOW() - INTERVAL '2 hours'
+               LIMIT 1`,
+              [defaultAcc.streamer_id]
+            );
+
+            if (recentCompletion.rows.length > 0) {
+              console.log(`[YouTube Service] Streamer ${defaultAcc.nama} baru saja menyelesaikan stream dalam 2 jam terakhir. Menolak auto-create schedule ganda.`);
+              continue;
+            }
+
             console.log(`[YouTube Service] 🔴 Streamer ${defaultAcc.nama} live YouTube di luar jadwal. Membuat schedule instan...`);
             const now = new Date();
             const startTime = new Date(now.getTime() - 15 * 60 * 1000); // diasumsikan mulai 15 menit lalu
