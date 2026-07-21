@@ -678,7 +678,7 @@ const Dashboard = () => {
               </div>
               <div className="mt-2.5 text-[10px] text-slate-400 flex items-center justify-between">
                 <span>Platform: <strong className="text-slate-350">{item.platform}</strong></span>
-                {item.hasSubmitted && (
+                {(item.hasSubmitted || item.liveDuration > 0) && (
                   <span className="font-bold text-slate-300">
                     Live: {item.liveDuration}h &bull; FTD: {item.ftdCount}
                   </span>

@@ -91,7 +91,7 @@ export const getDashboardSummary = async (req, res) => {
         s.id,
         s.nama,
         s.platform,
-        CASE WHEN r.id IS NOT NULL THEN TRUE ELSE FALSE END as has_submitted,
+        CASE WHEN r.id IS NOT NULL AND r.raw_message IS NOT NULL THEN TRUE ELSE FALSE END as has_submitted,
         r.live_duration,
         r.ftd_count,
         CASE WHEN EXISTS (
