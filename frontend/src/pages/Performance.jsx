@@ -815,7 +815,7 @@ const Performance = () => {
                               {row.platform}
                             </span>
                           </td>
-                          <td className="py-2.5 px-4 text-right text-white font-black text-sm">{row.viewer_count.toLocaleString('id-ID')} views</td>
+                          <td className="py-2.5 px-4 text-right text-white font-black text-sm">{row.viewer_count.toLocaleString('id-ID')} viewers</td>
                           <td className="py-2.5 px-4 text-center text-slate-405">{startStr} - {endStr}</td>
                         </tr>
                       );
