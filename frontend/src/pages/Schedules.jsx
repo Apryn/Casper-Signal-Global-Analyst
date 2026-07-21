@@ -352,14 +352,24 @@ const Schedules = () => {
                 return (
                   <div 
                     key={sc.id} 
-                    className={`tactile-card p-5 border-2 border-black bg-dark-card relative group flex flex-col justify-between min-h-[220px] transition-all duration-200 ${
-                      isLive ? 'shadow-[0_0_18px_rgba(244,63,94,0.18)] border-rose-500 bg-gradient-to-br from-rose-950/10 via-dark-card to-dark-card' : ''
+                    className={`tactile-card p-5 border-2 bg-dark-card relative group flex flex-col justify-between min-h-[220px] transition-all duration-200 ${
+                      isLive 
+                        ? 'shadow-[0_0_22px_rgba(244,63,94,0.35)] border-rose-500 bg-gradient-to-br from-rose-950/20 via-dark-card to-dark-card' 
+                        : 'border-black'
                     }`}
                   >
                     {/* Top Action Header */}
                     <div className="flex items-start justify-between border-b-2 border-black/45 pb-3">
                       <div>
-                        <strong className="block text-white text-base font-black">{sc.streamer_name}</strong>
+                        <div className="flex items-center gap-2">
+                          <strong className="block text-white text-base font-black">{sc.streamer_name}</strong>
+                          {isLive && (
+                            <span className="flex h-2 w-2 relative">
+                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                            </span>
+                          )}
+                        </div>
                         <span className="inline-flex items-center gap-1 mt-1 text-[9px] uppercase font-black text-indigo-400 tracking-widest">{sc.platform}</span>
                       </div>
 
