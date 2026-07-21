@@ -348,6 +348,7 @@ const Schedules = () => {
                 const startTimeStr = new Date(sc.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
                 const endTimeStr = new Date(sc.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
                 const isLive = sc.status === 'Live';
+                const isCompleted = sc.status === 'Completed';
 
                 return (
                   <div 
@@ -355,7 +356,9 @@ const Schedules = () => {
                     className={`tactile-card p-5 border-2 bg-dark-card relative group flex flex-col justify-between min-h-[220px] transition-all duration-200 ${
                       isLive 
                         ? 'shadow-[0_0_22px_rgba(244,63,94,0.35)] border-rose-500 bg-gradient-to-br from-rose-950/20 via-dark-card to-dark-card' 
-                        : 'border-black'
+                        : isCompleted
+                          ? 'shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-500 bg-gradient-to-br from-emerald-950/10 via-dark-card to-dark-card'
+                          : 'border-black'
                     }`}
                   >
                     {/* Top Action Header */}
