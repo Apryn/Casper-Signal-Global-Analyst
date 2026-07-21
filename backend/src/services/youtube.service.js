@@ -21,7 +21,7 @@ const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 // Toleransi waktu untuk mencocokkan jadwal:
 // Jika channel live dan ada jadwal dalam window ini → dianggap match
-const SCHEDULE_MATCH_WINDOW_MINUTES = 90;
+const SCHEDULE_MATCH_WINDOW_MINUTES = 45;
 
 // Toleransi keterlambatan sebelum alert dikirim (menit)
 const LATENESS_ALERT_THRESHOLD_MINUTES = 10;
