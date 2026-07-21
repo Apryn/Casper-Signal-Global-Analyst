@@ -122,8 +122,11 @@ NGINXEOF
 ln -sf /etc/nginx/sites-available/casper /etc/nginx/sites-enabled/casper
 nginx -t && systemctl reload nginx
 
-echo '-> Pull kode terbaru...'
+echo '-> Discarding local changes on VPS...'
 cd $APP_DIR
+git reset --hard
+
+echo '-> Pull kode terbaru...'
 git pull origin master
 
 echo '-> Update dependencies backend...'
