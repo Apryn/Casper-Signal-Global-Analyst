@@ -355,11 +355,18 @@ const Schedules = () => {
                     key={sc.id} 
                     className={`tactile-card p-5 border-2 bg-dark-card relative group flex flex-col justify-between min-h-[220px] transition-all duration-200 ${
                       isLive 
-                        ? 'shadow-[0_0_22px_rgba(244,63,94,0.35)] border-rose-500 bg-gradient-to-br from-rose-950/20 via-dark-card to-dark-card' 
+                        ? 'bg-gradient-to-br from-rose-950/20 via-dark-card to-dark-card' 
                         : isCompleted
-                          ? 'shadow-[0_0_15px_rgba(16,185,129,0.15)] border-emerald-500 bg-gradient-to-br from-emerald-950/10 via-dark-card to-dark-card'
+                          ? 'bg-gradient-to-br from-emerald-950/10 via-dark-card to-dark-card'
                           : 'border-black'
                     }`}
+                    style={
+                      isLive 
+                        ? { borderColor: '#f43f5e', boxShadow: '0 0 22px rgba(244,63,94,0.35)' } 
+                        : isCompleted 
+                          ? { borderColor: '#10b981', boxShadow: '0 0 15px rgba(16,185,129,0.15)' } 
+                          : {}
+                    }
                   >
                     {/* Top Action Header */}
                     <div className="flex items-start justify-between border-b-2 border-black/45 pb-3">
