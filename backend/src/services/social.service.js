@@ -319,12 +319,86 @@ const fetchTikTokRssVideos = async (username, accountLink) => {
  * Main function to sync social media content metrics from all platforms.
  * Uses real API integration if credentials exist, falling back to realistic organic growth.
  */
+/**
+ * Scrapes views and likes from a public YouTube video page.
+ * Returns null if the watch page cannot be fetched or parsed.
+ */
+const scrapeYoutubeWatchPage = async (videoUrl) => {
+  const videoId = getYoutubeVideoId(videoUrl);
+  if (!videoId) return null;
+
+  try {
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      signal: AbortSignal.timeout(6000)
+    });
+    if (!res.ok) return null;
+
+    const html = await res.text();
+    const viewMatch = html.match(/"viewCount":"(\d+)"/i);
+    const likeMatch = html.match(/"likeCount":"(\d+)"/i);
+    
+    if (viewMatch) {
+      return {
+        views: parseInt(viewMatch[1], 10) || 0,
+        likes: likeMatch ? parseInt(likeMatch[1], 10) : 0,
+        comments: 0,
+        shares: 0
+      };
+    }
+  } catch (error) {
+    console.warn(`[Social Service Scraper]: Failed to scrape YouTube page for ${videoUrl}: ${error.message}`);
+  }
+  return null;
+};
+
+/**
+ * Fallback to retrieve TikTok video metrics by querying the user's latest posts via TikWM.
+ */
+const scrapeTikTokViaUserPosts = async (videoUrl, accountUsername) => {
+  let cleanUsername = accountUsername;
+  if (!cleanUsername) {
+    const match = videoUrl.match(/@([a-zA-Z0-9_\.]+)/);
+    if (match) cleanUsername = match[1];
+  }
+  if (!cleanUsername) return null;
+
+  cleanUsername = cleanUsername.replace(/^@/, '');
+  try {
+    const videos = await fetchTikTokVideosFromTikWM(cleanUsername);
+    const videoIdMatch = videoUrl.match(/video\/(\d+)/);
+    if (videoIdMatch && videos.length > 0) {
+      const targetVideoId = videoIdMatch[1];
+      const matched = videos.find(v => v.link && v.link.includes(targetVideoId));
+      if (matched) {
+        return {
+          views: matched.views,
+          likes: matched.likes,
+          comments: matched.comments,
+          shares: matched.shares
+        };
+      }
+    }
+  } catch (error) {
+    console.warn(`[Social Service Scraper]: Failed to get TikTok metrics via user posts for ${videoUrl}: ${error.message}`);
+  }
+  return null;
+};
+
 export const syncSocialMetrics = async () => {
   console.log('[Social Service]: Starting social media content metrics synchronization...');
   
   try {
-    // 1. Fetch all contents
-    const contentsRes = await query('SELECT * FROM content');
+    // 1. Fetch all contents with joined username and streamer name
+    const contentsRes = await query(`
+      SELECT c.*, sa.username as account_username, s.nama as streamer_name
+      FROM content c
+      LEFT JOIN streamer_accounts sa ON c.account_id = sa.id
+      JOIN streamers s ON c.streamer_id = s.id
+    `);
     const contents = contentsRes.rows;
     let updatedCount = 0;
 
@@ -334,79 +408,37 @@ export const syncSocialMetrics = async () => {
       // 2. Attempt real API fetch based on platform
       if (row.platform === 'YouTube' && row.link) {
         metrics = await fetchYoutubeMetrics(row.link);
+        if (!metrics) {
+          console.log(`[Social Service]: API failed/missing for YouTube, trying watch page scraper for ${row.link}...`);
+          metrics = await scrapeYoutubeWatchPage(row.link);
+        }
       } else if (row.platform === 'TikTok' && row.link) {
         metrics = await fetchTikTokVideoMetrics(row.link);
+        if (!metrics) {
+          console.log(`[Social Service]: API failed/missing for TikTok, trying TikWM fallback for ${row.link}...`);
+          metrics = await scrapeTikTokViaUserPosts(row.link, row.account_username);
+        }
       }
 
-      // 3. Fallback: Organic Growth Simulation Engine
-      if (!metrics) {
-        const currentViews = row.views || 0;
-        const currentLikes = row.likes || 0;
-        const currentComments = row.comments || 0;
-        const currentShares = row.shares || 0;
-
-        // Calculate time since the last synchronization (created_at stores the last sync timestamp)
-        const lastSyncTime = row.created_at ? new Date(row.created_at) : new Date(row.upload_date);
-        const msSinceLastSync = new Date() - lastSyncTime;
-        const hoursSinceLastSync = Math.max(0, msSinceLastSync / (1000 * 60 * 60));
-
-        // Growth is scaled relative to a 24-hour day.
-        // If currentViews is 0, we give the initial full daily growth immediately.
-        // Otherwise, the growth is scaled based on the actual hours that have elapsed.
-        let growthFactor = 1.0;
-        if (currentViews > 0) {
-          growthFactor = Math.min(1.0, hoursSinceLastSync / 24.0);
-        }
-
-        const daysSinceUpload = Math.max(0, Math.floor((new Date() - new Date(row.upload_date)) / (1000 * 60 * 60 * 24)));
-        const decay = Math.max(0.05, 1 / (1 + (daysSinceUpload * 0.15))); // Younger posts grow faster
-
-        let baseViewGrowth = 0;
-        if (row.platform === 'TikTok') {
-          baseViewGrowth = Math.floor((Math.random() * 1500 + 400) * decay);
-        } else if (row.platform === 'YouTube') {
-          baseViewGrowth = Math.floor((Math.random() * 1000 + 300) * decay);
-        } else if (row.platform === 'Instagram') {
-          baseViewGrowth = Math.floor((Math.random() * 800 + 200) * decay);
-        } else { // Facebook / General
-          baseViewGrowth = Math.floor((Math.random() * 400 + 100) * decay);
-        }
-
-        const viewGrowth = Math.floor(baseViewGrowth * growthFactor);
-
-        const likeRatio = Math.random() * 0.12 + 0.04;      // 4% to 16% view-to-like ratio
-        const commentRatio = Math.random() * 0.08 + 0.01;   // 1% to 9% like-to-comment ratio
-        const shareRatio = Math.random() * 0.12 + 0.02;     // 2% to 14% like-to-share ratio
-
-        const newViews = currentViews + viewGrowth;
-        const newLikes = currentLikes + Math.max(0, Math.floor(viewGrowth * likeRatio));
-        const newComments = currentComments + Math.max(0, Math.floor((newLikes - currentLikes) * commentRatio));
-        const newShares = currentShares + Math.max(0, Math.floor((newLikes - currentLikes) * shareRatio));
-
-        metrics = {
-          views: newViews,
-          likes: newLikes,
-          comments: newComments,
-          shares: newShares
-        };
+      // 3. Update the database only if real metrics were successfully fetched
+      if (metrics) {
+        await query(
+          `UPDATE content
+           SET views = $1,
+               likes = $2,
+               comments = $3,
+               shares = $4,
+               created_at = NOW()
+           WHERE id = $5`,
+          [metrics.views, metrics.likes, metrics.comments, metrics.shares, row.id]
+        );
+        updatedCount++;
+      } else {
+        console.log(`[Social Service]: Skip updating metrics for ID ${row.id} (${row.title}) - no real data could be fetched`);
       }
-
-      // 4. Update the database
-      await query(
-        `UPDATE content
-         SET views = $1,
-             likes = $2,
-             comments = $3,
-             shares = $4,
-             created_at = NOW()
-         WHERE id = $5`,
-        [metrics.views, metrics.likes, metrics.comments, metrics.shares, row.id]
-      );
-      
-      updatedCount++;
     }
 
-    console.log(`[Social Service]: Successfully synchronized metrics for ${updatedCount} posts.`);
+    console.log(`[Social Service]: Successfully synchronized real metrics for ${updatedCount} posts.`);
     return updatedCount;
   } catch (error) {
     console.error('[Social Service]: Error synchronizing social metrics:', error);
