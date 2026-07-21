@@ -144,8 +144,8 @@ const fetchTikTokVideosFromTikWM = async (cleanUsername) => {
 
       const createTime = v.create_time;
       const uploadDate = createTime
-        ? new Date(createTime * 1000).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+        ? new Date(createTime * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+        : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 
       const rawTitle = v.title || v.desc || '';
       const title = rawTitle.length > 0
@@ -284,8 +284,8 @@ const fetchTikTokRssVideos = async (username, accountLink) => {
 
       const createTime = v.createTime || v.create_time;
       const uploadDate = createTime
-        ? new Date(createTime * 1000).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
+        ? new Date(createTime * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' })
+        : new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
 
       const rawTitle = v.desc || v.title || '';
       const title = rawTitle.length > 0
