@@ -49,15 +49,19 @@ export const checkTikTokLiveStatus = async (username) => {
     const roomId = roomIdMatch ? roomIdMatch[1] : null;
 
     // 2. Deteksi status live di state JSON
-    const isLiveState = html.includes('"status":2') || html.includes('"isRoomLive":true') || html.includes('"liveType"');
+    const isLiveState = html.includes('"status":2') || html.includes('"isRoomLive":true');
+
+    // 3. Deteksi jumlah penonton (Viewer/User Count)
+    const viewerMatch = html.match(/"userCount":(\d+)/) || html.match(/"viewerCount":(\d+)/) || html.match(/"user_count":(\d+)/);
+    const viewerCount = viewerMatch ? parseInt(viewerMatch[1], 10) : 0;
 
     // Jika ada roomId aktif dan indikator live state terpenuhi
     if (roomId && roomId !== '0' && isLiveState) {
-      console.log(`[TikTok Scraper]: 🔴 Akun @${cleanUsername} terdeteksi LIVE! Room ID: ${roomId}`);
-      return { isLive: true, roomId };
+      console.log(`[TikTok Scraper]: 🔴 Akun @${cleanUsername} terdeteksi LIVE! Room ID: ${roomId} (Viewer: ${viewerCount})`);
+      return { isLive: true, roomId, viewerCount };
     }
 
-    return { isLive: false, roomId: null };
+    return { isLive: false, roomId: null, viewerCount: 0 };
 
   } catch (error) {
     // Jika kena block/redirect Cloudflare (biasanya status 403 atau 429)

@@ -321,8 +321,8 @@ const handleChannelOffline = async (account) => {
   
   // Pastikan daily report untuk target streamer hari ini ada sebelum update
   await query(
-    `INSERT INTO daily_reports (streamer_id, tanggal, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
-     VALUES ($1, $2, $3, 0, 0, 0, 0, 0, 0, 0)
+    `INSERT INTO daily_reports (streamer_id, tanggal, kategori, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
+     VALUES ($1, $2, 'Streaming', $3, 0, 0, 0, 0, 0, 0, 0)
      ON CONFLICT (streamer_id, tanggal) 
      DO UPDATE SET live_duration = COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration`,
     [targetReportStreamerId, dateStr, durationHours]
