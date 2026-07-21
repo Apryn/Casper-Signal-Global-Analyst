@@ -93,6 +93,7 @@ export const getDashboardSummary = async (req, res) => {
         s.platform,
         CASE WHEN r.id IS NOT NULL AND r.raw_message IS NOT NULL THEN TRUE ELSE FALSE END as has_submitted,
         r.live_duration,
+        r.reported_live_duration,
         r.ftd_count,
         CASE WHEN EXISTS (
           SELECT 1 FROM schedule sc
@@ -124,6 +125,7 @@ export const getDashboardSummary = async (req, res) => {
       platform: row.platform,
       hasSubmitted: row.has_submitted,
       liveDuration: row.live_duration ? parseFloat(row.live_duration) : 0,
+      reportedLiveDuration: row.reported_live_duration ? parseFloat(row.reported_live_duration) : 0,
       ftdCount: row.ftd_count ? parseInt(row.ftd_count, 10) : 0,
       isCurrentlyLive: row.is_currently_live,
       actualStartTime: row.actual_start_time,

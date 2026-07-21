@@ -679,8 +679,20 @@ const Dashboard = () => {
               <div className="mt-2.5 text-[10px] text-slate-400 flex items-center justify-between">
                 <span>Platform: <strong className="text-slate-350">{item.platform}</strong></span>
                 {(item.hasSubmitted || item.liveDuration > 0) && (
-                  <span className="font-bold text-slate-300">
-                    Live: {item.liveDuration}h &bull; FTD: {item.ftdCount}
+                  <span className={`font-bold ${
+                    item.hasSubmitted && Math.abs(item.reportedLiveDuration - item.liveDuration) > 0.2
+                      ? 'text-rose-400 flex items-center gap-1 bg-rose-950/20 px-1.5 py-0.5 rounded border border-rose-500/20'
+                      : 'text-slate-300'
+                  }`}>
+                    {item.hasSubmitted && Math.abs(item.reportedLiveDuration - item.liveDuration) > 0.2 ? (
+                      <span title={`Selisih laporan! Bot mencatat ${item.liveDuration} jam, sedangkan streamer melapor ${item.reportedLiveDuration} jam.`}>
+                        Live: {item.liveDuration}h (Lap: {item.reportedLiveDuration}h) ⚠️
+                      </span>
+                    ) : (
+                      <span>Live: {item.liveDuration}h</span>
+                    )}
+                    <span className="text-slate-500 mx-1">&bull;</span>
+                    <span>FTD: {item.ftdCount}</span>
                   </span>
                 )}
               </div>
