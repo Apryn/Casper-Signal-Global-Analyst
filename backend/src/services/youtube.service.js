@@ -489,11 +489,11 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 }
               } else {
                 // Masih Scheduled -> Ubah status ke Live dengan substitute jika ada
-                const now = new Date();
+                const actualStart = liveInfo.actualStartTime || new Date();
                 const scheduledStart = new Date(bestSchedule.start_time);
-                const diffMs = now.getTime() - scheduledStart.getTime();
+                const diffMs = actualStart.getTime() - scheduledStart.getTime();
                 const latenessMinutes = Math.max(0, Math.floor(diffMs / 60000));
-
+ 
                 const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
                 await query(
                   `UPDATE schedule
@@ -503,10 +503,10 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                        substitute_streamer_id = $3,
                        live_link = $4
                    WHERE id = $5`,
-                  [now.toISOString(), latenessMinutes, substituteStreamerId, liveLink, bestSchedule.id]
+                  [actualStart.toISOString(), latenessMinutes, substituteStreamerId, liveLink, bestSchedule.id]
                 );
               }
-
+ 
               // Panggil handleChannelLive dengan defaultAcc (akan membaca update status/substitute terbaru)
               await handleChannelLive(defaultAcc, liveInfo, sendNotification);
             } else {
@@ -522,19 +522,19 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                    LIMIT 1`,
                   [targetStreamerId]
                 );
-
+ 
                 if (recentCompletion.rows.length > 0) {
                   console.log(`[YouTube Service] Streamer ${matchedStreamer ? matchedStreamer.nama : defaultAcc.nama} baru saja menyelesaikan stream dalam 2 jam terakhir. Menolak auto-create schedule ganda.`);
                   continue;
                 }
-
+ 
                 const displayName = matchedStreamer ? matchedStreamer.nama : defaultAcc.nama;
                 console.log(`[YouTube Service] 🔴 Streamer ${displayName} live YouTube di luar jadwal. Membuat schedule instan...`);
                 
                 const now = new Date();
-                const startTime = new Date(now.getTime() - 15 * 60 * 1000); // diasumsikan mulai 15 menit lalu
-                const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);  // estimasi 2 jam lagi
-
+                const startTime = liveInfo.actualStartTime || new Date(now.getTime() - 15 * 60 * 1000); 
+                const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);  // estimasi 2 jam lagi
+ 
                 const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
                 const insertRes = await query(
                   `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time, substitute_streamer_id, live_link)
