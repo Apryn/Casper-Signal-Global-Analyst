@@ -603,15 +603,41 @@ const fetchYoutubeRssVideos = async (channelId) => {
 };
 
 /**
+ * Resolves the target streamer_id for a video based on name matching in the video title.
+ * If the title contains words from any streamer's name (e.g., "Aline", "Keyla", "Brayy", "Ajo", "Rival"),
+ * attributes the video to that streamer instead of the default account owner.
+ */
+const resolveStreamerFromTitle = (title, defaultStreamerId, allStreamers) => {
+  if (!title || !allStreamers || allStreamers.length === 0) return defaultStreamerId;
+  const titleLower = title.toLowerCase();
+
+  for (const s of allStreamers) {
+    // Extract name parts of length >= 3 to avoid matching tiny words
+    const nameParts = s.nama.toLowerCase().split(/\s+/).filter(p => p.length >= 3);
+    for (const part of nameParts) {
+      if (titleLower.includes(part)) {
+        console.log(`[Social Service Smart Match]: Auto-attributed video "${title.slice(0, 40)}" -> Streamer "${s.nama}" (ID: ${s.id})`);
+        return s.id;
+      }
+    }
+  }
+  return defaultStreamerId;
+};
+
+/**
  * Scans all registered streamer accounts and auto-discovers new posts.
- * Crawls actual YouTube RSS feeds, and skips other platforms (no mock fallbacks) for production data integrity.
+ * Crawls actual YouTube RSS feeds and TikTok RapidAPI/TikWM, auto-matching streamers by title keywords.
  */
 export const discoverNewContent = async () => {
   console.log('[Social Service]: Starting auto-discovery scan for new uploads...');
   let discoveredCount = 0;
 
   try {
-    // 1. Get all accounts
+    // 1. Get all registered streamers for smart title matching
+    const streamersRes = await query('SELECT id, nama FROM streamers');
+    const allStreamers = streamersRes.rows;
+
+    // 2. Get all accounts
     const accountsRes = await query(`
       SELECT sa.*, s.nama as streamer_name 
       FROM streamer_accounts sa
@@ -634,13 +660,16 @@ export const discoverNewContent = async () => {
             );
 
             if (existsCheck.rows.length === 0) {
+              // Smart match streamer from video title
+              const assignedStreamerId = resolveStreamerFromTitle(video.title, acc.streamer_id, allStreamers);
+
               // Insert with zero metrics — no fake/random starter values
               const insertResult = await query(
                 `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
                  VALUES ($1, $2, $3, $4, $5, 0, 0, 0, 0, $6)
                  RETURNING id`,
                 [
-                  acc.streamer_id,
+                  assignedStreamerId,
                   acc.platform,
                   video.title,
                   video.uploadDate,
@@ -681,11 +710,13 @@ export const discoverNewContent = async () => {
           );
 
           if (existsCheck.rows.length === 0) {
+            const assignedStreamerId = resolveStreamerFromTitle(video.title, acc.streamer_id, allStreamers);
+
             await query(
               `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
               [
-                acc.streamer_id,
+                assignedStreamerId,
                 acc.platform,
                 video.title,
                 video.uploadDate,
