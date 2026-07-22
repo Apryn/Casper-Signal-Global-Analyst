@@ -90,29 +90,48 @@ export const getDashboardSummary = async (req, res) => {
       `SELECT 
         s.id,
         s.nama,
-        s.platform,
+        COALESCE(
+          (
+            SELECT sc.platform FROM schedule sc
+            WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
+              AND sc.status = 'Live'
+              AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+            LIMIT 1
+          ),
+          s.platform
+        ) as platform,
         CASE WHEN r.id IS NOT NULL AND r.raw_message IS NOT NULL THEN TRUE ELSE FALSE END as has_submitted,
         r.live_duration,
         r.reported_live_duration,
         r.ftd_count,
         CASE WHEN EXISTS (
           SELECT 1 FROM schedule sc
-          WHERE sc.streamer_id = s.id
+          WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
             AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
         ) THEN TRUE ELSE FALSE END as is_currently_live,
         (
           SELECT sc.start_time FROM schedule sc
-          WHERE sc.streamer_id = s.id
+          WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
             AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
           ORDER BY sc.start_time DESC LIMIT 1
         ) as actual_start_time,
-        (
-          SELECT sa.link FROM streamer_accounts sa
-          WHERE sa.streamer_id = s.id
-            AND sa.platform = s.platform
-          LIMIT 1
+        COALESCE(
+          (
+            SELECT sc.live_link 
+            FROM schedule sc
+            WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
+              AND sc.status = 'Live'
+              AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+            ORDER BY sc.start_time DESC LIMIT 1
+          ),
+          (
+            SELECT sa.link FROM streamer_accounts sa
+            WHERE sa.streamer_id = s.id
+              AND sa.platform = s.platform
+            LIMIT 1
+          )
         ) as live_link
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal = $1

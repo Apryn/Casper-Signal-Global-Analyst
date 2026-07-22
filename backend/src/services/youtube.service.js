@@ -200,6 +200,15 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
     const targetStreamerId = schedule.substitute_streamer_id || streamer_id;
     const currentViewers = liveInfo.viewerCount || 0;
     
+    const liveLink = liveInfo.liveLink || (account.platform === 'YouTube' ? `https://www.youtube.com/watch?v=${liveInfo.videoId}` : null);
+    if (liveLink && schedule.live_link !== liveLink) {
+      await query(
+        `UPDATE schedule SET live_link = $1 WHERE id = $2`,
+        [liveLink, schedule.id]
+      );
+      schedule.live_link = liveLink;
+    }
+    
     await query(
       `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
        VALUES ($1, $2, $3, $4)`,
@@ -213,14 +222,16 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
   const scheduledStart = new Date(schedule.start_time);
   const diffMs = now.getTime() - scheduledStart.getTime();
   const latenessMinutes = Math.max(0, Math.floor(diffMs / 60000));
+  const liveLink = liveInfo.liveLink || (account.platform === 'YouTube' ? `https://www.youtube.com/watch?v=${liveInfo.videoId}` : null);
 
   await query(
     `UPDATE schedule
      SET actual_start_time = $1,
          lateness_minutes = $2,
-         status = 'Live'
-     WHERE id = $3`,
-    [now.toISOString(), latenessMinutes, schedule.id]
+         status = 'Live',
+         live_link = $3
+     WHERE id = $4`,
+    [now.toISOString(), latenessMinutes, liveLink, schedule.id]
   );
 
   // Tentukan streamer target (pengganti atau asli)
@@ -348,6 +359,33 @@ const handleChannelOffline = async (account) => {
   console.log(`[YouTube Service] ✅ ${nama} selesai live — durasi: ${formatDuration(durationMs / 60000)}`);
 };
 
+// Helper to match streamer by live title
+const findStreamerByLiveTitle = (title, streamers) => {
+  if (!title) return null;
+  const normalizedTitle = title.toLowerCase();
+  
+  // Sort by length desc to match longer names first
+  const sortedStreamers = [...streamers].sort((a, b) => b.nama.length - a.nama.length);
+  
+  for (const streamer of sortedStreamers) {
+    const normalizedName = streamer.nama.toLowerCase();
+    
+    // Check full name
+    if (normalizedTitle.includes(normalizedName)) {
+      return streamer;
+    }
+    
+    // Check parts
+    const parts = normalizedName.split(/\s+/).filter(part => part.length > 2);
+    for (const part of parts) {
+      if (normalizedTitle.includes(part)) {
+        return streamer;
+      }
+    }
+  }
+  return null;
+};
+
 // ── MAIN EXPORT: checkYouTubeLiveStatus ──────────────────────────────────
 /**
  * Dipanggil oleh cron job tiap 1 jam.
@@ -358,125 +396,184 @@ const handleChannelOffline = async (account) => {
 export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.log('[YouTube Service] YOUTUBE_API_KEY belum dikonfigurasi. Deteksi live dilewati.');
-    return;
-  }
+    console.log('[YouTube Service] YOUTUBE_API_KEY belum dikonfigurasi. Deteksi live YouTube dilewati.');
+  } else {
+    // Ambil semua akun YouTube dengan channel_id
+    const accountsRes = await query(
+      `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, s.nama
+       FROM streamer_accounts sa
+       JOIN streamers s ON sa.streamer_id = s.id
+       WHERE sa.platform = 'YouTube'
+         AND sa.channel_id IS NOT NULL
+         AND sa.channel_id <> ''`
+    );
 
-  // Ambil semua akun YouTube dengan channel_id
-  const accountsRes = await query(
-    `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, s.nama
-     FROM streamer_accounts sa
-     JOIN streamers s ON sa.streamer_id = s.id
-     WHERE sa.platform = 'YouTube'
-       AND sa.channel_id IS NOT NULL
-       AND sa.channel_id <> ''`
-  );
+    const accounts = accountsRes.rows;
+    if (accounts.length === 0) {
+      console.log('[YouTube Service] Tidak ada channel YouTube dengan channel_id terdaftar.');
+    } else {
+      console.log(`[YouTube Service] Checking ${accounts.length} YouTube channel(s)...`);
 
-  const accounts = accountsRes.rows;
-  if (accounts.length === 0) {
-    console.log('[YouTube Service] Tidak ada channel YouTube dengan channel_id terdaftar.');
-    return;
-  }
+      // Deduplicate: satu channel_id bisa dipunya 2 streamer
+      // Kita cek per channel_id, lalu tentukan streamer berdasarkan jadwal
+      const uniqueChannels = [...new Map(accounts.map(a => [a.channel_id, a])).values()];
 
-  console.log(`[YouTube Service] Checking ${accounts.length} YouTube channel(s)...`);
+      for (const account of uniqueChannels) {
+        try {
+          const liveInfo = await checkChannelLiveStatus(account.channel_id, apiKey);
 
-  // Deduplicate: satu channel_id bisa dipunya 2 streamer
-  // Kita cek per channel_id, lalu tentukan streamer berdasarkan jadwal
-  const uniqueChannels = [...new Map(accounts.map(a => [a.channel_id, a])).values()];
+          if (liveInfo.isLive) {
+            // Channel sedang live → cari semua streamer yang pakai channel ini
+            const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
 
-  for (const account of uniqueChannels) {
-    try {
-      const liveInfo = await checkChannelLiveStatus(account.channel_id, apiKey);
+            // Cocokkan judul live stream dengan nama streamer yang terdaftar
+            const streamersRes = await query('SELECT id, nama FROM streamers');
+            const matchedStreamer = findStreamerByLiveTitle(liveInfo.title, streamersRes.rows);
 
-      if (liveInfo.isLive) {
-        // Channel sedang live → cari semua streamer yang pakai channel ini
-        const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
-        
-        // Cari streamer mana yang punya jadwal paling dekat sekarang
-        let bestMatch = null;
-        let bestSchedule = null;
+            // Tentukan target account dan substitute jika ada
+            let defaultAcc = null;
+            let substituteStreamerId = null;
+            let bestSchedule = null;
 
-        for (const acc of channelAccounts) {
-          const schedule = await findMatchingSchedule(acc.streamer_id);
-          if (schedule) {
-            if (!bestSchedule || Math.abs(new Date(schedule.start_time) - new Date()) < Math.abs(new Date(bestSchedule.start_time) - new Date())) {
-              bestMatch = acc;
-              bestSchedule = schedule;
+            if (matchedStreamer) {
+              const matchedAcc = channelAccounts.find(a => a.streamer_id === matchedStreamer.id);
+              if (matchedAcc) {
+                // Jika streamer yang terdeteksi dari judul adalah pemilik resmi channel ini, set sebagai defaultAcc langsung
+                defaultAcc = matchedAcc;
+                console.log(`[YouTube Service] Pengecekan judul live: "${liveInfo.title}" cocok dengan pemilik resmi channel: "${matchedStreamer.nama}".`);
+                bestSchedule = await findMatchingSchedule(defaultAcc.streamer_id);
+              } else {
+                // Jika tidak terdaftar sebagai pemilik channel ini, terapkan substitusi (tamu/streamer lain)
+                substituteStreamerId = matchedStreamer.id;
+                defaultAcc = channelAccounts[0]; // fallback ke pemilik utama
+                console.log(`[YouTube Service] Pengecekan judul live: "${liveInfo.title}" cocok dengan streamer pengganti: "${matchedStreamer.nama}". Menerapkan substitusi.`);
+                bestSchedule = await findMatchingSchedule(defaultAcc.streamer_id);
+              }
+            } else {
+              // Jika tidak ada nama yang cocok di judul, cari jadwal terdekat di antara SEMUA pemilik resmi channel ini
+              let bestScheduleDiff = Infinity;
+              for (const acc of channelAccounts) {
+                const schedule = await findMatchingSchedule(acc.streamer_id);
+                if (schedule) {
+                  const diff = Math.abs(new Date(schedule.start_time) - new Date());
+                  if (diff < bestScheduleDiff) {
+                    bestScheduleDiff = diff;
+                    bestSchedule = schedule;
+                    defaultAcc = acc;
+                  }
+                }
+              }
+              // Jika tidak ada jadwal yang cocok sama sekali untuk semua pemilik, fallback ke pemilik pertama
+              if (!defaultAcc) {
+                defaultAcc = channelAccounts[0];
+              }
+            }
+
+            if (bestSchedule) {
+              // Jika jadwal sudah Live, perbarui substitute jika berubah
+              if (bestSchedule.status === 'Live') {
+                if (substituteStreamerId && bestSchedule.substitute_streamer_id !== substituteStreamerId) {
+                  await query(
+                    `UPDATE schedule SET substitute_streamer_id = $1 WHERE id = $2`,
+                    [substituteStreamerId, bestSchedule.id]
+                  );
+                  bestSchedule.substitute_streamer_id = substituteStreamerId;
+                }
+              } else {
+                // Masih Scheduled -> Ubah status ke Live dengan substitute jika ada
+                const now = new Date();
+                const scheduledStart = new Date(bestSchedule.start_time);
+                const diffMs = now.getTime() - scheduledStart.getTime();
+                const latenessMinutes = Math.max(0, Math.floor(diffMs / 60000));
+
+                const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
+                await query(
+                  `UPDATE schedule
+                   SET actual_start_time = $1,
+                       lateness_minutes = $2,
+                       status = 'Live',
+                       substitute_streamer_id = $3,
+                       live_link = $4
+                   WHERE id = $5`,
+                  [now.toISOString(), latenessMinutes, substituteStreamerId, liveLink, bestSchedule.id]
+                );
+              }
+
+              // Panggil handleChannelLive dengan defaultAcc (akan membaca update status/substitute terbaru)
+              await handleChannelLive(defaultAcc, liveInfo, sendNotification);
+            } else {
+              // Live di luar jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
+              if (defaultAcc) {
+                // Cek apakah streamer ini baru saja menyelesaikan jadwal hari ini dalam 2 jam terakhir
+                const targetStreamerId = substituteStreamerId || defaultAcc.streamer_id;
+                const recentCompletion = await query(
+                  `SELECT id FROM schedule
+                   WHERE streamer_id = $1
+                     AND status = 'Completed'
+                     AND actual_end_time >= NOW() - INTERVAL '2 hours'
+                   LIMIT 1`,
+                  [targetStreamerId]
+                );
+
+                if (recentCompletion.rows.length > 0) {
+                  console.log(`[YouTube Service] Streamer ${matchedStreamer ? matchedStreamer.nama : defaultAcc.nama} baru saja menyelesaikan stream dalam 2 jam terakhir. Menolak auto-create schedule ganda.`);
+                  continue;
+                }
+
+                const displayName = matchedStreamer ? matchedStreamer.nama : defaultAcc.nama;
+                console.log(`[YouTube Service] 🔴 Streamer ${displayName} live YouTube di luar jadwal. Membuat schedule instan...`);
+                
+                const now = new Date();
+                const startTime = new Date(now.getTime() - 15 * 60 * 1000); // diasumsikan mulai 15 menit lalu
+                const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);  // estimasi 2 jam lagi
+
+                const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
+                const insertRes = await query(
+                  `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time, substitute_streamer_id, live_link)
+                   VALUES ($1, 'YouTube', $2, $3, 'Live', $4, $5, $6)
+                   RETURNING id`,
+                  [defaultAcc.streamer_id, startTime.toISOString(), endTime.toISOString(), startTime.toISOString(), substituteStreamerId, liveLink]
+                );
+
+                const newScheduleId = insertRes.rows[0].id;
+                await query(
+                  `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
+                   VALUES ($1, $2, 'YouTube', $3)`,
+                  [newScheduleId, targetStreamerId, liveInfo.viewerCount || 0]
+                );
+
+                // Kirim notifikasi Telegram Japri
+                // Dapatkan telegram_chat_id dari target streamer
+                const chatRes = await query('SELECT telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [targetStreamerId]);
+                const targetChatId = chatRes.rows[0]?.telegram_chat_id;
+                const teleUser = chatRes.rows[0]?.telegram_username;
+                const mention = teleUser ? `@${teleUser.trim()}` : `*${displayName}*`;
+                
+                const substituteText = substituteStreamerId ? ` *(menggantikan ${defaultAcc.nama})*` : '';
+                const msg = `🔴 *LIVE YOUTUBE DIMULAI — ${displayName}*${substituteText} (Di Luar Jadwal)\n\n${mention} mulai live di luar jadwal resmi.\n• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n_Sesi ekstra ini tetap dicatat di laporan jam live._`;
+                
+                if (targetChatId) {
+                  await sendNotification(msg, targetChatId);
+                }
+              }
+            }
+          } else {
+            // Channel offline → cek apakah ada sesi yang perlu ditutup
+            const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
+            for (const acc of channelAccounts) {
+              await handleChannelOffline(acc);
             }
           }
-        }
 
-        if (bestMatch) {
-          // Ada jadwal yang cocok -> proses normal
-          await handleChannelLive(bestMatch, liveInfo, sendNotification);
-        } else {
-          // Live di luar jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
-          const defaultAcc = channelAccounts[0]; // ambil streamer utama pemilik channel
-          if (defaultAcc) {
-            // Cek apakah streamer ini baru saja menyelesaikan jadwal hari ini dalam 2 jam terakhir
-            const recentCompletion = await query(
-              `SELECT id FROM schedule
-               WHERE streamer_id = $1
-                 AND status = 'Completed'
-                 AND actual_end_time >= NOW() - INTERVAL '2 hours'
-               LIMIT 1`,
-              [defaultAcc.streamer_id]
-            );
-
-            if (recentCompletion.rows.length > 0) {
-              console.log(`[YouTube Service] Streamer ${defaultAcc.nama} baru saja menyelesaikan stream dalam 2 jam terakhir. Menolak auto-create schedule ganda.`);
-              continue;
-            }
-
-            console.log(`[YouTube Service] 🔴 Streamer ${defaultAcc.nama} live YouTube di luar jadwal. Membuat schedule instan...`);
-            const now = new Date();
-            const startTime = new Date(now.getTime() - 15 * 60 * 1000); // diasumsikan mulai 15 menit lalu
-            const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);  // estimasi 2 jam lagi
-
-            const insertRes = await query(
-              `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time)
-               VALUES ($1, 'YouTube', $2, $3, 'Live', $4)
-               RETURNING id`,
-              [defaultAcc.streamer_id, startTime.toISOString(), endTime.toISOString(), startTime.toISOString()]
-            );
-
-            const newScheduleId = insertRes.rows[0].id;
-            await query(
-              `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
-               VALUES ($1, $2, 'YouTube', $3)`,
-              [newScheduleId, defaultAcc.streamer_id, liveInfo.viewerCount || 0]
-            );
-
-            // Kirim notifikasi Telegram Japri
-            // Dapatkan telegram_chat_id
-            const chatRes = await query('SELECT telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [defaultAcc.streamer_id]);
-            const targetChatId = chatRes.rows[0]?.telegram_chat_id;
-            const teleUser = chatRes.rows[0]?.telegram_username;
-            const mention = teleUser ? `@${teleUser.trim()}` : `*${defaultAcc.nama}*`;
-            
-            const msg = `🔴 *LIVE YOUTUBE DIMULAI — ${defaultAcc.nama}* (Di Luar Jadwal)\n\n${mention} mulai live di luar jadwal resmi.\n• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n_Sesi ekstra ini tetap dicatat di laporan jam live._`;
-            
-            if (targetChatId) {
-              await sendNotification(msg, targetChatId);
-            }
-          }
-        }
-      } else {
-        // Channel offline → cek apakah ada sesi yang perlu ditutup
-        const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
-        for (const acc of channelAccounts) {
-          await handleChannelOffline(acc);
+          // Jeda kecil antar request agar tidak rate-limit
+          await new Promise(r => setTimeout(r, 500));
+        } catch (err) {
+          console.error(`[YouTube Service] Error processing channel ${account.channel_id}:`, err.message);
         }
       }
-
-      // Jeda kecil antar request agar tidak rate-limit
-      await new Promise(r => setTimeout(r, 500));
-    } catch (err) {
-      console.error(`[YouTube Service] Error processing channel ${account.channel_id}:`, err.message);
+      console.log('[YouTube Service] Live status check complete.');
     }
   }
- 
-  console.log('[YouTube Service] Live status check complete.');
  
   // ── NEW: DETEKSI LIVE TIKTOK (Smart HTML Scraping) ────────────────────────
   try {
