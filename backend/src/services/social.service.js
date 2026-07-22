@@ -1,11 +1,16 @@
 import { query } from '../config/db.js';
 
 /**
- * Extracts YouTube Video ID from a URL
+ * Extracts YouTube Video ID from a URL.
+ * Supports: watch?v=, youtu.be/, embed/, and YouTube Shorts (/shorts/).
  */
 const getYoutubeVideoId = (url) => {
   if (!url) return null;
-  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?\s*v=|\&v=)([^#\&\?]*).*/;
+  // YouTube Shorts: https://www.youtube.com/shorts/VIDEO_ID
+  const shortsMatch = url.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+  if (shortsMatch) return shortsMatch[1];
+  // Standard: watch?v=, youtu.be/, embed/
+  const regExp = /^.*(youtu\.be\/|v\/|u\/\w\/|embed\/|watch\?\s*v=|&v=)([^#&?]*).*/;
   const match = url.match(regExp);
   return (match && match[2].length === 11) ? match[2] : null;
 };
@@ -84,7 +89,6 @@ const fetchTikTokVideoMetrics = async (videoUrl) => {
 };
 
 /**
-/**
  * Attempts to resolve secUid from TikWM as a fallback when RapidAPI returns 204.
  * TikWM is free and doesn't require an API key for user info lookups.
  */
@@ -116,7 +120,7 @@ const resolveSecUidFromTikWM = async (cleanUsername) => {
  */
 const fetchTikTokVideosFromTikWM = async (cleanUsername) => {
   try {
-    const url = `https://www.tikwm.com/api/user/posts?unique_id=${cleanUsername}&count=20&cursor=0`;
+    const url = `https://www.tikwm.com/api/user/posts?unique_id=${cleanUsername}&count=30&cursor=0`;
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -167,6 +171,54 @@ const fetchTikTokVideosFromTikWM = async (cleanUsername) => {
     console.warn(`[Social Service]: TikWM posts fetch failed for ${cleanUsername}: ${error.message}`);
   }
   return [];
+};
+
+/**
+ * Fetches real metrics for a specific TikTok video directly via TikWM's video detail API.
+ * More reliable than searching user posts — works for ANY video regardless of age or position.
+ * No API key required. Returns null if not found or request fails.
+ */
+const fetchTikTokVideoMetricsFromTikWM = async (videoUrl) => {
+  try {
+    const encodedUrl = encodeURIComponent(videoUrl);
+    const apiUrl = `https://www.tikwm.com/api/?url=${encodedUrl}`;
+    const res = await fetch(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json, text/plain, */*',
+        'Referer': 'https://www.tikwm.com/'
+      },
+      signal: AbortSignal.timeout(15000)
+    });
+
+    if (!res.ok) {
+      console.warn(`[Social Service]: TikWM video API returned ${res.status} for ${videoUrl}`);
+      return null;
+    }
+
+    const data = await res.json();
+    if (data?.code !== 0 || !data?.data) {
+      console.warn(`[Social Service]: TikWM video API code=${data?.code} for ${videoUrl}`);
+      return null;
+    }
+
+    const v = data.data;
+    const views   = parseInt(v.play_count,    10) || 0;
+    const likes   = parseInt(v.digg_count,    10) || 0;
+    const comments = parseInt(v.comment_count, 10) || 0;
+    const shares  = parseInt(v.share_count,   10) || 0;
+
+    if (views > 0 || likes > 0) {
+      console.log(`[Social Service]: TikWM direct fetch — ${views} views for ${videoUrl}`);
+      return { views, likes, comments, shares };
+    }
+
+    // TikWM returned zero metrics — treat as failure to avoid overwriting real data with zeros
+    console.warn(`[Social Service]: TikWM returned all-zero metrics for ${videoUrl}, skipping`);
+  } catch (error) {
+    console.warn(`[Social Service]: TikWM direct video fetch failed for ${videoUrl}: ${error.message}`);
+  }
+  return null;
 };
 
 /**
@@ -316,11 +368,8 @@ const fetchTikTokRssVideos = async (username, accountLink) => {
 };
 
 /**
- * Main function to sync social media content metrics from all platforms.
- * Uses real API integration if credentials exist, falling back to realistic organic growth.
- */
-/**
  * Scrapes views and likes from a public YouTube video page.
+ * Tries multiple regex patterns to handle YouTube's evolving page structure.
  * Returns null if the watch page cannot be fetched or parsed.
  */
 const scrapeYoutubeWatchPage = async (videoUrl) => {
@@ -331,24 +380,50 @@ const scrapeYoutubeWatchPage = async (videoUrl) => {
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
       },
-      signal: AbortSignal.timeout(6000)
+      signal: AbortSignal.timeout(8000)
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[Social Service Scraper]: YouTube watch page returned ${res.status} for ${videoUrl}`);
+      return null;
+    }
 
     const html = await res.text();
-    const viewMatch = html.match(/"viewCount":"(\d+)"/i);
-    const likeMatch = html.match(/"likeCount":"(\d+)"/i);
-    
-    if (viewMatch) {
+
+    // Pattern 1: Direct viewCount in videoDetails JSON (most reliable)
+    const viewPatterns = [
+      /"videoDetails"[\s\S]{0,500}?"viewCount":"(\d+)"/,
+      /"viewCount":"(\d+)"/,
+      /"views":\{"simpleText":"([\d,]+) views"/
+    ];
+
+    let viewCount = 0;
+    for (const pattern of viewPatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        // Strip commas in case of formatted number
+        viewCount = parseInt(match[1].replace(/,/g, ''), 10) || 0;
+        if (viewCount > 0) break;
+      }
+    }
+
+    // Like count (may be unavailable on some videos)
+    const likeMatch = html.match(/"likeCount":"(\d+)"/) || html.match(/"likes":\{"simpleText":"([\d,]+)"/)
+    const likeCount = likeMatch ? parseInt(likeMatch[1].replace(/,/g, ''), 10) : 0;
+
+    if (viewCount > 0) {
+      console.log(`[Social Service Scraper]: YouTube watch page scraped ${viewCount} views for ${videoId}`);
       return {
-        views: parseInt(viewMatch[1], 10) || 0,
-        likes: likeMatch ? parseInt(likeMatch[1], 10) : 0,
+        views: viewCount,
+        likes: likeCount,
         comments: 0,
         shares: 0
       };
     }
+
+    console.warn(`[Social Service Scraper]: Could not extract viewCount from YouTube page for ${videoId}`);
   } catch (error) {
     console.warn(`[Social Service Scraper]: Failed to scrape YouTube page for ${videoUrl}: ${error.message}`);
   }
@@ -356,15 +431,26 @@ const scrapeYoutubeWatchPage = async (videoUrl) => {
 };
 
 /**
- * Fallback to retrieve TikTok video metrics by querying the user's latest posts via TikWM.
+ * Retrieves real metrics for a TikTok video.
+ * Strategy:
+ *   1. TikWM direct video detail API (best — works for any video by URL, no API key).
+ *   2. Search through user's latest 30 posts via TikWM (fallback for videos not in direct API).
  */
 const scrapeTikTokViaUserPosts = async (videoUrl, accountUsername) => {
+  // Priority 1: Direct TikWM video detail — most reliable, no age/position limit
+  const directMetrics = await fetchTikTokVideoMetricsFromTikWM(videoUrl);
+  if (directMetrics) return directMetrics;
+
+  // Priority 2: Search through user's latest posts as fallback
   let cleanUsername = accountUsername;
   if (!cleanUsername) {
-    const match = videoUrl.match(/@([a-zA-Z0-9_\.]+)/);
+    const match = videoUrl.match(/@([a-zA-Z0-9_.]+)/);
     if (match) cleanUsername = match[1];
   }
-  if (!cleanUsername) return null;
+  if (!cleanUsername) {
+    console.warn(`[Social Service]: Could not determine TikTok username for ${videoUrl}, skipping user-posts fallback`);
+    return null;
+  }
 
   cleanUsername = cleanUsername.replace(/^@/, '');
   try {
@@ -374,13 +460,10 @@ const scrapeTikTokViaUserPosts = async (videoUrl, accountUsername) => {
       const targetVideoId = videoIdMatch[1];
       const matched = videos.find(v => v.link && v.link.includes(targetVideoId));
       if (matched) {
-        return {
-          views: matched.views,
-          likes: matched.likes,
-          comments: matched.comments,
-          shares: matched.shares
-        };
+        console.log(`[Social Service]: Matched video in user posts for ${videoUrl} — ${matched.views} views`);
+        return { views: matched.views, likes: matched.likes, comments: matched.comments, shares: matched.shares };
       }
+      console.warn(`[Social Service]: Video ID ${targetVideoId} not found in latest 30 posts for @${cleanUsername}`);
     }
   } catch (error) {
     console.warn(`[Social Service Scraper]: Failed to get TikTok metrics via user posts for ${videoUrl}: ${error.message}`);
@@ -420,21 +503,22 @@ export const syncSocialMetrics = async () => {
         }
       }
 
-      // 3. Update the database only if real metrics were successfully fetched
+      // 3. Update the database only if real metrics were successfully fetched.
+      // IMPORTANT: Do NOT touch created_at — it is the original record creation timestamp.
       if (metrics) {
         await query(
           `UPDATE content
            SET views = $1,
                likes = $2,
                comments = $3,
-               shares = $4,
-               created_at = NOW()
+               shares = $4
            WHERE id = $5`,
           [metrics.views, metrics.likes, metrics.comments, metrics.shares, row.id]
         );
+        console.log(`[Social Service]: Updated metrics for ID ${row.id} — ${metrics.views} views`);
         updatedCount++;
       } else {
-        console.log(`[Social Service]: Skip updating metrics for ID ${row.id} (${row.title}) - no real data could be fetched`);
+        console.log(`[Social Service]: Skip updating metrics for ID ${row.id} (${row.title}) — no real data could be fetched from the platform`);
       }
     }
 
@@ -550,23 +634,37 @@ export const discoverNewContent = async () => {
             );
 
             if (existsCheck.rows.length === 0) {
-              const initialViews = Math.floor(Math.random() * 50) + 5; // Starter views
-              const initialLikes = Math.floor(initialViews * 0.05);
-
-              await query(
+              // Insert with zero metrics — no fake/random starter values
+              const insertResult = await query(
                 `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, 0, 0, $8)`,
+                 VALUES ($1, $2, $3, $4, $5, 0, 0, 0, 0, $6)
+                 RETURNING id`,
                 [
                   acc.streamer_id,
                   acc.platform,
                   video.title,
                   video.uploadDate,
                   video.link,
-                  initialViews,
-                  initialLikes,
                   acc.id
                 ]
               );
+              const newId = insertResult.rows[0].id;
+
+              // Immediately try to fetch real metrics from YouTube API or scraper
+              let realMetrics = await fetchYoutubeMetrics(video.link);
+              if (!realMetrics) {
+                realMetrics = await scrapeYoutubeWatchPage(video.link);
+              }
+              if (realMetrics) {
+                await query(
+                  `UPDATE content SET views = $1, likes = $2, comments = $3, shares = $4 WHERE id = $5`,
+                  [realMetrics.views, realMetrics.likes, realMetrics.comments, realMetrics.shares, newId]
+                );
+                console.log(`[Social Service]: Fetched real metrics for new video "${video.title}" — ${realMetrics.views} views`);
+              } else {
+                console.log(`[Social Service]: Could not fetch real metrics for "${video.title}" — stored with 0 views (will be updated on next sync)`);
+              }
+
               discoveredCount++;
             }
           }

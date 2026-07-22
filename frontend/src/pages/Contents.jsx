@@ -29,6 +29,8 @@ const Contents = () => {
   // Filter states
   const [searchName, setSearchName] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
+  const [accountFilter, setAccountFilter] = useState('');
+  const [allAccountsList, setAllAccountsList] = useState([]);
   const [sortBy, setSortBy] = useState('upload_date');
 
   // Modal log states
@@ -144,17 +146,20 @@ const Contents = () => {
       const queryParams = new URLSearchParams();
       if (searchName) queryParams.append('streamerName', searchName);
       if (platformFilter) queryParams.append('platform', platformFilter);
+      if (accountFilter) queryParams.append('accountId', accountFilter);
       queryParams.append('sortBy', sortBy);
 
-      const [contentRes, analyticsRes, streamersRes] = await Promise.all([
+      const [contentRes, analyticsRes, streamersRes, accountsRes] = await Promise.all([
         api.get(`/content?${queryParams.toString()}`),
         api.get('/content/analytics'),
-        api.get('/streamers')
+        api.get('/streamers'),
+        api.get('/accounts')
       ]);
 
       setContents(contentRes.data);
       setAnalytics(analyticsRes.data);
       setStreamers(streamersRes.data);
+      setAllAccountsList(accountsRes.data);
 
       if (streamersRes.data.length > 0 && !selectedStreamerId) {
         setSelectedStreamerId(streamersRes.data[0].id);
@@ -172,7 +177,7 @@ const Contents = () => {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchName, platformFilter, sortBy]);
+  }, [searchName, platformFilter, accountFilter, sortBy]);
 
   const handleOpenModal = () => {
     setPlatform('TikTok');
@@ -404,6 +409,19 @@ const Contents = () => {
               <option value="YouTube">YouTube</option>
               <option value="Instagram">Instagram</option>
               <option value="Facebook">Facebook</option>
+            </select>
+
+            <select
+              value={accountFilter}
+              onChange={(e) => setAccountFilter(e.target.value)}
+              className="px-3.5 py-1.5 text-xs rounded-xl border border-dark-border bg-slate-900/60 text-white cursor-pointer focus:outline-none max-w-[200px] truncate"
+            >
+              <option value="">All Accounts</option>
+              {allAccountsList.map((acc) => (
+                <option key={acc.id} value={acc.id}>
+                  {acc.streamer_name} (@{acc.username})
+                </option>
+              ))}
             </select>
 
             <select

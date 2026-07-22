@@ -1,5 +1,21 @@
 import { query } from '../config/db.js';
 
+// GET /api/accounts -> Retrieve all streamer accounts
+export const getAllAccounts = async (req, res) => {
+  try {
+    const result = await query(
+      `SELECT sa.*, s.nama as streamer_name 
+       FROM streamer_accounts sa
+       JOIN streamers s ON sa.streamer_id = s.id
+       ORDER BY s.nama, sa.platform, sa.username`
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching all accounts:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 // GET /api/streamers/:id/accounts -> Retrieve accounts for streamer
 export const getStreamerAccounts = async (req, res) => {
   const { id } = req.params;
