@@ -29,6 +29,7 @@ const Contents = () => {
   // Filter states
   const [searchName, setSearchName] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
+  const [streamerFilter, setStreamerFilter] = useState('');
   const [accountFilter, setAccountFilter] = useState('');
   const [allAccountsList, setAllAccountsList] = useState([]);
   const [sortBy, setSortBy] = useState('upload_date');
@@ -146,6 +147,7 @@ const Contents = () => {
       const queryParams = new URLSearchParams();
       if (searchName) queryParams.append('streamerName', searchName);
       if (platformFilter) queryParams.append('platform', platformFilter);
+      if (streamerFilter) queryParams.append('streamerId', streamerFilter);
       if (accountFilter) queryParams.append('accountId', accountFilter);
       queryParams.append('sortBy', sortBy);
 
@@ -177,7 +179,7 @@ const Contents = () => {
     }, 300);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [searchName, platformFilter, accountFilter, sortBy]);
+  }, [searchName, platformFilter, streamerFilter, accountFilter, sortBy]);
 
   const handleOpenModal = () => {
     setPlatform('TikTok');
@@ -409,6 +411,19 @@ const Contents = () => {
               <option value="YouTube">YouTube</option>
               <option value="Instagram">Instagram</option>
               <option value="Facebook">Facebook</option>
+            </select>
+
+            <select
+              value={streamerFilter}
+              onChange={(e) => setStreamerFilter(e.target.value)}
+              className="px-3.5 py-1.5 text-xs rounded-xl border border-dark-border bg-slate-900/60 text-white cursor-pointer focus:outline-none max-w-[180px] truncate"
+            >
+              <option value="">All Streamers</option>
+              {streamers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.nama}
+                </option>
+              ))}
             </select>
 
             <select

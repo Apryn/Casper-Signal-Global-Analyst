@@ -2,7 +2,7 @@ import { query } from '../config/db.js';
 import { syncSocialMetrics, discoverNewContent } from '../services/social.service.js';
 
 export const getContentList = async (req, res) => {
-  const { platform, streamerName, accountId, sortBy = 'upload_date', sortOrder = 'DESC' } = req.query;
+  const { platform, streamerName, streamerId, accountId, sortBy = 'upload_date', sortOrder = 'DESC' } = req.query;
 
   try {
     let sql = `
@@ -25,6 +25,12 @@ export const getContentList = async (req, res) => {
     if (streamerName) {
       sql += ` AND s.nama ILIKE $${paramIndex}`;
       params.push(`%${streamerName}%`);
+      paramIndex++;
+    }
+
+    if (streamerId) {
+      sql += ` AND c.streamer_id = $${paramIndex}`;
+      params.push(streamerId);
       paramIndex++;
     }
 
