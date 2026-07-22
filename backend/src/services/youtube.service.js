@@ -381,6 +381,14 @@ const findStreamerByLiveTitle = (title, streamers) => {
       if (normalizedTitle.includes(part)) {
         return streamer;
       }
+      
+      // Lenient check: if name ends with double letter (e.g. keylaa -> keyla)
+      if (part.length > 3 && part[part.length - 1] === part[part.length - 2]) {
+        const sliced = part.slice(0, -1);
+        if (normalizedTitle.includes(sliced)) {
+          return streamer;
+        }
+      }
     }
   }
   return null;
