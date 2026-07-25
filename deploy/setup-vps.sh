@@ -161,7 +161,7 @@ echo "✅ Backend berjalan dengan PM2"
 # ── SELESAI ───────────────────────────────────────────────────
 echo ""
 echo "╔══════════════════════════════════════════════════╗"
-echo "║   ✅  SETUP SELESAI!                            ║"
+echo "║   ✅  SETUP SELESAI!                             ║"
 echo "╚══════════════════════════════════════════════════╝"
 echo ""
 if [ -n "$DOMAIN" ]; then
