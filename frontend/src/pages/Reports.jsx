@@ -611,21 +611,19 @@ const Reports = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-900/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                <th className="py-3.5 px-4">Tanggal</th>
-                <th className="py-3.5 px-4">Streamer</th>
-                <th className="py-3.5 px-4 text-center">Status</th>
-                <th className="py-3.5 px-4 text-center">Upload Sosmed</th>
-                <th className="py-3.5 px-4 text-center">Durasi Live</th>
-                <th className="py-3.5 px-4 text-right">Chats</th>
-                <th className="py-3.5 px-4 text-right">Registrasi</th>
-                <th className="py-3.5 px-4 text-center">FTD</th>
-                <th className="py-3.5 px-4 text-center">Aksi</th>
+                <th className="py-3 px-4 w-28">Tanggal</th>
+                <th className="py-3 px-4">Streamer</th>
+                <th className="py-3 px-4 text-center w-28">Status</th>
+                <th className="py-3 px-4 text-center">Upload Konten</th>
+                <th className="py-3 px-4 text-center w-24">Durasi Live</th>
+                <th className="py-3 px-4 text-center w-36">Reg / FTD</th>
+                <th className="py-3 px-4 text-center w-20">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-xs text-slate-300">
+            <tbody className="divide-y divide-slate-800/50 text-xs text-slate-300">
               {loading ? (
                 <tr>
-                  <td colSpan="9" className="py-12 text-center text-indigo-400">
+                  <td colSpan="7" className="py-12 text-center text-indigo-400">
                     <div className="flex justify-center items-center gap-2">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
                       <span>Memuat data laporan harian...</span>
@@ -634,125 +632,125 @@ const Reports = () => {
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="py-12 text-center text-slate-500">
+                  <td colSpan="7" className="py-12 text-center text-slate-500">
                     Tidak ada laporan yang sesuai dengan filter.
                   </td>
                 </tr>
               ) : (
                 reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-900/50 transition-colors group">
-                    {/* Date */}
-                    <td className="py-3.5 px-4 font-mono text-[11px] font-medium text-slate-300">
+                  <tr key={report.id} className="hover:bg-slate-800/30 transition-colors group">
+                    {/* Tanggal */}
+                    <td className="py-3 px-4 font-mono text-[11px] text-slate-400 whitespace-nowrap">
                       {report.tanggal ? report.tanggal.split('T')[0] : '-'}
                     </td>
                     
-                    {/* Name */}
-                    <td className="py-3.5 px-4 font-semibold text-white">
+                    {/* Streamer */}
+                    <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
-                        <span>{report.streamer_name}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-normal border border-slate-700/40">
+                        <span className="font-semibold text-white text-xs">{report.streamer_name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-500 border border-slate-700/40 shrink-0">
                           {report.streamer_platform}
                         </span>
                       </div>
                     </td>
 
-                    {/* Category / Status Badge */}
-                    <td className="py-3.5 px-4 text-center">
+                    {/* Status */}
+                    <td className="py-3 px-4 text-center">
                       {report.kategori === 'Streaming' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                          Streaming
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] font-semibold border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                          Live
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-[11px] font-medium border border-slate-700/50">
-                          <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-slate-800/80 text-slate-500 text-[10px] font-medium border border-slate-700/40">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 shrink-0"></span>
                           Off
                         </span>
                       )}
                     </td>
 
-                    {/* Uploads Compact Breakdown */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-1 text-[11px]">
+                    {/* Upload Konten */}
+                    <td className="py-3 px-4">
+                      <div className="flex items-center justify-center flex-wrap gap-1">
                         {report.tiktok_upload > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 font-mono border border-slate-800" title="TikTok">
-                            TT: <strong className="text-white">{report.tiktok_upload}</strong>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-200 font-mono border border-slate-700/60" title="TikTok">
+                            TT·<strong>{report.tiktok_upload}</strong>
                           </span>
                         )}
                         {report.youtube_upload > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-rose-300 font-mono border border-slate-800" title="YouTube Shorts">
-                            YT: <strong className="text-white">{report.youtube_upload}</strong>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-950/60 text-rose-300 font-mono border border-rose-800/40" title="YouTube Shorts">
+                            YT·<strong>{report.youtube_upload}</strong>
                           </span>
                         )}
                         {report.instagram_upload > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-pink-300 font-mono border border-slate-800" title="Instagram Reels">
-                            IG: <strong className="text-white">{report.instagram_upload}</strong>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-pink-950/60 text-pink-300 font-mono border border-pink-800/40" title="Instagram Reels">
+                            IG·<strong>{report.instagram_upload}</strong>
                           </span>
                         )}
                         {report.facebook_upload > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-blue-300 font-mono border border-slate-800" title="Facebook FP">
-                            FB: <strong className="text-white">{report.facebook_upload}</strong>
+                          <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-950/60 text-blue-300 font-mono border border-blue-800/40" title="Facebook FP">
+                            FB·<strong>{report.facebook_upload}</strong>
                           </span>
                         )}
                         {(!report.tiktok_upload && !report.youtube_upload && !report.instagram_upload && !report.facebook_upload) && (
-                          <span className="text-slate-600 font-normal">-</span>
+                          <span className="text-slate-700 text-[11px]">—</span>
                         )}
                       </div>
                     </td>
 
-                    {/* Live Hours */}
-                    <td className="py-3.5 px-4 text-center">
+                    {/* Durasi Live */}
+                    <td className="py-3 px-4 text-center">
                       {parseFloat(report.live_duration) > 0 ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 font-bold font-mono text-[11px] border border-purple-500/20">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-300 font-bold font-mono text-[11px] border border-violet-500/20">
                           {report.live_duration}h
                         </span>
                       ) : (
-                        <span className="text-slate-600 font-normal">-</span>
+                        <span className="text-slate-700">—</span>
                       )}
                     </td>
 
-                    {/* Engagement Counts */}
-                    <td className="py-3.5 px-4 text-right font-mono font-medium text-slate-300">
-                      {report.chat_count > 0 ? report.chat_count.toLocaleString() : <span className="text-slate-600 font-normal">-</span>}
-                    </td>
-                    
-                    {/* Registrations */}
-                    <td className="py-3.5 px-4 text-right">
-                      {report.registration_count > 0 ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 font-bold font-mono text-[11px] border border-indigo-500/20">
-                          {report.registration_count}
-                        </span>
-                      ) : (
-                        <span className="text-slate-600 font-normal">-</span>
-                      )}
-                    </td>
-
-                    {/* FTD Badge */}
-                    <td className="py-3.5 px-4 text-center">
-                      {report.ftd_count > 0 ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold font-mono text-[12px] shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                          ✨ {report.ftd_count}
-                        </span>
-                      ) : (
-                        <span className="text-slate-600 font-normal">-</span>
-                      )}
+                    {/* Reg / FTD - merged konversi column */}
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {/* Registrasi */}
+                        {report.registration_count > 0 ? (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono text-[10px] border border-slate-700/50" title={`${report.chat_count} chats → ${report.registration_count} reg`}>
+                            <span className="text-slate-500 font-normal">Reg</span>
+                            <span className="font-bold text-indigo-300 ml-0.5">{report.registration_count}</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded bg-slate-900 text-slate-700 font-mono text-[10px] border border-slate-800">
+                            <span className="font-normal">Reg</span>
+                            <span className="ml-0.5">0</span>
+                          </span>
+                        )}
+                        {/* FTD */}
+                        {report.ftd_count > 0 ? (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold font-mono text-[10px] shadow-[0_0_8px_rgba(245,158,11,0.15)]" title="First Time Deposit">
+                            FTD <strong>{report.ftd_count}</strong>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-slate-900 text-slate-700 font-mono text-[10px] border border-slate-800" title="No FTD">
+                            FTD 0
+                          </span>
+                        )}
+                      </div>
                     </td>
 
                     {/* Actions */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1.5">
                         <button
                           onClick={() => handleEditClick(report)}
-                          className="p-1.5 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-300 transition-all"
+                          className="p-1.5 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-500 hover:text-indigo-300 transition-all"
                           title="Edit Laporan"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
-                        
                         {isAdmin && (
                           <button
                             onClick={() => handleDelete(report.id)}
-                            className="p-1.5 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all"
+                            className="p-1.5 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-500 hover:text-red-400 transition-all"
                             title="Hapus Laporan"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
