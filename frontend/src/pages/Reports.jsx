@@ -380,34 +380,39 @@ const Reports = () => {
       {/* Page Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-wide">Daily Recaps Ledger</h2>
-          <p className="text-sm text-gray-400">Search, filter, edit, and export structured daily streamer reports.</p>
+          <h2 className="text-2xl font-bold text-white tracking-wide flex items-center gap-2">
+            <span>Daily Recaps Ledger</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {reports.length} Records
+            </span>
+          </h2>
+          <p className="text-sm text-slate-400">Monitoring & audit log performa harian streamer, live streaming, dan konversi FTD.</p>
         </div>
         
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <button
             onClick={handleExportPdf}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/10 active:translate-y-px transition-all duration-200"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600/90 hover:bg-rose-500 text-white shadow-md transition-all duration-200 active:scale-95"
           >
-            <Download className="h-4.5 w-4.5" />
-            Export to PDF
+            <Download className="h-4 w-4" />
+            Export PDF
           </button>
 
           <button
             onClick={handleExportExcel}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 active:translate-y-px transition-all duration-200"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600/90 hover:bg-emerald-500 text-white shadow-md transition-all duration-200 active:scale-95"
           >
-            <Download className="h-4.5 w-4.5" />
-            Export to Excel
+            <Download className="h-4 w-4" />
+            Export Excel
           </button>
 
           <button
             onClick={handleSendTelegramReminder}
             disabled={telegramSending}
-            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-lg transition-all duration-200 active:translate-y-px ${
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-md transition-all duration-200 active:scale-95 ${
               telegramSending 
                 ? 'bg-sky-700/50 cursor-not-allowed opacity-75' 
-                : 'bg-sky-600 hover:bg-sky-500 shadow-sky-600/10'
+                : 'bg-sky-600 hover:bg-sky-500'
             }`}
           >
             {telegramSending ? (
@@ -418,17 +423,17 @@ const Reports = () => {
             ) : (
               <>
                 <Send className="h-4 w-4" />
-                Kirim Pengingat Telegram
+                Pengingat Telegram
               </>
             )}
           </button>
 
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all duration-200 active:scale-95"
           >
-            <Plus className="h-4.5 w-4.5" />
-            Tambah Laporan Baru
+            <Plus className="h-4 w-4" />
+            Tambah Laporan
           </button>
         </div>
       </div>
@@ -456,54 +461,144 @@ const Reports = () => {
         </div>
       )}
 
+      {/* Stat Cards Overview Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Total Reports */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Laporan</p>
+              <h3 className="text-2xl font-bold text-white mt-1">{reports.length} <span className="text-xs text-slate-500 font-normal">rekap</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+              <Tv className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20">
+              {reports.filter(r => r.kategori === 'Streaming').length} Streaming
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700/50">
+              {reports.filter(r => r.kategori === 'Non Streaming').length} Off
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Total Live Hours */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Jam Live</p>
+              <h3 className="text-2xl font-bold text-purple-300 mt-1">{totalLive.toFixed(1)} <span className="text-xs text-slate-500 font-normal">Jam</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+              <Video className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-purple-300/80 font-medium">
+            Akumulasi durasi tayang live streamer
+          </div>
+        </div>
+
+        {/* Card 3: Total Registrations & Chats */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Registrasi & Chat</p>
+              <h3 className="text-2xl font-bold text-indigo-300 mt-1">{totalRegs.toLocaleString()} <span className="text-xs text-slate-500 font-normal">Regs</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+              <UserCheck className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-slate-400 flex items-center justify-between">
+            <span>Total Chat Masuk:</span>
+            <span className="font-semibold text-slate-200">{totalChats.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Card 4: Total FTD */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 shadow-lg relative overflow-hidden group hover:border-amber-400/50 transition-all">
+          <div className="flex justify-between items-start">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-400/90">Total FTD (Deposit Baru)</p>
+              <h3 className="text-3xl font-extrabold text-amber-400 mt-1 tracking-tight drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+                {totalFtds.toLocaleString()} <span className="text-xs text-amber-300 font-normal">FTD</span>
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shadow-inner">
+              <Coins className="h-6 w-6" />
+            </div>
+          </div>
+          <div className="mt-3 text-xs text-amber-400/90 font-semibold flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+            Puncak pencapaian konversi
+          </div>
+        </div>
+      </div>
+
       {/* Filter Control Bar */}
-      <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+      <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-950/40 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
         
         {/* Name Search */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">Streamer Name</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Cari Streamer</label>
           <div className="relative">
-            <Search className="absolute inset-y-0 left-0 pl-3.5 h-full w-4.5 text-gray-500 flex items-center pointer-events-none" />
+            <Search className="absolute inset-y-0 left-0 pl-3 h-full w-4 text-slate-500 flex items-center pointer-events-none" />
             <input
               type="text"
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
-              placeholder="Search by name..."
-              className="block w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+              placeholder="Nama streamer..."
+              className="block w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
             />
           </div>
         </div>
 
         {/* Start Date */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">Start Date</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Mulai Tanggal</label>
           <div className="relative">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-3.5 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
             />
           </div>
         </div>
 
         {/* End Date */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">End Date</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Sampai Tanggal</label>
           <div className="relative">
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full px-3.5 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
             />
           </div>
+        </div>
+
+        {/* Category Filter */}
+        <div className="space-y-1.5">
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Kategori Status</label>
+          <select
+            value={kategori}
+            onChange={(e) => setKategori(e.target.value)}
+            className="block w-full px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+          >
+            <option value="">Semua Kategori</option>
+            <option value="Streaming">Streaming Only</option>
+            <option value="Non Streaming">Non Streaming Only</option>
+          </select>
         </div>
 
         {/* Reset button */}
         <button
           onClick={handleResetFilters}
-          className="w-full py-2 px-4 rounded-xl border border-dark-border hover:bg-slate-950 text-sm font-semibold text-gray-300 hover:text-white transition-colors h-10"
+          className="w-full py-2 px-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-colors h-9"
         >
           Reset Filters
         </button>
@@ -511,77 +606,145 @@ const Reports = () => {
       </div>
 
       {/* Main Table */}
-      <div className="glass-panel rounded-2xl border bg-slate-950/20 overflow-hidden shadow-xl">
+      <div className="glass-panel rounded-2xl border border-slate-800 bg-slate-950/40 overflow-hidden shadow-2xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-dark-border bg-slate-950/50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                <th className="py-4.5 px-6">Tanggal</th>
-                <th className="py-4.5 px-4">Nama</th>
-                <th className="py-4.5 px-4 text-center">TikTok</th>
-                <th className="py-4.5 px-4 text-center">Youtube</th>
-                <th className="py-4.5 px-4 text-center">Instagram</th>
-                <th className="py-4.5 px-4 text-center">Facebook</th>
-                <th className="py-4.5 px-4 text-center">Live</th>
-                <th className="py-4.5 px-4 text-right">Chats</th>
-                <th className="py-4.5 px-4 text-right">Regs</th>
-                <th className="py-4.5 px-4 text-right">FTD</th>
-                <th className="py-4.5 px-6 text-center">Actions</th>
+              <tr className="border-b border-slate-800 bg-slate-900/80 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                <th className="py-3.5 px-4">Tanggal</th>
+                <th className="py-3.5 px-4">Streamer</th>
+                <th className="py-3.5 px-4 text-center">Status</th>
+                <th className="py-3.5 px-4 text-center">Upload Sosmed</th>
+                <th className="py-3.5 px-4 text-center">Durasi Live</th>
+                <th className="py-3.5 px-4 text-right">Chats</th>
+                <th className="py-3.5 px-4 text-right">Registrasi</th>
+                <th className="py-3.5 px-4 text-center">FTD</th>
+                <th className="py-3.5 px-4 text-center">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-dark-border/40 text-sm text-gray-300">
+            <tbody className="divide-y divide-slate-800/60 text-xs text-slate-300">
               {loading ? (
                 <tr>
-                  <td colSpan="11" className="py-12 text-center text-indigo-400">
+                  <td colSpan="9" className="py-12 text-center text-indigo-400">
                     <div className="flex justify-center items-center gap-2">
                       <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
-                      <span>Updating reports ledger...</span>
+                      <span>Memuat data laporan harian...</span>
                     </div>
                   </td>
                 </tr>
               ) : reports.length === 0 ? (
                 <tr>
-                  <td colSpan="11" className="py-12 text-center text-gray-500">
-                    No reports match selected filters.
+                  <td colSpan="9" className="py-12 text-center text-slate-500">
+                    Tidak ada laporan yang sesuai dengan filter.
                   </td>
                 </tr>
               ) : (
                 reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-900/25 transition-colors group">
+                  <tr key={report.id} className="hover:bg-slate-900/50 transition-colors group">
                     {/* Date */}
-                    <td className="py-4 px-6 text-xs font-mono font-medium text-white">
+                    <td className="py-3.5 px-4 font-mono text-[11px] font-medium text-slate-300">
                       {report.tanggal ? report.tanggal.split('T')[0] : '-'}
                     </td>
                     
                     {/* Name */}
-                    <td className="py-4 px-4 font-semibold text-white">
-                      {report.streamer_name}
-                      <span className="block text-[10px] text-gray-400 font-normal">{report.streamer_platform}</span>
+                    <td className="py-3.5 px-4 font-semibold text-white">
+                      <div className="flex items-center gap-2">
+                        <span>{report.streamer_name}</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-normal border border-slate-700/40">
+                          {report.streamer_platform}
+                        </span>
+                      </div>
                     </td>
 
-                    {/* Uploads Breakdown */}
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.tiktok_upload || '-'}</td>
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.youtube_upload || '-'}</td>
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.instagram_upload || '-'}</td>
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.facebook_upload || '-'}</td>
+                    {/* Category / Status Badge */}
+                    <td className="py-3.5 px-4 text-center">
+                      {report.kategori === 'Streaming' ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[11px] font-semibold border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                          Streaming
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-[11px] font-medium border border-slate-700/50">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                          Off
+                        </span>
+                      )}
+                    </td>
+
+                    {/* Uploads Compact Breakdown */}
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="flex items-center justify-center gap-1 text-[11px]">
+                        {report.tiktok_upload > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 font-mono border border-slate-800" title="TikTok">
+                            TT: <strong className="text-white">{report.tiktok_upload}</strong>
+                          </span>
+                        )}
+                        {report.youtube_upload > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-rose-300 font-mono border border-slate-800" title="YouTube Shorts">
+                            YT: <strong className="text-white">{report.youtube_upload}</strong>
+                          </span>
+                        )}
+                        {report.instagram_upload > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-pink-300 font-mono border border-slate-800" title="Instagram Reels">
+                            IG: <strong className="text-white">{report.instagram_upload}</strong>
+                          </span>
+                        )}
+                        {report.facebook_upload > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-slate-900 text-blue-300 font-mono border border-slate-800" title="Facebook FP">
+                            FB: <strong className="text-white">{report.facebook_upload}</strong>
+                          </span>
+                        )}
+                        {(!report.tiktok_upload && !report.youtube_upload && !report.instagram_upload && !report.facebook_upload) && (
+                          <span className="text-slate-600 font-normal">-</span>
+                        )}
+                      </div>
+                    </td>
 
                     {/* Live Hours */}
-                    <td className="py-4 px-4 text-center font-mono font-bold text-indigo-400">
-                      {report.live_duration > 0 ? `${report.live_duration}h` : '-'}
+                    <td className="py-3.5 px-4 text-center">
+                      {parseFloat(report.live_duration) > 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-300 font-bold font-mono text-[11px] border border-purple-500/20">
+                          {report.live_duration}h
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 font-normal">-</span>
+                      )}
                     </td>
 
                     {/* Engagement Counts */}
-                    <td className="py-4 px-4 text-right font-mono font-medium">{report.chat_count.toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-amber-500">{report.registration_count}</td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-emerald-400">{report.ftd_count}</td>
+                    <td className="py-3.5 px-4 text-right font-mono font-medium text-slate-300">
+                      {report.chat_count > 0 ? report.chat_count.toLocaleString() : <span className="text-slate-600 font-normal">-</span>}
+                    </td>
+                    
+                    {/* Registrations */}
+                    <td className="py-3.5 px-4 text-right">
+                      {report.registration_count > 0 ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-300 font-bold font-mono text-[11px] border border-indigo-500/20">
+                          {report.registration_count}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 font-normal">-</span>
+                      )}
+                    </td>
+
+                    {/* FTD Badge */}
+                    <td className="py-3.5 px-4 text-center">
+                      {report.ftd_count > 0 ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 font-extrabold font-mono text-[12px] shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                          ✨ {report.ftd_count}
+                        </span>
+                      ) : (
+                        <span className="text-slate-600 font-normal">-</span>
+                      )}
+                    </td>
 
                     {/* Actions */}
-                    <td className="py-4 px-6 text-center">
-                      <div className="flex items-center justify-center gap-2.5">
+                    <td className="py-3.5 px-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
                         <button
                           onClick={() => handleEditClick(report)}
-                          className="p-1.5 rounded-lg border border-dark-border hover:border-indigo-500/40 hover:bg-indigo-500/10 text-gray-400 hover:text-indigo-400 transition-all duration-200"
-                          title="Edit Report"
+                          className="p-1.5 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-300 transition-all"
+                          title="Edit Laporan"
                         >
                           <Edit2 className="h-3.5 w-3.5" />
                         </button>
@@ -589,36 +752,18 @@ const Reports = () => {
                         {isAdmin && (
                           <button
                             onClick={() => handleDelete(report.id)}
-                            className="p-1.5 rounded-lg border border-dark-border hover:border-red-500/40 hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all duration-200"
-                            title="Delete Report"
+                            className="p-1.5 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-all"
+                            title="Hapus Laporan"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
                       </div>
                     </td>
-
                   </tr>
                 ))
               )}
             </tbody>
-            {reports.length > 0 && !loading && (
-              <tfoot className="border-t-2 border-dark-border bg-slate-950/80 text-xs font-bold text-white uppercase">
-                <tr className="bg-slate-950/60">
-                  <td className="py-4 px-6 text-gray-400">Total</td>
-                  <td className="py-4 px-4 text-gray-400">({reports.length} Laporan)</td>
-                  <td className="py-4 px-4 text-center">{totalTiktok}</td>
-                  <td className="py-4 px-4 text-center">{totalYoutube}</td>
-                  <td className="py-4 px-4 text-center">{totalInstagram}</td>
-                  <td className="py-4 px-4 text-center">{totalFacebook}</td>
-                  <td className="py-4 px-4 text-center text-indigo-400 font-mono">{totalLive.toFixed(1)}h</td>
-                  <td className="py-4 px-4 text-right font-mono">{totalChats.toLocaleString()}</td>
-                  <td className="py-4 px-4 text-right font-mono text-amber-500">{totalRegs}</td>
-                  <td className="py-4 px-4 text-right font-mono text-emerald-400">{totalFtds}</td>
-                  <td className="py-4 px-6 text-center"></td>
-                </tr>
-              </tfoot>
-            )}
           </table>
         </div>
       </div>
