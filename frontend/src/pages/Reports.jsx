@@ -605,9 +605,9 @@ const Reports = () => {
 
       </div>
 
-      {/* ========== CARD VIEW - Grouped by Date ========== */}
+      {/* ========== CARD VIEW - Grouped by Date (All Streamers Included) ========== */}
       {(() => {
-        const MIN_LIVE_HOURS = 2; // Target minimum jam live per hari
+        const MIN_LIVE_HOURS = 4; // Target minimum jam live per hari (4 Jam)
 
         // Group reports by date, sort dates descending
         const groupedByDate = reports.reduce((groups, report) => {
@@ -620,6 +620,19 @@ const Reports = () => {
 
         // Work status helper
         const getWorkStatus = (report) => {
+          if (!report || report.isMissing) {
+            return {
+              icon: '❌',
+              label: 'Belum Bekerja / Absen',
+              sub: 'Belum mengirim rekap Telegram',
+              bgColor: 'bg-rose-950/20',
+              borderColor: 'border-rose-900/50',
+              textColor: 'text-rose-400',
+              dotColor: 'bg-rose-500',
+              isAbsen: true
+            };
+          }
+
           const isStreaming = report.kategori === 'Streaming';
           const liveHours = parseFloat(report.live_duration || 0);
           const liveMet = liveHours >= MIN_LIVE_HOURS;
@@ -628,9 +641,9 @@ const Reports = () => {
             return {
               icon: '📴',
               label: 'Non-Streaming',
-              sub: 'Hari tidak live',
-              bgColor: 'bg-slate-800/60',
-              borderColor: 'border-slate-700/40',
+              sub: 'Hari tidak live (Izin/Off)',
+              bgColor: 'bg-slate-900/60',
+              borderColor: 'border-slate-800',
               textColor: 'text-slate-400',
               dotColor: 'bg-slate-500',
             };
@@ -639,19 +652,19 @@ const Reports = () => {
             return {
               icon: '✅',
               label: 'Sudah Bekerja',
-              sub: `Rekap ✓ · Live ${liveHours.toFixed(1)}h/${MIN_LIVE_HOURS}h ✓`,
-              bgColor: 'bg-emerald-950/40',
-              borderColor: 'border-emerald-700/30',
+              sub: `Rekap ✓ · Live ${liveHours.toFixed(1)}h / ${MIN_LIVE_HOURS}h ✓`,
+              bgColor: 'bg-emerald-950/30',
+              borderColor: 'border-emerald-700/40',
               textColor: 'text-emerald-400',
               dotColor: 'bg-emerald-400',
             };
           }
           return {
             icon: '⚠️',
-            label: 'Live Kurang',
-            sub: `Rekap ✓ · Live ${liveHours.toFixed(1)}h/${MIN_LIVE_HOURS}h`,
+            label: 'Live Kurang (< 4 Jam)',
+            sub: `Rekap ✓ · Live ${liveHours.toFixed(1)}h / ${MIN_LIVE_HOURS}h`,
             bgColor: 'bg-amber-950/30',
-            borderColor: 'border-amber-700/30',
+            borderColor: 'border-amber-700/40',
             textColor: 'text-amber-400',
             dotColor: 'bg-amber-400',
           };
@@ -672,7 +685,7 @@ const Reports = () => {
           );
         }
 
-        if (reports.length === 0) {
+        if (reports.length === 0 && streamers.length === 0) {
           return (
             <div className="py-20 text-center text-slate-500 text-sm">
               Tidak ada laporan yang sesuai dengan filter.
@@ -683,11 +696,42 @@ const Reports = () => {
         return (
           <div className="space-y-6">
             {sortedDates.map((date) => {
-              const dayReports = groupedByDate[date];
+              const dayReports = groupedByDate[date] || [];
+              const reportStreamerNames = new Set(dayReports.map(r => r.streamer_name ? r.streamer_name.toLowerCase().trim() : ''));
+
+              // Find registered streamers who HAVEN'T submitted a report for this date
+              const missingStreamers = streamers.filter(s => {
+                if (searchName && !s.nama.toLowerCase().includes(searchName.toLowerCase())) return false;
+                return !reportStreamerNames.has(s.nama.toLowerCase().trim());
+              });
+
+              // Combine reported + missing streamers for complete overview
+              const allCardsForDay = [
+                ...dayReports,
+                ...missingStreamers.map(s => ({
+                  id: `missing-${s.id}-${date}`,
+                  isMissing: true,
+                  streamer_name: s.nama,
+                  streamer_platform: s.platform || 'TikTok',
+                  tanggal: date,
+                  kategori: 'Absen',
+                  live_duration: 0,
+                  chat_count: 0,
+                  registration_count: 0,
+                  ftd_count: 0,
+                  tiktok_upload: 0,
+                  youtube_upload: 0,
+                  instagram_upload: 0,
+                  facebook_upload: 0
+                }))
+              ];
+
               const dayFtds = dayReports.reduce((s, r) => s + (r.ftd_count || 0), 0);
               const dayRegs = dayReports.reduce((s, r) => s + (r.registration_count || 0), 0);
+              const dayChats = dayReports.reduce((s, r) => s + (r.chat_count || 0), 0);
               const dayLive = dayReports.reduce((s, r) => s + parseFloat(r.live_duration || 0), 0);
-              const doneCount = dayReports.filter(r => {
+              
+              const workedCount = dayReports.filter(r => {
                 const isStreaming = r.kategori === 'Streaming';
                 const liveMet = parseFloat(r.live_duration || 0) >= MIN_LIVE_HOURS;
                 return !isStreaming || liveMet;
@@ -700,15 +744,23 @@ const Reports = () => {
                     <div className="flex items-center gap-3">
                       <div className="flex flex-col">
                         <span className="text-xs font-bold text-white tracking-wide">{formatDate(date)}</span>
-                        <span className="text-[11px] text-slate-500">{dayReports.length} streamer melapor</span>
+                        <span className="text-[11px] text-slate-400">
+                          {dayReports.length} melapor &bull; <strong className="text-rose-400">{missingStreamers.length} belum melapor/absen</strong>
+                        </span>
                       </div>
                       <div className="h-px flex-1 min-w-8 bg-slate-800"></div>
                     </div>
+
                     {/* Day Summary Pills */}
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/50 font-mono">
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/50 font-mono">
                         ⏱ {dayLive.toFixed(1)}h live
                       </span>
+                      {dayChats > 0 && (
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/50 font-mono">
+                          💬 {dayChats.toLocaleString()} chat
+                        </span>
+                      )}
                       {dayRegs > 0 && (
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono">
                           👤 {dayRegs} reg
@@ -724,22 +776,23 @@ const Reports = () => {
                         </span>
                       )}
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                        {doneCount}/{dayReports.length} selesai
+                        {workedCount}/{allCardsForDay.length} memenuhi SOP (4h)
                       </span>
                     </div>
                   </div>
 
                   {/* Streamer Cards Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {dayReports.map((report) => {
+                    {allCardsForDay.map((report) => {
                       const status = getWorkStatus(report);
                       const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
+
                       return (
                         <div
                           key={report.id}
                           className={`relative rounded-xl border ${status.borderColor} ${status.bgColor} p-4 transition-all hover:scale-[1.01] hover:shadow-lg`}
                         >
-                          {/* Card Top: Streamer Name + Action */}
+                          {/* Card Top: Streamer Name + Platform + Action */}
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
                               {/* Status dot */}
@@ -749,51 +802,67 @@ const Reports = () => {
                                 <p className="text-[10px] text-slate-500 mt-0.5">{report.streamer_platform}</p>
                               </div>
                             </div>
-                            <button
-                              onClick={() => handleEditClick(report)}
-                              className="p-1 rounded-lg border border-slate-700/40 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-slate-600 hover:text-indigo-300 transition-all shrink-0"
-                              title="Edit"
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </button>
+                            {!report.isMissing && (
+                              <button
+                                onClick={() => handleEditClick(report)}
+                                className="p-1 rounded-lg border border-slate-700/40 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-slate-500 hover:text-indigo-300 transition-all shrink-0"
+                                title="Edit Laporan"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                            )}
                           </div>
 
                           {/* Work Status Banner */}
-                          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-3 border ${status.borderColor} bg-black/20`}>
+                          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-3 border ${status.borderColor} bg-black/30`}>
                             <span className="text-xs">{status.icon}</span>
                             <div className="min-w-0">
                               <p className={`text-[11px] font-bold ${status.textColor} leading-tight`}>{status.label}</p>
-                              <p className="text-[10px] text-slate-500 leading-tight truncate">{status.sub}</p>
+                              <p className="text-[10px] text-slate-400 leading-tight truncate">{status.sub}</p>
                             </div>
                           </div>
 
-                          {/* Metrics Grid */}
-                          <div className="grid grid-cols-3 gap-2 mb-3">
+                          {/* Metrics Grid (Live, Chat, Reg, FTD) */}
+                          <div className="grid grid-cols-4 gap-1 text-center bg-slate-950/50 p-2 rounded-lg border border-slate-800/50 mb-3">
                             {/* Live Duration */}
-                            <div className="text-center">
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Live</p>
-                              {parseFloat(report.live_duration) > 0 ? (
-                                <p className="text-xs font-bold text-violet-300 font-mono">{report.live_duration}h</p>
+                            <div>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Live</p>
+                              {!report.isMissing && parseFloat(report.live_duration) > 0 ? (
+                                <p className={`text-xs font-bold font-mono ${parseFloat(report.live_duration) >= MIN_LIVE_HOURS ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                  {report.live_duration}h
+                                </p>
                               ) : (
-                                <p className="text-xs text-slate-600">—</p>
+                                <p className="text-xs text-slate-600 font-mono">—</p>
                               )}
                             </div>
+
+                            {/* Chat Count */}
+                            <div>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Chat</p>
+                              {!report.isMissing && report.chat_count > 0 ? (
+                                <p className="text-xs font-bold text-slate-200 font-mono">{report.chat_count.toLocaleString()}</p>
+                              ) : (
+                                <p className="text-xs text-slate-600 font-mono">—</p>
+                              )}
+                            </div>
+
                             {/* Registrasi */}
-                            <div className="text-center">
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">Reg</p>
-                              {report.registration_count > 0 ? (
+                            <div>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Reg</p>
+                              {!report.isMissing && report.registration_count > 0 ? (
                                 <p className="text-xs font-bold text-indigo-300 font-mono">{report.registration_count}</p>
                               ) : (
-                                <p className="text-xs text-slate-600">—</p>
+                                <p className="text-xs text-slate-600 font-mono">—</p>
                               )}
                             </div>
+
                             {/* FTD */}
-                            <div className="text-center">
-                              <p className="text-[9px] text-slate-500 uppercase tracking-wider mb-0.5">FTD</p>
-                              {report.ftd_count > 0 ? (
-                                <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_4px_rgba(245,158,11,0.4)]">{report.ftd_count}</p>
+                            <div>
+                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">FTD</p>
+                              {!report.isMissing && report.ftd_count > 0 ? (
+                                <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">{report.ftd_count}</p>
                               ) : (
-                                <p className="text-xs text-slate-600">—</p>
+                                <p className="text-xs text-slate-600 font-mono">—</p>
                               )}
                             </div>
                           </div>
@@ -815,17 +884,19 @@ const Reports = () => {
                               )}
                             </div>
                           ) : (
-                            <div className="border-t border-slate-800/60 pt-2.5">
-                              <span className="text-[10px] text-slate-700">Tidak ada upload konten</span>
+                            <div className="border-t border-slate-800/60 pt-2 text-center">
+                              <span className="text-[10px] text-slate-600 font-medium">
+                                {report.isMissing ? '❌ Belum ada laporan' : 'Tidak ada upload konten'}
+                              </span>
                             </div>
                           )}
 
                           {/* Delete button for admin */}
-                          {isAdmin && (
+                          {isAdmin && !report.isMissing && (
                             <button
                               onClick={() => handleDelete(report.id)}
                               className="absolute top-3 right-8 p-1 rounded text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                              title="Hapus"
+                              title="Hapus Laporan"
                             >
                               <Trash2 className="h-3 w-3" />
                             </button>
@@ -840,6 +911,7 @@ const Reports = () => {
           </div>
         );
       })()}
+
 
       {/* Edit Report Modal */}
       {editModalOpen && editingReport && (
