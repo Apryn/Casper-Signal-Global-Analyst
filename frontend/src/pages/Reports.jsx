@@ -605,9 +605,9 @@ const Reports = () => {
 
       </div>
 
-      {/* ========== CARD VIEW - Grouped by Date (All Streamers Included) ========== */}
+      {/* ========== CARD VIEW - Grouped by Date (Clean Executive Layout) ========== */}
       {(() => {
-        const MIN_LIVE_HOURS = 4; // Target minimum jam live per hari (4 Jam)
+        const MIN_LIVE_HOURS = 4; // Target minimum jam live per hari (4 Jam SOP)
 
         // Group reports by date, sort dates descending
         const groupedByDate = reports.reduce((groups, report) => {
@@ -617,58 +617,6 @@ const Reports = () => {
           return groups;
         }, {});
         const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
-
-        // Work status helper
-        const getWorkStatus = (report) => {
-          if (!report || report.isMissing) {
-            return {
-              icon: '❌',
-              label: 'Belum Bekerja / Absen',
-              sub: 'Belum mengirim rekap Telegram',
-              bgColor: 'bg-rose-950/20',
-              borderColor: 'border-rose-900/50',
-              textColor: 'text-rose-400',
-              dotColor: 'bg-rose-500',
-              isAbsen: true
-            };
-          }
-
-          const isStreaming = report.kategori === 'Streaming';
-          const liveHours = parseFloat(report.live_duration || 0);
-          const liveMet = liveHours >= MIN_LIVE_HOURS;
-
-          if (!isStreaming) {
-            return {
-              icon: '📴',
-              label: 'Non-Streaming',
-              sub: 'Hari tidak live (Izin/Off)',
-              bgColor: 'bg-slate-900/60',
-              borderColor: 'border-slate-800',
-              textColor: 'text-slate-400',
-              dotColor: 'bg-slate-500',
-            };
-          }
-          if (liveMet) {
-            return {
-              icon: '✅',
-              label: 'Sudah Bekerja',
-              sub: `Rekap ✓ · Live ${liveHours.toFixed(1)}h / ${MIN_LIVE_HOURS}h ✓`,
-              bgColor: 'bg-emerald-950/30',
-              borderColor: 'border-emerald-700/40',
-              textColor: 'text-emerald-400',
-              dotColor: 'bg-emerald-400',
-            };
-          }
-          return {
-            icon: '⚠️',
-            label: 'Live Kurang (< 4 Jam)',
-            sub: `Rekap ✓ · Live ${liveHours.toFixed(1)}h / ${MIN_LIVE_HOURS}h`,
-            bgColor: 'bg-amber-950/30',
-            borderColor: 'border-amber-700/40',
-            textColor: 'text-amber-400',
-            dotColor: 'bg-amber-400',
-          };
-        };
 
         // Format date to Indonesian
         const formatDate = (dateStr) => {
@@ -694,7 +642,7 @@ const Reports = () => {
         }
 
         return (
-          <div className="space-y-6">
+          <div className="space-y-8">
             {sortedDates.map((date) => {
               const dayReports = groupedByDate[date] || [];
               const reportStreamerNames = new Set(dayReports.map(r => r.streamer_name ? r.streamer_name.toLowerCase().trim() : ''));
@@ -705,212 +653,245 @@ const Reports = () => {
                 return !reportStreamerNames.has(s.nama.toLowerCase().trim());
               });
 
-              // Combine reported + missing streamers for complete overview
-              const allCardsForDay = [
-                ...dayReports,
-                ...missingStreamers.map(s => ({
-                  id: `missing-${s.id}-${date}`,
-                  isMissing: true,
-                  streamer_name: s.nama,
-                  streamer_platform: s.platform || 'TikTok',
-                  tanggal: date,
-                  kategori: 'Absen',
-                  live_duration: 0,
-                  chat_count: 0,
-                  registration_count: 0,
-                  ftd_count: 0,
-                  tiktok_upload: 0,
-                  youtube_upload: 0,
-                  instagram_upload: 0,
-                  facebook_upload: 0
-                }))
-              ];
-
               const dayFtds = dayReports.reduce((s, r) => s + (r.ftd_count || 0), 0);
               const dayRegs = dayReports.reduce((s, r) => s + (r.registration_count || 0), 0);
               const dayChats = dayReports.reduce((s, r) => s + (r.chat_count || 0), 0);
               const dayLive = dayReports.reduce((s, r) => s + parseFloat(r.live_duration || 0), 0);
               
-              const workedCount = dayReports.filter(r => {
+              const workedSopCount = dayReports.filter(r => {
                 const isStreaming = r.kategori === 'Streaming';
                 const liveMet = parseFloat(r.live_duration || 0) >= MIN_LIVE_HOURS;
                 return !isStreaming || liveMet;
               }).length;
 
               return (
-                <div key={date} className="space-y-3">
-                  {/* Date Header */}
-                  <div className="flex items-center justify-between">
+                <div key={date} className="space-y-3 bg-slate-950/30 p-4.5 rounded-2xl border border-slate-800/80 shadow-lg">
+                  
+                  {/* Date Header & Day Summary */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
                     <div className="flex items-center gap-3">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-white tracking-wide">{formatDate(date)}</span>
-                        <span className="text-[11px] text-slate-400">
-                          {dayReports.length} melapor &bull; <strong className="text-rose-400">{missingStreamers.length} belum melapor/absen</strong>
-                        </span>
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white tracking-wide">{formatDate(date)}</h3>
+                        <p className="text-[11px] text-slate-400">
+                          <strong className="text-emerald-400">{dayReports.length}</strong> melapor &bull;{' '}
+                          <strong className={missingStreamers.length > 0 ? 'text-rose-400' : 'text-slate-400'}>
+                            {missingStreamers.length} belum melapor/absen
+                          </strong>
+                        </p>
                       </div>
-                      <div className="h-px flex-1 min-w-8 bg-slate-800"></div>
                     </div>
 
                     {/* Day Summary Pills */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 border border-slate-700/50 font-mono">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-800 font-mono">
                         ⏱ {dayLive.toFixed(1)}h live
                       </span>
                       {dayChats > 0 && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700/50 font-mono">
+                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
                           💬 {dayChats.toLocaleString()} chat
                         </span>
                       )}
                       {dayRegs > 0 && (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono">
+                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono">
                           👤 {dayRegs} reg
                         </span>
                       )}
                       {dayFtds > 0 ? (
-                        <span className="text-[10px] px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/25 font-bold font-mono shadow-[0_0_8px_rgba(245,158,11,0.15)]">
+                        <span className="text-[10px] px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono shadow-[0_0_8px_rgba(245,158,11,0.2)]">
                           ✨ {dayFtds} FTD
                         </span>
                       ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-900 text-slate-600 border border-slate-800 font-mono">
+                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-600 border border-slate-800 font-mono">
                           0 FTD
                         </span>
                       )}
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                        {workedCount}/{allCardsForDay.length} memenuhi SOP (4h)
+                      <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                        {workedSopCount}/{dayReports.length + missingStreamers.length} SOP (4h)
                       </span>
                     </div>
                   </div>
 
-                  {/* Streamer Cards Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {allCardsForDay.map((report) => {
-                      const status = getWorkStatus(report);
-                      const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
+                  {/* Missing Streamers Alert Bar (Ringkas & Tidak Memenuhi Layar) */}
+                  {missingStreamers.length > 0 && (
+                    <div className="p-3 rounded-xl border border-rose-900/40 bg-rose-950/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                      <div className="flex items-start gap-2 text-xs">
+                        <span className="text-rose-400 font-bold flex items-center gap-1.5 shrink-0 mt-0.5">
+                          <span>❌</span>
+                          <span>{missingStreamers.length} Streamer Belum Melapor:</span>
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {missingStreamers.map(s => (
+                            <span key={s.id} className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-300 font-medium text-[11px] border border-rose-500/20">
+                              {s.nama} <span className="text-[9px] text-rose-400/70">({s.platform || 'TikTok'})</span>
+                            </span>
+                          ))}
+                        </div>
+                      </div>
 
-                      return (
-                        <div
-                          key={report.id}
-                          className={`relative rounded-xl border ${status.borderColor} ${status.bgColor} p-4 transition-all hover:scale-[1.01] hover:shadow-lg`}
-                        >
-                          {/* Card Top: Streamer Name + Platform + Action */}
-                          <div className="flex items-start justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              {/* Status dot */}
-                              <span className={`w-2 h-2 rounded-full ${status.dotColor} mt-0.5 shrink-0`}></span>
+                      <button
+                        onClick={handleSendTelegramReminder}
+                        disabled={telegramSending}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+                      >
+                        <Send className="h-3 w-3" />
+                        Kirim Pengingat Telegram
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Streamer Cards Grid (Reporting Streamers Only) */}
+                  {dayReports.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pt-1">
+                      {dayReports.map((report) => {
+                        const isStreaming = report.kategori === 'Streaming';
+                        const liveHours = parseFloat(report.live_duration || 0);
+                        const isSopMet = liveHours >= MIN_LIVE_HOURS;
+                        const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
+
+                        return (
+                          <div
+                            key={report.id}
+                            className={`relative rounded-xl border p-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-xl ${
+                              !isStreaming
+                                ? 'bg-slate-900/60 border-slate-800'
+                                : isSopMet
+                                ? 'bg-gradient-to-b from-slate-900/90 to-emerald-950/20 border-emerald-500/30'
+                                : 'bg-gradient-to-b from-slate-900/90 to-amber-950/20 border-amber-500/30'
+                            }`}
+                          >
+                            {/* Card Top Header */}
+                            <div className="flex items-start justify-between gap-2 mb-2.5">
                               <div>
-                                <p className="font-bold text-white text-sm leading-tight">{report.streamer_name}</p>
-                                <p className="text-[10px] text-slate-500 mt-0.5">{report.streamer_platform}</p>
+                                <h4 className="font-bold text-white text-sm leading-snug">{report.streamer_name}</h4>
+                                <span className="text-[10px] text-slate-400 font-medium">{report.streamer_platform}</span>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <button
+                                  onClick={() => handleEditClick(report)}
+                                  className="p-1 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-300 transition-colors"
+                                  title="Edit Laporan"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </button>
+                                {isAdmin && (
+                                  <button
+                                    onClick={() => handleDelete(report.id)}
+                                    className="p-1 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                                    title="Hapus Laporan"
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                )}
                               </div>
                             </div>
-                            {!report.isMissing && (
-                              <button
-                                onClick={() => handleEditClick(report)}
-                                className="p-1 rounded-lg border border-slate-700/40 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-slate-500 hover:text-indigo-300 transition-all shrink-0"
-                                title="Edit Laporan"
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </button>
+
+                            {/* SOP Status Pill Header */}
+                            <div className="mb-3">
+                              {!isStreaming ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-medium border border-slate-700/60 w-full justify-center">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+                                  Non-Streaming (Off/Izin)
+                                </span>
+                              ) : isSopMet ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                  ✅ Live SOP {liveHours.toFixed(1)}h / 4h
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+                                  ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h)
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Metrics Grid 4-Cols */}
+                            <div className="grid grid-cols-4 gap-1 text-center bg-slate-950/60 p-2 rounded-lg border border-slate-800/60 mb-3">
+                              {/* Live */}
+                              <div>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Live</p>
+                                {liveHours > 0 ? (
+                                  <p className={`text-xs font-bold font-mono ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                    {liveHours}h
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-slate-600 font-mono">—</p>
+                                )}
+                              </div>
+
+                              {/* Chat */}
+                              <div>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Chat</p>
+                                {report.chat_count > 0 ? (
+                                  <p className="text-xs font-bold text-slate-200 font-mono">{report.chat_count.toLocaleString()}</p>
+                                ) : (
+                                  <p className="text-xs text-slate-600 font-mono">—</p>
+                                )}
+                              </div>
+
+                              {/* Reg */}
+                              <div>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Reg</p>
+                                {report.registration_count > 0 ? (
+                                  <p className="text-xs font-bold text-indigo-300 font-mono">{report.registration_count}</p>
+                                ) : (
+                                  <p className="text-xs text-slate-600 font-mono">—</p>
+                                )}
+                              </div>
+
+                              {/* FTD */}
+                              <div>
+                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">FTD</p>
+                                {report.ftd_count > 0 ? (
+                                  <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">
+                                    ✨{report.ftd_count}
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-slate-600 font-mono">—</p>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Upload Sosmed pills */}
+                            {totalUploads > 0 ? (
+                              <div className="flex flex-wrap gap-1 border-t border-slate-800/60 pt-2 text-[10px]">
+                                {report.tiktok_upload > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700/50">TT·{report.tiktok_upload}</span>
+                                )}
+                                {report.youtube_upload > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 font-mono border border-rose-800/40">YT·{report.youtube_upload}</span>
+                                )}
+                                {report.instagram_upload > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-pink-950/80 text-pink-300 font-mono border border-pink-800/40">IG·{report.instagram_upload}</span>
+                                )}
+                                {report.facebook_upload > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 font-mono border border-blue-800/40">FB·{report.facebook_upload}</span>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="border-t border-slate-800/60 pt-2 text-center">
+                                <span className="text-[10px] text-slate-600 font-medium">Tidak ada upload konten</span>
+                              </div>
                             )}
                           </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-slate-500 text-xs italic">
+                      Belum ada streamer yang mengirimkan rekap pada tanggal ini.
+                    </div>
+                  )}
 
-                          {/* Work Status Banner */}
-                          <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg mb-3 border ${status.borderColor} bg-black/30`}>
-                            <span className="text-xs">{status.icon}</span>
-                            <div className="min-w-0">
-                              <p className={`text-[11px] font-bold ${status.textColor} leading-tight`}>{status.label}</p>
-                              <p className="text-[10px] text-slate-400 leading-tight truncate">{status.sub}</p>
-                            </div>
-                          </div>
-
-                          {/* Metrics Grid (Live, Chat, Reg, FTD) */}
-                          <div className="grid grid-cols-4 gap-1 text-center bg-slate-950/50 p-2 rounded-lg border border-slate-800/50 mb-3">
-                            {/* Live Duration */}
-                            <div>
-                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Live</p>
-                              {!report.isMissing && parseFloat(report.live_duration) > 0 ? (
-                                <p className={`text-xs font-bold font-mono ${parseFloat(report.live_duration) >= MIN_LIVE_HOURS ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                  {report.live_duration}h
-                                </p>
-                              ) : (
-                                <p className="text-xs text-slate-600 font-mono">—</p>
-                              )}
-                            </div>
-
-                            {/* Chat Count */}
-                            <div>
-                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Chat</p>
-                              {!report.isMissing && report.chat_count > 0 ? (
-                                <p className="text-xs font-bold text-slate-200 font-mono">{report.chat_count.toLocaleString()}</p>
-                              ) : (
-                                <p className="text-xs text-slate-600 font-mono">—</p>
-                              )}
-                            </div>
-
-                            {/* Registrasi */}
-                            <div>
-                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Reg</p>
-                              {!report.isMissing && report.registration_count > 0 ? (
-                                <p className="text-xs font-bold text-indigo-300 font-mono">{report.registration_count}</p>
-                              ) : (
-                                <p className="text-xs text-slate-600 font-mono">—</p>
-                              )}
-                            </div>
-
-                            {/* FTD */}
-                            <div>
-                              <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">FTD</p>
-                              {!report.isMissing && report.ftd_count > 0 ? (
-                                <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">{report.ftd_count}</p>
-                              ) : (
-                                <p className="text-xs text-slate-600 font-mono">—</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Upload Sosmed pills */}
-                          {totalUploads > 0 ? (
-                            <div className="flex flex-wrap gap-1 border-t border-slate-800/60 pt-2.5">
-                              {report.tiktok_upload > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono border border-slate-700/50">TT·{report.tiktok_upload}</span>
-                              )}
-                              {report.youtube_upload > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-950/80 text-rose-300 font-mono border border-rose-800/40">YT·{report.youtube_upload}</span>
-                              )}
-                              {report.instagram_upload > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-pink-950/80 text-pink-300 font-mono border border-pink-800/40">IG·{report.instagram_upload}</span>
-                              )}
-                              {report.facebook_upload > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] bg-blue-950/80 text-blue-300 font-mono border border-blue-800/40">FB·{report.facebook_upload}</span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="border-t border-slate-800/60 pt-2 text-center">
-                              <span className="text-[10px] text-slate-600 font-medium">
-                                {report.isMissing ? '❌ Belum ada laporan' : 'Tidak ada upload konten'}
-                              </span>
-                            </div>
-                          )}
-
-                          {/* Delete button for admin */}
-                          {isAdmin && !report.isMissing && (
-                            <button
-                              onClick={() => handleDelete(report.id)}
-                              className="absolute top-3 right-8 p-1 rounded text-slate-700 hover:text-red-400 hover:bg-red-500/10 transition-all opacity-0 group-hover:opacity-100"
-                              title="Hapus Laporan"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               );
             })}
           </div>
         );
       })()}
+
 
 
       {/* Edit Report Modal */}
