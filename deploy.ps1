@@ -80,76 +80,9 @@ if ($pilihan -eq "1") {
     Write-Host "====================================================" -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "▶ [VPS] Menghubungkan ke VPS untuk menulis .env dan menjalankan update..." -ForegroundColor Yellow
+    Write-Host "▶ [VPS] Menghubungkan ke VPS via SSH..." -ForegroundColor Yellow
 
-    $ENV_CONTENT = Get-Content -Raw -Path "$(Join-Path $PSScriptRoot "backend\.env")"
-
-    $REMOTE_COMMANDS = @"
-echo '-> Menulis file .env terbaru...'
-cat << 'ENVEOF' > $APP_DIR/backend/.env
-$ENV_CONTENT
-ENVEOF
-
-echo '-> Update config Nginx...'
-cat << 'NGINXEOF' > /etc/nginx/sites-available/casper
-server {
-    listen $NGINX_PORT;
-    server_name _;
-
-    root $APP_DIR/frontend/dist;
-    index index.html;
-
-    # Frontend SPA routing
-    location / {
-        try_files `$uri `$uri/ /index.html;
-    }
-
-    # Backend API proxy ke port $BACKEND_PORT
-    location /api/ {
-        proxy_pass http://localhost:$BACKEND_PORT;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade `$http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host `$host;
-        proxy_set_header X-Real-IP `$remote_addr;
-        proxy_set_header X-Forwarded-For `$proxy_add_x_forwarded_for;
-        proxy_cache_bypass `$http_upgrade;
-        proxy_read_timeout 60s;
-    }
-}
-NGINXEOF
-
-ln -sf /etc/nginx/sites-available/casper /etc/nginx/sites-enabled/casper
-nginx -t && systemctl reload nginx
-
-echo '-> Discarding local changes on VPS...'
-cd $APP_DIR
-git reset --hard
-
-echo '-> Pull kode terbaru...'
-git pull origin master
-
-echo '-> Update dependencies backend...'
-cd $APP_DIR/backend
-npm install --omit=dev --silent
-
-echo '-> Rebuild frontend...'
-cd $APP_DIR/frontend
-npm install --silent
-npm run build
-
-echo '-> Memperbarui proses PM2...'
-pm2 delete casper-api 2>/dev/null || true
-cd $APP_DIR/backend
-PORT=$BACKEND_PORT pm2 start src/index.js --name 'casper-api' --env production
-pm2 save
-
-echo ''
-echo '[OK] Update selesai!'
-pm2 list
-"@
-    $REMOTE_COMMANDS = $REMOTE_COMMANDS -replace "`r`n", "`n"
-    ssh -o StrictHostKeyChecking=no "${VPS_USER}@${VPS_IP}" $REMOTE_COMMANDS
+    ssh -o StrictHostKeyChecking=no -t "${VPS_USER}@${VPS_IP}" "bash /var/www/casper/deploy/update.sh"
 
 } else {
 # == FULL SETUP ================================================
