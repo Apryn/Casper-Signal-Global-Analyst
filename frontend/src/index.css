@@ -173,7 +173,7 @@ body {
 }
 
 /* Tactile Form Inputs */
-.tactile-input, select, textarea {
+.tactile-input, .tactile-select, .tactile-textarea {
   background: #090a10;
   border: 2px solid #2c314c;
   color: #f1f5f9;
@@ -184,7 +184,7 @@ body {
   transition: all 0.2s ease;
 }
 
-.tactile-input:focus, select:focus, textarea:focus {
+.tactile-input:focus, .tactile-select:focus, .tactile-textarea:focus {
   outline: none;
   border-color: #6366f1;
   box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.4), 0 0 0 2.5px rgba(99, 102, 241, 0.25);

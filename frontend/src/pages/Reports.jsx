@@ -464,75 +464,76 @@ const Reports = () => {
       {/* Stat Cards Overview Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Reports */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Laporan</p>
-              <h3 className="text-2xl font-bold text-white mt-1">{reports.length} <span className="text-xs text-slate-500 font-normal">rekap</span></h3>
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Total Laporan</p>
+              <h3 className="text-2xl font-extrabold text-white mt-1">{reports.length} <span className="text-xs text-slate-500 font-normal">rekap</span></h3>
             </div>
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
               <Tv className="h-5 w-5" />
             </div>
           </div>
           <div className="mt-3 flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-medium border border-emerald-500/20">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]">
               {reports.filter(r => r.kategori === 'Streaming').length} Streaming
             </span>
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-medium border border-slate-700/50">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-800 text-slate-400 font-semibold border border-slate-700/50 text-[11px]">
               {reports.filter(r => r.kategori === 'Non Streaming').length} Off
             </span>
           </div>
         </div>
 
         {/* Card 2: Total Live Hours */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Jam Live</p>
-              <h3 className="text-2xl font-bold text-purple-300 mt-1">{totalLive.toFixed(1)} <span className="text-xs text-slate-500 font-normal">Jam</span></h3>
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Total Jam Live</p>
+              <h3 className="text-2xl font-extrabold text-purple-300 mt-1">{totalLive.toFixed(1)} <span className="text-xs text-slate-500 font-normal">Jam</span></h3>
             </div>
-            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400">
+            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
               <Video className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 text-xs text-purple-300/80 font-medium">
+          <div className="mt-3 text-[11px] text-purple-300/80 font-medium">
             Akumulasi durasi tayang live streamer
           </div>
         </div>
 
         {/* Card 3: Total Registrations & Chats */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Registrasi & Chat</p>
-              <h3 className="text-2xl font-bold text-indigo-300 mt-1">{totalRegs.toLocaleString()} <span className="text-xs text-slate-500 font-normal">Regs</span></h3>
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Registrasi & Chat</p>
+              <h3 className="text-2xl font-extrabold text-indigo-300 mt-1">{totalRegs.toLocaleString()} <span className="text-xs text-slate-500 font-normal">Regs</span></h3>
             </div>
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400">
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
               <UserCheck className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 text-xs text-slate-400 flex items-center justify-between">
+          <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between gap-2 border-t border-slate-800/60 pt-2">
             <span>Total Chat Masuk:</span>
-            <span className="font-semibold text-slate-200">{totalChats.toLocaleString()}</span>
+            <span className="font-bold text-white font-mono bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/60">{totalChats.toLocaleString()}</span>
           </div>
         </div>
 
         {/* Card 4: Total FTD */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 shadow-lg relative overflow-hidden group hover:border-amber-400/50 transition-all">
-          <div className="flex justify-between items-start">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-amber-400/90">Total FTD (Deposit Baru)</p>
-              <h3 className="text-3xl font-extrabold text-amber-400 mt-1 tracking-tight drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+        <div className="glass-panel p-4.5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 shadow-lg relative overflow-hidden group hover:border-amber-400/50 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 truncate">Total FTD</p>
+              <p className="text-[9px] font-semibold text-amber-500/80 uppercase tracking-widest -mt-0.5">Deposit Baru</p>
+              <h3 className="text-2xl font-extrabold text-amber-400 mt-1 tracking-tight drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
                 {totalFtds.toLocaleString()} <span className="text-xs text-amber-300 font-normal">FTD</span>
               </h3>
             </div>
-            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shadow-inner">
-              <Coins className="h-6 w-6" />
+            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shrink-0 shadow-inner">
+              <Coins className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 text-xs text-amber-400/90 font-semibold flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-            Puncak pencapaian konversi
+          <div className="mt-3 text-[11px] text-amber-400/90 font-semibold flex items-center gap-1.5 border-t border-amber-500/20 pt-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+            <span className="truncate">Puncak pencapaian konversi</span>
           </div>
         </div>
       </div>
@@ -550,7 +551,7 @@ const Reports = () => {
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
               placeholder="Nama streamer..."
-              className="block w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+              className="block w-full h-10 pl-9 pr-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
             />
           </div>
         </div>
@@ -563,7 +564,7 @@ const Reports = () => {
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
             />
           </div>
         </div>
@@ -576,7 +577,7 @@ const Reports = () => {
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
             />
           </div>
         </div>
@@ -587,7 +588,7 @@ const Reports = () => {
           <select
             value={kategori}
             onChange={(e) => setKategori(e.target.value)}
-            className="block w-full px-3 py-2 text-xs rounded-xl border border-slate-800 bg-slate-900/80 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+            className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
           >
             <option value="">Semua Kategori</option>
             <option value="Streaming">Streaming Only</option>
@@ -598,7 +599,7 @@ const Reports = () => {
         {/* Reset button */}
         <button
           onClick={handleResetFilters}
-          className="w-full py-2 px-4 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-colors h-9"
+          className="w-full h-10 flex items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
         >
           Reset Filters
         </button>
@@ -665,17 +666,17 @@ const Reports = () => {
               }).length;
 
               return (
-                <div key={date} className="space-y-3 bg-slate-950/30 p-4.5 rounded-2xl border border-slate-800/80 shadow-lg">
+                <div key={date} className="space-y-4 bg-slate-950/40 p-5 rounded-2xl border border-slate-800/80 shadow-lg">
                   
                   {/* Date Header & Day Summary */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
                     <div className="flex items-center gap-3">
-                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div>
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></div>
                       <div>
                         <h3 className="text-sm font-bold text-white tracking-wide">{formatDate(date)}</h3>
-                        <p className="text-[11px] text-slate-400">
-                          <strong className="text-emerald-400">{dayReports.length}</strong> melapor &bull;{' '}
-                          <strong className={missingStreamers.length > 0 ? 'text-rose-400' : 'text-slate-400'}>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          <strong className="text-emerald-400 font-semibold">{dayReports.length}</strong> melapor &bull;{' '}
+                          <strong className={missingStreamers.length > 0 ? 'text-rose-400 font-semibold' : 'text-slate-400 font-normal'}>
                             {missingStreamers.length} belum melapor/absen
                           </strong>
                         </p>
@@ -684,65 +685,65 @@ const Reports = () => {
 
                     {/* Day Summary Pills */}
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-300 border border-slate-800 font-mono">
+                      <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-800 font-mono font-semibold">
                         ⏱ {dayLive.toFixed(1)}h live
                       </span>
                       {dayChats > 0 && (
-                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-400 border border-slate-800 font-mono">
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-slate-400 border border-slate-800 font-mono font-semibold">
                           💬 {dayChats.toLocaleString()} chat
                         </span>
                       )}
                       {dayRegs > 0 && (
-                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono">
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono font-semibold">
                           👤 {dayRegs} reg
                         </span>
                       )}
                       {dayFtds > 0 ? (
-                        <span className="text-[10px] px-3 py-1 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono shadow-[0_0_8px_rgba(245,158,11,0.2)]">
+                        <span className="text-[11px] px-3 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono shadow-[0_0_8px_rgba(245,158,11,0.2)]">
                           ✨ {dayFtds} FTD
                         </span>
                       ) : (
-                        <span className="text-[10px] px-2.5 py-1 rounded-full bg-slate-900 text-slate-600 border border-slate-800 font-mono">
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-slate-600 border border-slate-800 font-mono">
                           0 FTD
                         </span>
                       )}
-                      <span className="text-[10px] px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                      <span className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-semibold">
                         {workedSopCount}/{dayReports.length + missingStreamers.length} SOP (4h)
                       </span>
                     </div>
                   </div>
 
-                  {/* Missing Streamers Alert Bar (Ringkas & Tidak Memenuhi Layar) */}
+                  {/* Missing Streamers Alert Bar */}
                   {missingStreamers.length > 0 && (
-                    <div className="p-3 rounded-xl border border-rose-900/40 bg-rose-950/20 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                      <div className="flex items-start gap-2 text-xs">
-                        <span className="text-rose-400 font-bold flex items-center gap-1.5 shrink-0 mt-0.5">
+                    <div className="p-3.5 rounded-xl border border-rose-900/40 bg-rose-950/20 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
                           <span>❌</span>
                           <span>{missingStreamers.length} Streamer Belum Melapor:</span>
                         </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {missingStreamers.map(s => (
-                            <span key={s.id} className="px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-300 font-medium text-[11px] border border-rose-500/20">
-                              {s.nama} <span className="text-[9px] text-rose-400/70">({s.platform || 'TikTok'})</span>
-                            </span>
-                          ))}
-                        </div>
+                        <button
+                          onClick={handleSendTelegramReminder}
+                          disabled={telegramSending}
+                          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+                        >
+                          <Send className="h-3 w-3" />
+                          Kirim Pengingat Telegram
+                        </button>
                       </div>
 
-                      <button
-                        onClick={handleSendTelegramReminder}
-                        disabled={telegramSending}
-                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
-                      >
-                        <Send className="h-3 w-3" />
-                        Kirim Pengingat Telegram
-                      </button>
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        {missingStreamers.map(s => (
+                          <span key={s.id} className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-300 font-semibold text-[11px] border border-rose-500/20 flex items-center gap-1">
+                            {s.nama} <span className="text-[9.5px] text-rose-400/70 font-normal">({s.platform || 'TikTok'})</span>
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
 
                   {/* Streamer Cards Grid (Reporting Streamers Only) */}
                   {dayReports.length > 0 ? (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 pt-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
                       {dayReports.map((report) => {
                         const isStreaming = report.kategori === 'Streaming';
                         const liveHours = parseFloat(report.live_duration || 0);
@@ -752,7 +753,7 @@ const Reports = () => {
                         return (
                           <div
                             key={report.id}
-                            className={`relative rounded-xl border p-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-xl ${
+                            className={`relative rounded-2xl border p-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-xl flex flex-col justify-between ${
                               !isStreaming
                                 ? 'bg-slate-900/60 border-slate-800'
                                 : isSopMet
@@ -761,120 +762,123 @@ const Reports = () => {
                             }`}
                           >
                             {/* Card Top Header */}
-                            <div className="flex items-start justify-between gap-2 mb-2.5">
-                              <div>
-                                <h4 className="font-bold text-white text-sm leading-snug">{report.streamer_name}</h4>
-                                <span className="text-[10px] text-slate-400 font-medium">{report.streamer_platform}</span>
-                              </div>
+                            <div>
+                              <div className="flex items-start justify-between gap-2 mb-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="font-bold text-white text-sm leading-snug truncate">{report.streamer_name}</h4>
+                                  <span className="text-[11px] text-slate-400 font-medium">{report.streamer_platform}</span>
+                                </div>
 
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <button
-                                  onClick={() => handleEditClick(report)}
-                                  className="p-1 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-300 transition-colors"
-                                  title="Edit Laporan"
-                                >
-                                  <Edit2 className="h-3 w-3" />
-                                </button>
-                                {isAdmin && (
+                                <div className="flex items-center gap-1.5 shrink-0">
                                   <button
-                                    onClick={() => handleDelete(report.id)}
-                                    className="p-1 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
-                                    title="Hapus Laporan"
+                                    onClick={() => handleEditClick(report)}
+                                    className="p-1.5 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-300 transition-colors"
+                                    title="Edit Laporan"
                                   >
-                                    <Trash2 className="h-3 w-3" />
+                                    <Edit2 className="h-3 w-3" />
                                   </button>
-                                )}
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => handleDelete(report.id)}
+                                      className="p-1.5 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                                      title="Hapus Laporan"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
-                            </div>
 
-                            {/* SOP Status Pill Header */}
-                            <div className="mb-3">
-                              {!isStreaming ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-medium border border-slate-700/60 w-full justify-center">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
-                                  Non-Streaming (Off/Izin)
-                                </span>
-                              ) : isSopMet ? (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                                  ✅ Live SOP {liveHours.toFixed(1)}h / 4h
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-                                  ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h)
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Metrics Grid 4-Cols */}
-                            <div className="grid grid-cols-4 gap-1 text-center bg-slate-950/60 p-2 rounded-lg border border-slate-800/60 mb-3">
-                              {/* Live */}
-                              <div>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Live</p>
-                                {liveHours > 0 ? (
-                                  <p className={`text-xs font-bold font-mono ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                    {liveHours}h
-                                  </p>
+                              {/* SOP Status Pill Header */}
+                              <div className="mb-3">
+                                {!isStreaming ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-semibold border border-slate-700/60 w-full justify-center truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+                                    Non-Streaming (Off/Izin)
+                                  </span>
+                                ) : isSopMet ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                                    ✅ Live SOP {liveHours.toFixed(1)}h / 4h
+                                  </span>
                                 ) : (
-                                  <p className="text-xs text-slate-600 font-mono">—</p>
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                                    ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h)
+                                  </span>
                                 )}
                               </div>
 
-                              {/* Chat */}
-                              <div>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Chat</p>
-                                {report.chat_count > 0 ? (
-                                  <p className="text-xs font-bold text-slate-200 font-mono">{report.chat_count.toLocaleString()}</p>
-                                ) : (
-                                  <p className="text-xs text-slate-600 font-mono">—</p>
-                                )}
-                              </div>
+                              {/* Metrics Grid 4-Cols */}
+                              <div className="grid grid-cols-4 gap-1 text-center bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-3">
+                                {/* Live */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Live</p>
+                                  {liveHours > 0 ? (
+                                    <p className={`text-xs font-bold font-mono truncate ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                      {liveHours}h
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
 
-                              {/* Reg */}
-                              <div>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">Reg</p>
-                                {report.registration_count > 0 ? (
-                                  <p className="text-xs font-bold text-indigo-300 font-mono">{report.registration_count}</p>
-                                ) : (
-                                  <p className="text-xs text-slate-600 font-mono">—</p>
-                                )}
-                              </div>
+                                {/* Chat */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Chat</p>
+                                  {report.chat_count > 0 ? (
+                                    <p className="text-xs font-bold text-slate-200 font-mono truncate">{report.chat_count.toLocaleString()}</p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
 
-                              {/* FTD */}
-                              <div>
-                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider mb-0.5">FTD</p>
-                                {report.ftd_count > 0 ? (
-                                  <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]">
-                                    ✨{report.ftd_count}
-                                  </p>
-                                ) : (
-                                  <p className="text-xs text-slate-600 font-mono">—</p>
-                                )}
+                                {/* Reg */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Reg</p>
+                                  {report.registration_count > 0 ? (
+                                    <p className="text-xs font-bold text-indigo-300 font-mono truncate">{report.registration_count}</p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
+
+                                {/* FTD */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">FTD</p>
+                                  {report.ftd_count > 0 ? (
+                                    <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_6px_rgba(245,158,11,0.4)] truncate">
+                                      ✨{report.ftd_count}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
                               </div>
                             </div>
 
                             {/* Upload Sosmed pills */}
-                            {totalUploads > 0 ? (
-                              <div className="flex flex-wrap gap-1 border-t border-slate-800/60 pt-2 text-[10px]">
-                                {report.tiktok_upload > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-mono border border-slate-700/50">TT·{report.tiktok_upload}</span>
-                                )}
-                                {report.youtube_upload > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-300 font-mono border border-rose-800/40">YT·{report.youtube_upload}</span>
-                                )}
-                                {report.instagram_upload > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-pink-950/80 text-pink-300 font-mono border border-pink-800/40">IG·{report.instagram_upload}</span>
-                                )}
-                                {report.facebook_upload > 0 && (
-                                  <span className="px-1.5 py-0.5 rounded bg-blue-950/80 text-blue-300 font-mono border border-blue-800/40">FB·{report.facebook_upload}</span>
-                                )}
-                              </div>
-                            ) : (
-                              <div className="border-t border-slate-800/60 pt-2 text-center">
-                                <span className="text-[10px] text-slate-600 font-medium">Tidak ada upload konten</span>
-                              </div>
-                            )}
+                            <div className="border-t border-slate-800/80 pt-2.5 mt-1 flex flex-wrap gap-1.5 text-[10px] items-center min-h-[30px]">
+                              {totalUploads > 0 ? (
+                                <>
+                                  {report.tiktok_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700/60">TT·{report.tiktok_upload}</span>
+                                  )}
+                                  {report.youtube_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-rose-950/80 text-rose-300 font-mono font-semibold border border-rose-800/40">YT·{report.youtube_upload}</span>
+                                  )}
+                                  {report.instagram_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-pink-950/80 text-pink-300 font-mono font-semibold border border-pink-800/40">IG·{report.instagram_upload}</span>
+                                  )}
+                                  {report.facebook_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-blue-950/80 text-blue-300 font-mono font-semibold border border-blue-800/40">FB·{report.facebook_upload}</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 italic font-medium w-full text-center py-0.5">Tidak ada upload konten</span>
+                              )}
+                            </div>
+
                           </div>
                         );
                       })}

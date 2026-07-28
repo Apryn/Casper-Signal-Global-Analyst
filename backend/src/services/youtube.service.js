@@ -512,15 +512,17 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
             } else {
               // Live di luar jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
               if (defaultAcc) {
-                // Cek apakah streamer ini baru saja menyelesaikan jadwal hari ini dalam 2 jam terakhir
+                // Cek apakah video link yang sama baru saja diselesaikan dalam 15 menit terakhir (mencegah duplikasi saat reconnect)
                 const targetStreamerId = substituteStreamerId || defaultAcc.streamer_id;
+                const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
                 const recentCompletion = await query(
                   `SELECT id FROM schedule
                    WHERE streamer_id = $1
                      AND status = 'Completed'
-                     AND actual_end_time >= NOW() - INTERVAL '2 hours'
+                     AND live_link = $2
+                     AND actual_end_time >= NOW() - INTERVAL '15 minutes'
                    LIMIT 1`,
-                  [targetStreamerId]
+                  [targetStreamerId, liveLink]
                 );
  
                 if (recentCompletion.rows.length > 0) {
@@ -535,7 +537,6 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 const startTime = liveInfo.actualStartTime || new Date(now.getTime() - 15 * 60 * 1000); 
                 const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);  // estimasi 2 jam lagi
  
-                const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
                 const insertRes = await query(
                   `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time, substitute_streamer_id, live_link)
                    VALUES ($1, 'YouTube', $2, $3, 'Live', $4, $5, $6)
