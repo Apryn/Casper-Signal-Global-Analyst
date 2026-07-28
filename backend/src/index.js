@@ -35,6 +35,7 @@ import analyticsRoutes from './routes/analytics.routes.js';
 import evaluationRoutes from './routes/evaluation.routes.js';
 import accountRoutes from './routes/account.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
+import deployRoutes from './routes/deploy.routes.js';
 import { startCronJobs, setBotInstance } from './services/cron.service.js';
 import telegramService from './services/telegram.service.js';
 const { parseMessageText } = telegramService;
@@ -138,6 +139,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/evaluations', evaluationRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/deploy', deployRoutes);
 
 // ============================================================
 // GLOBAL ERROR HANDLER
