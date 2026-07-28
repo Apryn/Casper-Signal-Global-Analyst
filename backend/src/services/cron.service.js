@@ -431,151 +431,9 @@ export const checkMinLiveViolations = async (wibDateStr) => {
   }
 };
 
-/**
- * [NEW] Auto-generate daily schedule entries from schedule_templates.
- * Runs at 00:05 WIB every day. Skips if entry for that day already exists.
- */
-export const generateDailySchedules = async (wibDateStr) => {
-  const todayStr = wibDateStr || getWibHourAndDate().dateStr;
-  // day of week: 0=Sunday, 1=Monday, ..., 6=Saturday
-  const dayOfWeek = new Date(todayStr + 'T12:00:00+07:00').getDay();
+// generateDailySchedules dan checkPreLiveReminders dihapus.
+// Sistem sekarang mengandalkan pure live detection: jadwal dibuat otomatis saat streamer terdeteksi live.
 
-  // Hari Minggu libur -> tidak ada auto-generate jadwal
-  if (dayOfWeek === 0) {
-    console.log(`[Schedule Generator] Hari ini adalah hari Minggu (Libur). Lewati proses auto-generate.`);
-    return;
-  }
-
-  try {
-    // Ambil semua template aktif yang berlaku hari ini
-    const templatesRes = await query(
-      `SELECT t.*, s.nama
-       FROM schedule_templates t
-       JOIN streamers s ON t.streamer_id = s.id
-       WHERE t.is_active = TRUE
-         AND $1 = ANY(t.days_of_week)
-       ORDER BY t.start_time`,
-      [dayOfWeek]
-    );
-
-    const templates = templatesRes.rows;
-    if (templates.length === 0) {
-      console.log(`[Schedule Generator] Tidak ada template aktif untuk hari ini (day ${dayOfWeek}).`);
-      return;
-    }
-
-    let generated = 0;
-    let skipped = 0;
-
-    for (const t of templates) {
-      // Bangun datetime dengan timezone WIB (UTC+7)
-      const startISO = `${todayStr}T${t.start_time.substring(0, 5)}:00+07:00`;
-      // Kalau end_time = 23:59, jadikan 23:59 (bukan tengah malam keesokan hari)
-      const endISO   = `${todayStr}T${t.end_time.substring(0, 5)}:00+07:00`;
-
-      // Cek apakah sudah ada jadwal untuk streamer ini di waktu ini hari ini
-      const existCheck = await query(
-        `SELECT id FROM schedule
-         WHERE streamer_id = $1
-           AND start_time = $2
-           AND DATE(start_time AT TIME ZONE 'Asia/Jakarta') = $3`,
-        [t.streamer_id, startISO, todayStr]
-      );
-
-      if (existCheck.rows.length > 0) {
-        skipped++;
-        continue; // Sudah ada, skip
-      }
-
-      // Insert jadwal baru
-      await query(
-        `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status)
-         VALUES ($1, $2, $3, $4, 'Scheduled')`,
-        [t.streamer_id, t.platform, startISO, endISO]
-      );
-
-      generated++;
-    }
-
-    console.log(`[Schedule Generator] ${todayStr} — Generated: ${generated}, Skipped (exists): ${skipped}`);
-  } catch (error) {
-    console.error('[Schedule Generator] Error:', error.message);
-  }
-};
-
-/**
- * [NEW] Checks schedules starting in 10-20 minutes and sends pre-live promo reminders.
- * Marks pre_live_submitted = true to prevent duplicate sends.
- */
-export const checkPreLiveReminders = async () => {
-  try {
-    const now = new Date();
-    // Window: jadwal yang mulai 10-20 menit dari sekarang
-    const windowStart = new Date(now.getTime() + 10 * 60 * 1000);
-    const windowEnd   = new Date(now.getTime() + 20 * 60 * 1000);
-
-    const result = await query(
-      `SELECT sc.id, sc.start_time, sc.platform, sc.streamer_id, sc.substitute_streamer_id,
-              s.nama as original_name,
-              target.nama as target_name,
-              target.telegram_username as target_tg_username,
-              target.telegram_chat_id as target_tg_chat_id
-       FROM schedule sc
-       JOIN streamers s ON sc.streamer_id = s.id
-       JOIN streamers target ON target.id = COALESCE(sc.substitute_streamer_id, sc.streamer_id)
-       WHERE sc.status = 'Scheduled'
-         AND sc.pre_live_submitted = FALSE
-         AND sc.start_time BETWEEN $1 AND $2`,
-      [windowStart.toISOString(), windowEnd.toISOString()]
-    );
-
-    for (const row of result.rows) {
-      if (!row.target_tg_chat_id) {
-        console.log(`[Pre-Live Reminder Skipped]: Streamer ${row.target_name} has no telegram_chat_id, skipped.`);
-        continue;
-      }
-
-      const startWib = new Date(row.start_time).toLocaleTimeString('id-ID', {
-        timeZone: 'Asia/Jakarta',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      const mention = row.target_tg_username
-        ? `@${row.target_tg_username.trim()}`
-        : `*${row.target_name}*`;
-
-      const isSubstituting = !!row.substitute_streamer_id;
-      const substituteText = isSubstituting ? ` menggantikan *${row.original_name}*` : '';
-
-      const message =
-        `⏰ *REMINDER PRE-LIVE — ${row.target_name}*${isSubstituting ? ' (Pengganti)' : ''}\n\n` +
-        `Halo ${mention}! Live kamu${substituteText} di *${row.platform}* dimulai pukul *${startWib} WIB* (kurang lebih 15 menit lagi).\n\n` +
-        `📢 Sudah share promo, tren, atau analisa singkat ke grup belum?\n` +
-        `Ketik */promo [link_post]* atau cukup */promo done* jika kamu membagikan screenshot. Semangat! 🚀`;
-
-      await sendTelegramNotification(message, row.target_tg_chat_id);
-
-      // Tandai sudah terkirim agar tidak double-send
-      await query(
-        `UPDATE schedule SET pre_live_submitted = TRUE WHERE id = $1`,
-        [row.id]
-      );
-
-      // Log ke notifikasi untuk target streamer
-      const logStreamerId = row.substitute_streamer_id || row.streamer_id;
-      await query(
-        `INSERT INTO notifications (streamer_id, message, status, type)
-         VALUES ($1, $2, 'Sent', 'Report Reminder')`,
-        [logStreamerId, message]
-      );
-
-      console.log(`[Pre-Live Reminder] Sent to ${row.target_name}${isSubstituting ? ' (substitute)' : ''} for ${startWib} WIB`);
-      await new Promise(r => setTimeout(r, 300));
-    }
-  } catch (error) {
-    console.error('[Pre-Live Reminder] Error:', error.message);
-  }
-};
 
 /**
  * Master scheduler using node-cron with Asia/Jakarta (WIB UTC+7) timezone
@@ -629,24 +487,12 @@ export const startCronJobs = (botInstance) => {
     autoGenerateWeeklyEvaluations().catch(err => console.error('[Cron] Error running autoGenerateWeeklyEvaluations:', err));
   }, { timezone: 'Asia/Jakarta' });
 
-  // ⏰ [NEW] Auto-generate jadwal harian dari templates — jam 00:05 WIB setiap hari
-  cron.schedule('5 0 * * *', () => {
-    const { dateStr } = getWibHourAndDate();
-    console.log(`[Cron] Auto-generating daily schedules from templates for ${dateStr}`);
-    generateDailySchedules(dateStr).catch(err => console.error('[Cron] Error running generateDailySchedules:', err));
-  }, { timezone: 'Asia/Jakarta' });
-
-  // ⏰ [NEW] Pre-live reminder — cek tiap 5 menit, kirim reminder 10-20 menit sebelum jadwal
-  cron.schedule('*/5 * * * *', () => {
-    console.log('[Cron] Running pre-live reminder check...');
-    checkPreLiveReminders().catch(err => console.error('[Cron] Error running checkPreLiveReminders:', err));
-  }, { timezone: 'Asia/Jakarta' });
-
-  // ⏰ [NEW] YouTube Live Detection — tiap 15 menit, jam 07:00-23:00 WIB
-  // Smart filter aktif: hanya query channel yang punya jadwal dalam window ±60 menit
-  // Estimasi quota: ~12.800 unit/hari (sedikit di atas free 10K, request increase jika perlu)
+  // ⏰ [YouTube Live Detection] — tiap 15 menit, jam 07:00-23:00 WIB
+  // Pure live detection: selalu cek semua channel tanpa filter jadwal
+  // Estimasi quota: ~6.400 units/hari (di bawah free tier 10K) ✅
   cron.schedule('*/15 7-23 * * *', () => {
-    console.log('[Cron] Running YouTube live status detection (15-min smart poll)...');
+    console.log('[Cron] Running YouTube live status detection (15-min pure poll)...');
     checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
   }, { timezone: 'Asia/Jakarta' });
 };
+

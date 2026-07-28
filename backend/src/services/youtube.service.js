@@ -44,31 +44,7 @@ const getApiKey = () => {
   return key.trim();
 };
 
-// ── Helper: cek apakah channel punya jadwal aktif sekarang atau 30 menit ke depan ────
-/**
- * Hanya query YouTube API jika channel ini punya streamer yang:
- * - Sedang dalam sesi live (status = 'Live'), ATAU
- * - Jadwalnya mulai dalam 30 menit ke depan, ATAU
- * - Jadwalnya baru mulai dalam 60 menit terakhir (toleransi terlambat)
- */
-const isChannelScheduleActive = async (streamerIds) => {
-  const now = new Date();
-  const windowStart = new Date(now.getTime() - 60 * 60 * 1000);  // 60 menit lalu
-  const windowEnd   = new Date(now.getTime() + 30 * 60 * 1000);  // 30 menit ke depan
-
-  const result = await query(
-    `SELECT id FROM schedule
-     WHERE streamer_id = ANY($1)
-       AND (
-         status = 'Live'
-         OR (status = 'Scheduled' AND start_time BETWEEN $2 AND $3)
-       )
-     LIMIT 1`,
-    [streamerIds, windowStart.toISOString(), windowEnd.toISOString()]
-  );
-
-  return result.rows.length > 0;
-};
+// isChannelScheduleActive dihapus — sistem sekarang selalu cek semua channel (pure live detection)
 
 // ── Core: Mengambil Jumlah Penonton Aktif Youtube (Concurrent Viewers) ─────
 export const getYouTubeConcurrentViewers = async (videoId, apiKey) => {
@@ -169,6 +145,7 @@ const findMatchingSchedule = async (streamerId, videoId = null) => {
   }
 
   // 1b. Jika videoId diberikan, cek apakah ada jadwal yang prematur berstatus 'Completed' padahal video ini MASIH LIVE
+  // Window diperlebar ke 6 jam agar sesi panjang yang sempat 'ditutup' sistem bisa diaktifkan kembali
   if (videoId) {
     const liveLink = `https://www.youtube.com/watch?v=${videoId}`;
     const completedRes = await query(
@@ -176,7 +153,7 @@ const findMatchingSchedule = async (streamerId, videoId = null) => {
        WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
          AND status = 'Completed'
          AND live_link = $2
-         AND actual_end_time >= NOW() - INTERVAL '60 minutes'
+         AND actual_end_time >= NOW() - INTERVAL '6 hours'
        ORDER BY actual_start_time DESC
        LIMIT 1`,
       [streamerId, liveLink]
@@ -548,13 +525,13 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                    WHERE streamer_id = $1
                      AND status = 'Completed'
                      AND live_link = $2
-                     AND actual_end_time >= NOW() - INTERVAL '15 minutes'
+                     AND actual_end_time >= NOW() - INTERVAL '3 minutes'
                    LIMIT 1`,
                   [targetStreamerId, liveLink]
                 );
  
                 if (recentCompletion.rows.length > 0) {
-                  console.log(`[YouTube Service] Streamer ${matchedStreamer ? matchedStreamer.nama : defaultAcc.nama} baru saja menyelesaikan stream dalam 2 jam terakhir. Menolak auto-create schedule ganda.`);
+                  console.log(`[YouTube Service] Streamer ${matchedStreamer ? matchedStreamer.nama : defaultAcc.nama} baru saja selesai stream (< 3 menit). Menolak auto-create schedule ganda.`);
                   continue;
                 }
  
