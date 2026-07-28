@@ -408,11 +408,17 @@ const handleChannelOffline = async (account, sendNotification = async () => {}) 
   const nama = streamer?.nama || `Streamer #${targetReportStreamerId}`;
   const formattedDur = formatDuration(durationMs / 60000);
 
-  // Kirim notifikasi Telegram bahwa live selesai
+  // Ambil total jam live hari ini untuk streamer
+  const todayReportRes = await query('SELECT live_duration FROM daily_reports WHERE streamer_id = $1 AND tanggal = $2', [targetReportStreamerId, dateStr]);
+  const totalLiveToday = parseFloat(todayReportRes.rows[0]?.live_duration || durationHours);
+
+  // Kirim notifikasi Telegram bahwa live selesai dengan status target 4 jam
   if (streamer && streamer.telegram_chat_id) {
     const mention = streamer.telegram_username ? `@${streamer.telegram_username.trim()}` : `*${nama}*`;
-    const shortWarning = durationHours < 2.0 ? `\n⚠️ *Perhatian:* Durasi live (${formattedDur}) kurang dari target minimal 2 jam.` : '';
-    const msg = `🟩 *LIVE SELESAI — ${nama}*\n\n${mention} Sesi live ${platformName} telah berakhir.\n• Durasi sesi: *${formattedDur}*${shortWarning}\n• Total durasi otomatis ditambahkan ke laporan harian.`;
+    const targetWarning = totalLiveToday < 4.0 
+      ? `\n⚠️ *Perhatian:* Total live hari ini (*${totalLiveToday} jam*) masih di bawah target SOP 4 jam/hari.` 
+      : `\n✅ *Mantap!* Target minimal 4 jam live hari ini telah tercapai (*${totalLiveToday} jam*)! 🎉`;
+    const msg = `🟩 *LIVE SELESAI — ${nama}*\n\n${mention} Sesi live ${platformName} telah berakhir.\n• Durasi sesi ini: *${formattedDur}*\n• Total jam live hari ini: *${totalLiveToday} jam*${targetWarning}\n\n_Data otomatis di-update ke laporan harian._`;
     await sendNotification(msg, streamer.telegram_chat_id).catch(() => {});
   }
 
