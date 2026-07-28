@@ -507,11 +507,11 @@ export const startCronJobs = (botInstance) => {
     cleanupStaleSchedules().catch(err => console.error('[Cron] Error running cleanupStaleSchedules:', err));
   }, { timezone: 'Asia/Jakarta' });
 
-  // ⏰ [YouTube Live Detection] — tiap 15 menit, jam 07:00-23:00 WIB
+  // ⏰ [YouTube Live Detection] — tiap 15 menit, 24/7 (24 jam nonstop)
   // Pure live detection: selalu cek semua channel tanpa filter jadwal
-  // Estimasi quota: ~6.400 units/hari (di bawah free tier 10K) ✅
-  cron.schedule('*/15 7-23 * * *', () => {
-    console.log('[Cron] Running YouTube live status detection (15-min pure poll)...');
+  // Estimasi quota: ~9.600 units/hari (di bawah free tier 10K API units) ✅
+  cron.schedule('*/15 * * * *', () => {
+    console.log('[Cron] Running YouTube live status detection (24/7 15-min pure poll)...');
     checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
   }, { timezone: 'Asia/Jakarta' });
 };

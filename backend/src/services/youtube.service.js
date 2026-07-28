@@ -336,27 +336,33 @@ const handleChannelOffline = async (account, sendNotification = async () => {}) 
   const durationMs = now.getTime() - startTime.getTime();
   const durationHours = parseFloat((durationMs / 3600000).toFixed(2));
 
-  // Update schedule → Completed
+  // Hitung durasi baru yang belum pernah dicatat (mencegah double-counting jika di-recover)
+  const previousReported = parseFloat(schedule.live_duration || 0);
+  const netDurationHours = Math.max(0, parseFloat((durationHours - previousReported).toFixed(2)));
+
+  // Update schedule → Completed & simpan live_duration terbaru
   await query(
     `UPDATE schedule
      SET actual_end_time = $1,
+         live_duration = $2,
          status = 'Completed'
-     WHERE id = $2`,
-    [now.toISOString(), schedule.id]
+     WHERE id = $3`,
+    [now.toISOString(), durationHours, schedule.id]
   );
 
-  // Catat live_duration di daily_reports milik target streamer (asli atau pengganti)
+  // Catat net duration di daily_reports milik target streamer (asli atau pengganti)
   const targetReportStreamerId = schedule.substitute_streamer_id || schedule.streamer_id;
   const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
   
-  // Pastikan daily report untuk target streamer hari ini ada sebelum update
-  await query(
-    `INSERT INTO daily_reports (streamer_id, tanggal, kategori, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
-     VALUES ($1, $2, 'Streaming', $3, 0, 0, 0, 0, 0, 0, 0)
-     ON CONFLICT (streamer_id, tanggal) 
-     DO UPDATE SET live_duration = COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration`,
-    [targetReportStreamerId, dateStr, durationHours]
-  );
+  if (netDurationHours > 0) {
+    await query(
+      `INSERT INTO daily_reports (streamer_id, tanggal, kategori, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
+       VALUES ($1, $2, 'Streaming', $3, 0, 0, 0, 0, 0, 0, 0)
+       ON CONFLICT (streamer_id, tanggal) 
+       DO UPDATE SET live_duration = COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration`,
+      [targetReportStreamerId, dateStr, netDurationHours]
+    );
+  }
 
   const streamerRes = await query('SELECT nama, telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [targetReportStreamerId]);
   const streamer = streamerRes.rows[0];
