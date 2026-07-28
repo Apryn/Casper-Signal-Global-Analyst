@@ -311,7 +311,7 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
 };
 
 // ── Core: Handle channel yang offline (sebelumnya Live) ──────────────────
-const handleChannelOffline = async (account) => {
+const handleChannelOffline = async (account, sendNotification = async () => {}) => {
   const { streamer_id, platform } = account;
   const platformName = platform || 'YouTube';
 
@@ -358,18 +358,52 @@ const handleChannelOffline = async (account) => {
     [targetReportStreamerId, dateStr, durationHours]
   );
 
-  const streamerRes = await query('SELECT nama FROM streamers WHERE id = $1', [targetReportStreamerId]);
-  const nama = streamerRes.rows[0]?.nama || `Streamer #${targetReportStreamerId}`;
+  const streamerRes = await query('SELECT nama, telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [targetReportStreamerId]);
+  const streamer = streamerRes.rows[0];
+  const nama = streamer?.nama || `Streamer #${targetReportStreamerId}`;
+  const formattedDur = formatDuration(durationMs / 60000);
 
-  console.log(`[YouTube Service] ✅ ${nama} selesai live ${platformName} — durasi: ${formatDuration(durationMs / 60000)}`);
+  // Kirim notifikasi Telegram bahwa live selesai
+  if (streamer && streamer.telegram_chat_id) {
+    const mention = streamer.telegram_username ? `@${streamer.telegram_username.trim()}` : `*${nama}*`;
+    const msg = `🟩 *LIVE SELESAI — ${nama}*\n\n${mention} Sesi live ${platformName} telah berakhir.\n• Durasi sesi: *${formattedDur}*\n• Total durasi otomatis ditambahkan ke laporan harian.`;
+    await sendNotification(msg, streamer.telegram_chat_id).catch(() => {});
+  }
+
+  console.log(`[YouTube Service] ✅ ${nama} selesai live ${platformName} — durasi: ${formattedDur}`);
 };
+
+// Streamer keyword aliases for 100% accurate title attribution
+const STREAMER_KEYWORD_ALIASES = [
+  { keywords: ['bray', 'brayy', 'arief', 'candle'], canonicalName: 'brayy' },
+  { keywords: ['rival', 'suhanda'], canonicalName: 'rival suhanda' },
+  { keywords: ['ajo'], canonicalName: 'ajo' },
+  { keywords: ['tizza', 'teizza', 'got'], canonicalName: 'tizza' },
+  { keywords: ['ratu', 'valencia'], canonicalName: 'ratu' },
+  { keywords: ['aline'], canonicalName: 'aline' },
+  { keywords: ['keyla'], canonicalName: 'keyla' },
+  { keywords: ['qamil', 'alvaro', 'alvano'], canonicalName: 'qamil alvaro' },
+  { keywords: ['syabila', 'bila'], canonicalName: 'syabila' },
+];
 
 // Helper to match streamer by live title
 const findStreamerByLiveTitle = (title, streamers) => {
   if (!title) return null;
   const normalizedTitle = title.toLowerCase();
   
-  // Sort by length desc to match longer names first
+  // 1. Check keyword alias map first for direct hits
+  for (const aliasGroup of STREAMER_KEYWORD_ALIASES) {
+    for (const kw of aliasGroup.keywords) {
+      if (normalizedTitle.includes(kw)) {
+        const matched = streamers.find(s => s.nama.toLowerCase().includes(aliasGroup.canonicalName) || aliasGroup.canonicalName.includes(s.nama.toLowerCase()));
+        if (matched) {
+          return matched;
+        }
+      }
+    }
+  }
+
+  // 2. Sort by length desc to match longer names first
   const sortedStreamers = [...streamers].sort((a, b) => b.nama.length - a.nama.length);
   
   for (const streamer of sortedStreamers) {
@@ -575,7 +609,7 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
             // Channel offline → cek apakah ada sesi yang perlu ditutup
             const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
             for (const acc of channelAccounts) {
-              await handleChannelOffline(acc);
+              await handleChannelOffline(acc, sendNotification);
             }
           }
 
@@ -656,7 +690,7 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
         } else {
           // Jika offline, cek dan tutup sesi live yang aktif
           const ttAccount = { ...account, platform: 'TikTok' };
-          await handleChannelOffline(ttAccount);
+          await handleChannelOffline(ttAccount, sendNotification);
         }
  
         // Delay 2 detik antar check TikTok agar tidak dicurigai bot oleh Cloudflare

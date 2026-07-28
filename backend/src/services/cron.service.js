@@ -431,9 +431,24 @@ export const checkMinLiveViolations = async (wibDateStr) => {
   }
 };
 
-// generateDailySchedules dan checkPreLiveReminders dihapus.
-// Sistem sekarang mengandalkan pure live detection: jadwal dibuat otomatis saat streamer terdeteksi live.
-
+/**
+ * Clean up stale 'Scheduled' entries older than 24 hours.
+ */
+export const cleanupStaleSchedules = async () => {
+  try {
+    const res = await query(
+      `UPDATE schedule
+       SET status = 'Cancelled'
+       WHERE status = 'Scheduled'
+         AND start_time < NOW() - INTERVAL '24 hours'`
+    );
+    if (res.rowCount > 0) {
+      console.log(`[Cron] Cleaned up ${res.rowCount} stale Scheduled entries.`);
+    }
+  } catch (error) {
+    console.error('[Cron] Error cleaning up stale schedules:', error.message);
+  }
+};
 
 /**
  * Master scheduler using node-cron with Asia/Jakarta (WIB UTC+7) timezone
@@ -487,6 +502,11 @@ export const startCronJobs = (botInstance) => {
     autoGenerateWeeklyEvaluations().catch(err => console.error('[Cron] Error running autoGenerateWeeklyEvaluations:', err));
   }, { timezone: 'Asia/Jakarta' });
 
+  // ⏰ Clean up stale Scheduled entries at 03:00 WIB every day
+  cron.schedule('0 3 * * *', () => {
+    cleanupStaleSchedules().catch(err => console.error('[Cron] Error running cleanupStaleSchedules:', err));
+  }, { timezone: 'Asia/Jakarta' });
+
   // ⏰ [YouTube Live Detection] — tiap 15 menit, jam 07:00-23:00 WIB
   // Pure live detection: selalu cek semua channel tanpa filter jadwal
   // Estimasi quota: ~6.400 units/hari (di bawah free tier 10K) ✅
@@ -495,4 +515,7 @@ export const startCronJobs = (botInstance) => {
     checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
   }, { timezone: 'Asia/Jakarta' });
 };
+
+
+
 
