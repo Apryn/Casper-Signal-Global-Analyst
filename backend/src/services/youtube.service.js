@@ -68,60 +68,98 @@ export const getYouTubeConcurrentViewers = async (videoId, apiKey) => {
   }
 };
 
+// ── Helper: Smart HTML Scraper untuk YouTube Live Status (0 Quota / Gratis / Immune 429) ──
+export const checkYouTubeLiveViaScrape = async (channelId) => {
+  try {
+    const url = `https://www.youtube.com/channel/${channelId}/live`;
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    if (!response.ok) return { isLive: false, videoId: null, title: null };
+
+    const html = await response.text();
+    const isLive = html.includes('"isLive":true') || html.includes('"style":"LIVE"') || html.includes('liveStreamabilityRenderer');
+
+    if (!isLive) {
+      return { isLive: false, videoId: null, title: null };
+    }
+
+    const videoIdMatch = html.match(/"videoId":"([^"]+)"/) || html.match(/href="\/watch\?v=([^"]+)"/);
+    const videoId = videoIdMatch ? videoIdMatch[1] : null;
+
+    const titleMatch = html.match(/<title>(.*?)<\/title>/) || html.match(/"title":{"runs":\[{"text":"([^"]+)"}/);
+    let title = titleMatch ? (titleMatch[1] || titleMatch[2]) : null;
+    if (title) {
+      title = title.replace(/ - YouTube$/, '').trim();
+    }
+
+    return { isLive: true, videoId, title };
+  } catch (err) {
+    console.warn(`[YouTube Scraper] Failed to scrape channel ${channelId}: ${err.message}`);
+    return { isLive: false, videoId: null, title: null };
+  }
+};
+
 // ── Core: Cek satu channel apakah sedang live ─────────────────────────────
 /**
  * @param {string} channelId - YouTube Channel ID (UCxxxxx)
- * @param {string} apiKey
+ * @param {string} apiKey - Optional
  * @returns {{ isLive: boolean, videoId: string|null, title: string|null, actualStartTime: Date|null, viewerCount: number }}
  */
-export const checkChannelLiveStatus = async (channelId, apiKey) => {
-  try {
-    const url = new URL(`${YOUTUBE_API_BASE}/search`);
-    url.searchParams.set('part', 'snippet');
-    url.searchParams.set('channelId', channelId);
-    url.searchParams.set('eventType', 'live');
-    url.searchParams.set('type', 'video');
-    url.searchParams.set('key', apiKey);
-
-    const response = await fetch(url.toString(), {
-      signal: AbortSignal.timeout(10000),
-    });
-
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}));
-      const errMsg = errBody?.error?.message || response.statusText;
-      throw new Error(`YouTube API error (${response.status}): ${errMsg}`);
-    }
-
-    const data = await response.json();
-
-    if (!data.items || data.items.length === 0) {
-      return { isLive: false, videoId: null, title: null, actualStartTime: null, viewerCount: 0 };
-    }
-
-    const liveItem = data.items[0];
-    const videoId = liveItem.id?.videoId || null;
-    const publishedAt = liveItem.snippet?.publishedAt
-      ? new Date(liveItem.snippet.publishedAt)
-      : new Date();
-
-    // Ambil jumlah penonton aktif Youtube
+export const checkChannelLiveStatus = async (channelId, apiKey = null) => {
+  // 1. Utamakan HTML Scraping (0 Quota cost, 100% bebas dari error 429 Quota Exceeded!)
+  const scraped = await checkYouTubeLiveViaScrape(channelId);
+  if (scraped.isLive) {
     let viewerCount = 0;
-    if (videoId) {
-      viewerCount = await getYouTubeConcurrentViewers(videoId, apiKey);
+    if (apiKey && scraped.videoId) {
+      viewerCount = await getYouTubeConcurrentViewers(scraped.videoId, apiKey).catch(() => 0);
     }
-
     return {
       isLive: true,
-      videoId,
-      title: liveItem.snippet?.title || null,
-      actualStartTime: publishedAt,
+      videoId: scraped.videoId,
+      title: scraped.title,
+      actualStartTime: new Date(),
       viewerCount
     };
-  } catch (err) {
-    console.error(`[YouTube Service] Error checking channel ${channelId}: ${err.message}`);
-    return { isLive: false, videoId: null, title: null, actualStartTime: null, viewerCount: 0 };
   }
+
+  // 2. Fallback ke API search jika scraping return false dan apiKey tersedia
+  if (apiKey) {
+    try {
+      const url = new URL(`${YOUTUBE_API_BASE}/search`);
+      url.searchParams.set('part', 'snippet');
+      url.searchParams.set('channelId', channelId);
+      url.searchParams.set('eventType', 'live');
+      url.searchParams.set('type', 'video');
+      url.searchParams.set('key', apiKey);
+
+      const response = await fetch(url.toString(), { signal: AbortSignal.timeout(10000) });
+      if (response.ok) {
+        const data = await response.json();
+        if (data.items && data.items.length > 0) {
+          const liveItem = data.items[0];
+          const videoId = liveItem.id?.videoId || null;
+          const publishedAt = liveItem.snippet?.publishedAt ? new Date(liveItem.snippet.publishedAt) : new Date();
+          const viewerCount = videoId ? await getYouTubeConcurrentViewers(videoId, apiKey).catch(() => 0) : 0;
+          return {
+            isLive: true,
+            videoId,
+            title: liveItem.snippet?.title || null,
+            actualStartTime: publishedAt,
+            viewerCount
+          };
+        }
+      }
+    } catch (err) {
+      console.warn(`[YouTube Service API Fallback]: ${err.message}`);
+    }
+  }
+
+  return { isLive: false, videoId: null, title: null, actualStartTime: null, viewerCount: 0 };
 };
 
 // ── Core: Cocokkan live channel dengan jadwal terdaftar ───────────────────
@@ -450,23 +488,24 @@ const findStreamerByLiveTitle = (title, streamers) => {
 export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) => {
   const apiKey = getApiKey();
   if (!apiKey) {
-    console.log('[YouTube Service] YOUTUBE_API_KEY belum dikonfigurasi. Deteksi live YouTube dilewati.');
-  } else {
-    // Ambil semua akun YouTube dengan channel_id
-    const accountsRes = await query(
-      `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, s.nama
-       FROM streamer_accounts sa
-       JOIN streamers s ON sa.streamer_id = s.id
-       WHERE sa.platform = 'YouTube'
-         AND sa.channel_id IS NOT NULL
-         AND sa.channel_id <> ''`
-    );
+    console.log('[YouTube Service] YOUTUBE_API_KEY tidak set, menggunakan Smart HTML Scraper (0 Quota).');
+  }
 
-    const accounts = accountsRes.rows;
-    if (accounts.length === 0) {
-      console.log('[YouTube Service] Tidak ada channel YouTube dengan channel_id terdaftar.');
-    } else {
-      console.log(`[YouTube Service] Checking ${accounts.length} YouTube channel(s)...`);
+  // Ambil semua akun YouTube dengan channel_id
+  const accountsRes = await query(
+    `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, s.nama
+     FROM streamer_accounts sa
+     JOIN streamers s ON sa.streamer_id = s.id
+     WHERE sa.platform = 'YouTube'
+       AND sa.channel_id IS NOT NULL
+       AND sa.channel_id <> ''`
+  );
+
+  const accounts = accountsRes.rows;
+  if (accounts.length === 0) {
+    console.log('[YouTube Service] Tidak ada channel YouTube dengan channel_id terdaftar.');
+  } else {
+    console.log(`[YouTube Service] Checking ${accounts.length} YouTube channel(s)...`);
 
       // Deduplicate: satu channel_id bisa dipunya 2 streamer
       // Kita cek per channel_id, lalu tentukan streamer berdasarkan jadwal
@@ -628,7 +667,6 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
       }
       console.log('[YouTube Service] Live status check complete.');
     }
-  }
  
   // ── NEW: DETEKSI LIVE TIKTOK (Smart HTML Scraping) ────────────────────────
   try {
