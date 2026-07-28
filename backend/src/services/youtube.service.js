@@ -351,8 +351,9 @@ const handleChannelOffline = async (account, sendNotification = async () => {}) 
   );
 
   // Catat net duration di daily_reports milik target streamer (asli atau pengganti)
+  // Menggunakan tanggal mulai live (actual_start_time) agar live malam/dini hari (misal 23:00 - 03:00) tercatat di tanggal hari live dimulai
   const targetReportStreamerId = schedule.substitute_streamer_id || schedule.streamer_id;
-  const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
+  const dateStr = new Date(schedule.actual_start_time || now).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' }); // YYYY-MM-DD
   
   if (netDurationHours > 0) {
     await query(
