@@ -95,8 +95,7 @@ export const getDashboardSummary = async (req, res) => {
             SELECT sc.platform FROM schedule sc
             WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
               AND sc.status = 'Live'
-              AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
-            LIMIT 1
+            ORDER BY sc.actual_start_time DESC LIMIT 1
           ),
           s.platform
         ) as platform,
@@ -108,14 +107,12 @@ export const getDashboardSummary = async (req, res) => {
           SELECT 1 FROM schedule sc
           WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
-            AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
         ) THEN TRUE ELSE FALSE END as is_currently_live,
         (
-          SELECT sc.start_time FROM schedule sc
+          SELECT sc.actual_start_time FROM schedule sc
           WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
-            AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
-          ORDER BY sc.start_time DESC LIMIT 1
+          ORDER BY sc.actual_start_time DESC LIMIT 1
         ) as actual_start_time,
         COALESCE(
           (
@@ -123,8 +120,7 @@ export const getDashboardSummary = async (req, res) => {
             FROM schedule sc
             WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
               AND sc.status = 'Live'
-              AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
-            ORDER BY sc.start_time DESC LIMIT 1
+            ORDER BY sc.actual_start_time DESC LIMIT 1
           ),
           (
             SELECT sa.link FROM streamer_accounts sa
@@ -340,6 +336,57 @@ export const getLeaderboard = async (req, res) => {
     })));
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+export const getLiveViewerTrends = async (req, res) => {
+  const { range = '30days' } = req.query;
+  const { start, end } = getDateRangeFilter(range);
+
+  try {
+    const peakViewersRes = await query(
+      `SELECT 
+        s.id,
+        s.nama,
+        COALESCE(MAX(h.viewer_count), 0) as peak_viewers,
+        COALESCE(ROUND(AVG(h.viewer_count)), 0) as avg_viewers,
+        COUNT(h.id) as data_points
+       FROM streamers s
+       LEFT JOIN live_viewer_history h ON s.id = h.streamer_id AND DATE(h.recorded_at AT TIME ZONE 'Asia/Jakarta') >= $1 AND DATE(h.recorded_at AT TIME ZONE 'Asia/Jakarta') <= $2
+       GROUP BY s.id
+       ORDER BY peak_viewers DESC, avg_viewers DESC`,
+      [start, end]
+    );
+
+    const activeLiveRes = await query(
+      `SELECT 
+        sc.id as schedule_id,
+        st.nama as streamer_name,
+        sc.platform,
+        sc.actual_start_time,
+        sc.live_link,
+        COALESCE(
+          (SELECT viewer_count FROM live_viewer_history WHERE schedule_id = sc.id ORDER BY recorded_at DESC LIMIT 1),
+          0
+        ) as current_viewers
+       FROM schedule sc
+       JOIN streamers st ON COALESCE(sc.substitute_streamer_id, sc.streamer_id) = st.id
+       WHERE sc.status = 'Live'`
+    );
+
+    res.json({
+      streamerStats: peakViewersRes.rows.map(row => ({
+        id: row.id,
+        nama: row.nama,
+        peakViewers: parseInt(row.peak_viewers, 10),
+        avgViewers: parseInt(row.avg_viewers, 10),
+        dataPoints: parseInt(row.data_points, 10)
+      })),
+      activeLiveSessions: activeLiveRes.rows
+    });
+  } catch (error) {
+    console.error('Error fetching live viewer trends:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };

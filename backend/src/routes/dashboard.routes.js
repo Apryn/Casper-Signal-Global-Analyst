@@ -3,7 +3,8 @@ import {
   getDashboardSummary,
   getChartData,
   getComparisonData,
-  getLeaderboard
+  getLeaderboard,
+  getLiveViewerTrends
 } from '../controllers/dashboard.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
@@ -16,5 +17,6 @@ router.get('/summary', getDashboardSummary);
 router.get('/charts', getChartData);
 router.get('/comparison', getComparisonData);
 router.get('/leaderboard', getLeaderboard);
+router.get('/live-viewers', getLiveViewerTrends);
 
 export default router;

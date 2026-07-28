@@ -411,7 +411,8 @@ const handleChannelOffline = async (account, sendNotification = async () => {}) 
   // Kirim notifikasi Telegram bahwa live selesai
   if (streamer && streamer.telegram_chat_id) {
     const mention = streamer.telegram_username ? `@${streamer.telegram_username.trim()}` : `*${nama}*`;
-    const msg = `🟩 *LIVE SELESAI — ${nama}*\n\n${mention} Sesi live ${platformName} telah berakhir.\n• Durasi sesi: *${formattedDur}*\n• Total durasi otomatis ditambahkan ke laporan harian.`;
+    const shortWarning = durationHours < 2.0 ? `\n⚠️ *Perhatian:* Durasi live (${formattedDur}) kurang dari target minimal 2 jam.` : '';
+    const msg = `🟩 *LIVE SELESAI — ${nama}*\n\n${mention} Sesi live ${platformName} telah berakhir.\n• Durasi sesi: *${formattedDur}*${shortWarning}\n• Total durasi otomatis ditambahkan ke laporan harian.`;
     await sendNotification(msg, streamer.telegram_chat_id).catch(() => {});
   }
 
