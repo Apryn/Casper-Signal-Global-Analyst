@@ -345,40 +345,41 @@ const extractLive = (text) => {
     return parseFloat(total.toFixed(2));
   }
 
-  // B: "LIVE : 5 JAM" or "LIVE: 5 JAM" (same line)
-  const liveJam = text.match(/\bLIVE\s*[:\s]+(\d+(?:[.,]\d+)?)\s*JAM/i);
-  if (liveJam) return parseFloat(parseFloat(liveJam[1].replace(',', '.')).toFixed(2));
+  // B1: Single-line "LIVE : 5 JAM" or "LIVE: 5 JAM" or "Live: 4" or "SESI LIVE: 4" (on the same line)
+  const liveJamSameLine = text.match(/\b(?:SESI\s+)?LIVE\s*:[ \t]*(\d+(?:[.,]\d+)?)(?:[ \t]*jam)?(?:\s|$)/i);
+  if (liveJamSameLine) {
+    return parseFloat(parseFloat(liveJamSameLine[1].replace(',', '.')).toFixed(2));
+  }
 
-  // B2: Multi-line LIVE block: "LIVE:\n2 jam\n2 jam" → sum all bare "X jam" lines after LIVE:
-  const liveBlockMatch = text.match(/\bLIVE\s*:\s*\n([\s\S]*?)(?=\n[A-Z]{2,}\s*:|$)/i);
+  // B2: Multi-line LIVE block: "LIVE:" or "SESI LIVE" followed by newline and then lines with "X jam" or bare number "X"
+  const liveBlockMatch = text.match(/\b(?:SESI\s+)?LIVE\s*:?\s*\n([\s\S]*?)(?=\n[A-Z]{2,}\s*:|$)/i);
   if (liveBlockMatch) {
     const blockLines = liveBlockMatch[1].split('\n');
     let total = 0;
     for (const bl of blockLines) {
-      const m = bl.trim().match(/^(\d+(?:[.,]\d+)?)\s*jam/i);
+      const m = bl.trim().match(/^(\d+(?:[.,]\d+)?)(?:\s*jam)?$/i);
       if (m) total += parseFloat(m[1].replace(',', '.'));
     }
     if (total > 0) return parseFloat(total.toFixed(2));
   }
 
-
-  // B: "YouTube : 6 jam" or "YouTube : 5 jam" inside SESI LIVE block
+  // C: "YouTube : 6 jam" or "YouTube : 5 jam" inside SESI LIVE block
   const ytJam = text.match(/YouTube\s*:\s*(\d+(?:[.,]\d+)?)\s*jam/i);
   if (ytJam) return parseFloat(parseFloat(ytJam[1].replace(',', '.')).toFixed(2));
 
-  // C: "Total live : 3 jam"
-  const totalJam = text.match(/Total\s+live\s*:\s*(\d+(?:[.,]\d+)?)\s*(?:jam)/i);
+  // D: "Total live : 3 jam" or "Total live : 3"
+  const totalJam = text.match(/Total\s+live\s*:\s*(\d+(?:[.,]\d+)?)(?:\s*jam)?/i);
   if (totalJam) return parseFloat(parseFloat(totalJam[1].replace(',', '.')).toFixed(2));
 
-  // D: "Total live : 3 sesi" → treat as 3 hours (1 session ≈ 1 hour)
+  // E: "Total live : 3 sesi" → treat as 3 hours (1 session ≈ 1 hour)
   const totalSesi = text.match(/Total\s+live\s*:\s*(\d+)\s*sesi/i);
   if (totalSesi) return parseInt(totalSesi[1]);
 
-  // E: "SESI LIVE: 4jam"  or  "Sesi live: 3 jam"
-  const sesiJam = text.match(/SESI\s+LIVE\s*[:\s]+(\d+(?:[.,]\d+)?)\s*jam/i);
+  // F: "SESI LIVE: 4jam"  or  "Sesi live: 3 jam"
+  const sesiJam = text.match(/SESI\s+LIVE\s*:[ \t]*(\d+(?:[.,]\d+)?)\s*(?:jam)?/i);
   if (sesiJam) return parseFloat(parseFloat(sesiJam[1].replace(',', '.')).toFixed(2));
 
-  // F: Count "JAM : HH:MM" or "JAM ONTIME : HH:MM" lines (numeric time only)
+  // G: Count "JAM : HH:MM" or "JAM ONTIME : HH:MM" lines (numeric time only)
   const jamLines = (text.match(/^JAM\s*(?:ONTIME)?\s*:\s*[\d.:]+/gim) || [])
     .filter(l => /\d{1,2}[:.]\d{2}/.test(l));
   if (jamLines.length > 0) return jamLines.length;
@@ -594,7 +595,7 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
        youtube_upload    = EXCLUDED.youtube_upload,
        instagram_upload  = EXCLUDED.instagram_upload,
        facebook_upload   = EXCLUDED.facebook_upload,
-       live_duration     = COALESCE(NULLIF(daily_reports.live_duration, 0), EXCLUDED.live_duration),
+       live_duration     = EXCLUDED.live_duration,
        chat_count        = EXCLUDED.chat_count,
        registration_count= EXCLUDED.registration_count,
        ftd_count         = EXCLUDED.ftd_count,

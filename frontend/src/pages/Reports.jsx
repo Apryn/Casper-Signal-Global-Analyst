@@ -380,34 +380,39 @@ const Reports = () => {
       {/* Page Title & Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-white tracking-wide">Daily Recaps Ledger</h2>
-          <p className="text-sm text-gray-400">Search, filter, edit, and export structured daily streamer reports.</p>
+          <h2 className="text-2xl font-bold text-white tracking-wide flex items-center gap-2">
+            <span>Daily Recaps Ledger</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              {reports.length} Records
+            </span>
+          </h2>
+          <p className="text-sm text-slate-400">Monitoring & audit log performa harian streamer, live streaming, dan konversi FTD.</p>
         </div>
         
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <button
             onClick={handleExportPdf}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/10 active:translate-y-px transition-all duration-200"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-rose-600/90 hover:bg-rose-500 text-white shadow-md transition-all duration-200 active:scale-95"
           >
-            <Download className="h-4.5 w-4.5" />
-            Export to PDF
+            <Download className="h-4 w-4" />
+            Export PDF
           </button>
 
           <button
             onClick={handleExportExcel}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/10 active:translate-y-px transition-all duration-200"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-emerald-600/90 hover:bg-emerald-500 text-white shadow-md transition-all duration-200 active:scale-95"
           >
-            <Download className="h-4.5 w-4.5" />
-            Export to Excel
+            <Download className="h-4 w-4" />
+            Export Excel
           </button>
 
           <button
             onClick={handleSendTelegramReminder}
             disabled={telegramSending}
-            className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold text-white shadow-lg transition-all duration-200 active:translate-y-px ${
+            className={`flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white shadow-md transition-all duration-200 active:scale-95 ${
               telegramSending 
                 ? 'bg-sky-700/50 cursor-not-allowed opacity-75' 
-                : 'bg-sky-600 hover:bg-sky-500 shadow-sky-600/10'
+                : 'bg-sky-600 hover:bg-sky-500'
             }`}
           >
             {telegramSending ? (
@@ -418,17 +423,17 @@ const Reports = () => {
             ) : (
               <>
                 <Send className="h-4 w-4" />
-                Kirim Pengingat Telegram
+                Pengingat Telegram
               </>
             )}
           </button>
 
           <button
             onClick={handleOpenAddModal}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200"
+            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20 transition-all duration-200 active:scale-95"
           >
-            <Plus className="h-4.5 w-4.5" />
-            Tambah Laporan Baru
+            <Plus className="h-4 w-4" />
+            Tambah Laporan
           </button>
         </div>
       </div>
@@ -456,172 +461,442 @@ const Reports = () => {
         </div>
       )}
 
+      {/* Stat Cards Overview Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Total Reports */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Total Laporan</p>
+              <h3 className="text-2xl font-extrabold text-white mt-1">{reports.length} <span className="text-xs text-slate-500 font-normal">rekap</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+              <Tv className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]">
+              {reports.filter(r => r.kategori === 'Streaming').length} Streaming
+            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-800 text-slate-400 font-semibold border border-slate-700/50 text-[11px]">
+              {reports.filter(r => r.kategori === 'Non Streaming').length} Off
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Total Live Hours */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Total Jam Live</p>
+              <h3 className="text-2xl font-extrabold text-purple-300 mt-1">{totalLive.toFixed(1)} <span className="text-xs text-slate-500 font-normal">Jam</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
+              <Video className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-purple-300/80 font-medium">
+            Akumulasi durasi tayang live streamer
+          </div>
+        </div>
+
+        {/* Card 3: Total Registrations & Chats */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Registrasi & Chat</p>
+              <h3 className="text-2xl font-extrabold text-indigo-300 mt-1">{totalRegs.toLocaleString()} <span className="text-xs text-slate-500 font-normal">Regs</span></h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+              <UserCheck className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between gap-2 border-t border-slate-800/60 pt-2">
+            <span>Total Chat Masuk:</span>
+            <span className="font-bold text-white font-mono bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/60">{totalChats.toLocaleString()}</span>
+          </div>
+        </div>
+
+        {/* Card 4: Total FTD */}
+        <div className="glass-panel p-4.5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 shadow-lg relative overflow-hidden group hover:border-amber-400/50 transition-all flex flex-col justify-between">
+          <div className="flex justify-between items-start gap-2">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 truncate">Total FTD</p>
+              <p className="text-[9px] font-semibold text-amber-500/80 uppercase tracking-widest -mt-0.5">Deposit Baru</p>
+              <h3 className="text-2xl font-extrabold text-amber-400 mt-1 tracking-tight drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+                {totalFtds.toLocaleString()} <span className="text-xs text-amber-300 font-normal">FTD</span>
+              </h3>
+            </div>
+            <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/30 text-amber-400 shrink-0 shadow-inner">
+              <Coins className="h-5 w-5" />
+            </div>
+          </div>
+          <div className="mt-3 text-[11px] text-amber-400/90 font-semibold flex items-center gap-1.5 border-t border-amber-500/20 pt-2">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+            <span className="truncate">Puncak pencapaian konversi</span>
+          </div>
+        </div>
+      </div>
+
       {/* Filter Control Bar */}
-      <div className="glass-panel p-5 rounded-2xl border bg-slate-950/20 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+      <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-950/40 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
         
         {/* Name Search */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">Streamer Name</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Cari Streamer</label>
           <div className="relative">
-            <Search className="absolute inset-y-0 left-0 pl-3.5 h-full w-4.5 text-gray-500 flex items-center pointer-events-none" />
+            <Search className="absolute inset-y-0 left-0 pl-3 h-full w-4 text-slate-500 flex items-center pointer-events-none" />
             <input
               type="text"
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
-              placeholder="Search by name..."
-              className="block w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+              placeholder="Nama streamer..."
+              className="block w-full h-10 pl-9 pr-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
             />
           </div>
         </div>
 
         {/* Start Date */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">Start Date</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Mulai Tanggal</label>
           <div className="relative">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full px-3.5 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
             />
           </div>
         </div>
 
         {/* End Date */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest">End Date</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Sampai Tanggal</label>
           <div className="relative">
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full px-3.5 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
             />
           </div>
+        </div>
+
+        {/* Category Filter */}
+        <div className="space-y-1.5">
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Kategori Status</label>
+          <select
+            value={kategori}
+            onChange={(e) => setKategori(e.target.value)}
+            className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+          >
+            <option value="">Semua Kategori</option>
+            <option value="Streaming">Streaming Only</option>
+            <option value="Non Streaming">Non Streaming Only</option>
+          </select>
         </div>
 
         {/* Reset button */}
         <button
           onClick={handleResetFilters}
-          className="w-full py-2 px-4 rounded-xl border border-dark-border hover:bg-slate-950 text-sm font-semibold text-gray-300 hover:text-white transition-colors h-10"
+          className="w-full h-10 flex items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
         >
           Reset Filters
         </button>
 
       </div>
 
-      {/* Main Table */}
-      <div className="glass-panel rounded-2xl border bg-slate-950/20 overflow-hidden shadow-xl">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-dark-border bg-slate-950/50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-                <th className="py-4.5 px-6">Tanggal</th>
-                <th className="py-4.5 px-4">Nama</th>
-                <th className="py-4.5 px-4 text-center">TikTok</th>
-                <th className="py-4.5 px-4 text-center">Youtube</th>
-                <th className="py-4.5 px-4 text-center">Instagram</th>
-                <th className="py-4.5 px-4 text-center">Facebook</th>
-                <th className="py-4.5 px-4 text-center">Live</th>
-                <th className="py-4.5 px-4 text-right">Chats</th>
-                <th className="py-4.5 px-4 text-right">Regs</th>
-                <th className="py-4.5 px-4 text-right">FTD</th>
-                <th className="py-4.5 px-6 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-dark-border/40 text-sm text-gray-300">
-              {loading ? (
-                <tr>
-                  <td colSpan="11" className="py-12 text-center text-indigo-400">
-                    <div className="flex justify-center items-center gap-2">
-                      <div className="h-5 w-5 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
-                      <span>Updating reports ledger...</span>
-                    </div>
-                  </td>
-                </tr>
-              ) : reports.length === 0 ? (
-                <tr>
-                  <td colSpan="11" className="py-12 text-center text-gray-500">
-                    No reports match selected filters.
-                  </td>
-                </tr>
-              ) : (
-                reports.map((report) => (
-                  <tr key={report.id} className="hover:bg-slate-900/25 transition-colors group">
-                    {/* Date */}
-                    <td className="py-4 px-6 text-xs font-mono font-medium text-white">
-                      {report.tanggal ? report.tanggal.split('T')[0] : '-'}
-                    </td>
-                    
-                    {/* Name */}
-                    <td className="py-4 px-4 font-semibold text-white">
-                      {report.streamer_name}
-                      <span className="block text-[10px] text-gray-400 font-normal">{report.streamer_platform}</span>
-                    </td>
+      {/* ========== CARD VIEW - Grouped by Date (Clean Executive Layout) ========== */}
+      {(() => {
+        const MIN_LIVE_HOURS = 4; // Target minimum jam live per hari (4 Jam SOP)
 
-                    {/* Uploads Breakdown */}
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.tiktok_upload || '-'}</td>
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.youtube_upload || '-'}</td>
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.instagram_upload || '-'}</td>
-                    <td className="py-4 px-4 text-center font-semibold text-white">{report.facebook_upload || '-'}</td>
+        // Group reports by date, sort dates descending
+        const groupedByDate = reports.reduce((groups, report) => {
+          const date = report.tanggal ? report.tanggal.split('T')[0] : 'Unknown';
+          if (!groups[date]) groups[date] = [];
+          groups[date].push(report);
+          return groups;
+        }, {});
+        const sortedDates = Object.keys(groupedByDate).sort((a, b) => new Date(b) - new Date(a));
 
-                    {/* Live Hours */}
-                    <td className="py-4 px-4 text-center font-mono font-bold text-indigo-400">
-                      {report.live_duration > 0 ? `${report.live_duration}h` : '-'}
-                    </td>
+        // Format date to Indonesian
+        const formatDate = (dateStr) => {
+          const d = new Date(dateStr + 'T00:00:00');
+          return d.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        };
 
-                    {/* Engagement Counts */}
-                    <td className="py-4 px-4 text-right font-mono font-medium">{report.chat_count.toLocaleString()}</td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-amber-500">{report.registration_count}</td>
-                    <td className="py-4 px-4 text-right font-mono font-bold text-emerald-400">{report.ftd_count}</td>
+        if (loading) {
+          return (
+            <div className="flex justify-center items-center gap-3 py-20 text-indigo-400">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
+              <span className="text-sm">Memuat data laporan harian...</span>
+            </div>
+          );
+        }
 
-                    {/* Actions */}
-                    <td className="py-4 px-6 text-center">
-                      <div className="flex items-center justify-center gap-2.5">
-                        <button
-                          onClick={() => handleEditClick(report)}
-                          className="p-1.5 rounded-lg border border-dark-border hover:border-indigo-500/40 hover:bg-indigo-500/10 text-gray-400 hover:text-indigo-400 transition-all duration-200"
-                          title="Edit Report"
-                        >
-                          <Edit2 className="h-3.5 w-3.5" />
-                        </button>
-                        
-                        {isAdmin && (
-                          <button
-                            onClick={() => handleDelete(report.id)}
-                            className="p-1.5 rounded-lg border border-dark-border hover:border-red-500/40 hover:bg-red-500/10 text-gray-400 hover:text-red-400 transition-all duration-200"
-                            title="Delete Report"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
+        if (reports.length === 0 && streamers.length === 0) {
+          return (
+            <div className="py-20 text-center text-slate-500 text-sm">
+              Tidak ada laporan yang sesuai dengan filter.
+            </div>
+          );
+        }
+
+        return (
+          <div className="space-y-8">
+            {sortedDates.map((date) => {
+              const dayReports = groupedByDate[date] || [];
+              const reportStreamerNames = new Set(dayReports.map(r => r.streamer_name ? r.streamer_name.toLowerCase().trim() : ''));
+
+              // Find registered streamers who HAVEN'T submitted a report for this date
+              const missingStreamers = streamers.filter(s => {
+                if (searchName && !s.nama.toLowerCase().includes(searchName.toLowerCase())) return false;
+                return !reportStreamerNames.has(s.nama.toLowerCase().trim());
+              });
+
+              const dayFtds = dayReports.reduce((s, r) => s + (r.ftd_count || 0), 0);
+              const dayRegs = dayReports.reduce((s, r) => s + (r.registration_count || 0), 0);
+              const dayChats = dayReports.reduce((s, r) => s + (r.chat_count || 0), 0);
+              const dayLive = dayReports.reduce((s, r) => s + parseFloat(r.live_duration || 0), 0);
+              
+              const workedSopCount = dayReports.filter(r => {
+                const isStreaming = r.kategori === 'Streaming';
+                const liveMet = parseFloat(r.live_duration || 0) >= MIN_LIVE_HOURS;
+                return !isStreaming || liveMet;
+              }).length;
+
+              return (
+                <div key={date} className="space-y-4 bg-slate-950/40 p-5 rounded-2xl border border-slate-800/80 shadow-lg">
+                  
+                  {/* Date Header & Day Summary */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2.5 h-2.5 rounded-full bg-indigo-500 shrink-0"></div>
+                      <div>
+                        <h3 className="text-sm font-bold text-white tracking-wide">{formatDate(date)}</h3>
+                        <p className="text-[11px] text-slate-400 mt-0.5">
+                          <strong className="text-emerald-400 font-semibold">{dayReports.length}</strong> melapor &bull;{' '}
+                          <strong className={missingStreamers.length > 0 ? 'text-rose-400 font-semibold' : 'text-slate-400 font-normal'}>
+                            {missingStreamers.length} belum melapor/absen
+                          </strong>
+                        </p>
                       </div>
-                    </td>
+                    </div>
 
-                  </tr>
-                ))
-              )}
-            </tbody>
-            {reports.length > 0 && !loading && (
-              <tfoot className="border-t-2 border-dark-border bg-slate-950/80 text-xs font-bold text-white uppercase">
-                <tr className="bg-slate-950/60">
-                  <td className="py-4 px-6 text-gray-400">Total</td>
-                  <td className="py-4 px-4 text-gray-400">({reports.length} Laporan)</td>
-                  <td className="py-4 px-4 text-center">{totalTiktok}</td>
-                  <td className="py-4 px-4 text-center">{totalYoutube}</td>
-                  <td className="py-4 px-4 text-center">{totalInstagram}</td>
-                  <td className="py-4 px-4 text-center">{totalFacebook}</td>
-                  <td className="py-4 px-4 text-center text-indigo-400 font-mono">{totalLive.toFixed(1)}h</td>
-                  <td className="py-4 px-4 text-right font-mono">{totalChats.toLocaleString()}</td>
-                  <td className="py-4 px-4 text-right font-mono text-amber-500">{totalRegs}</td>
-                  <td className="py-4 px-4 text-right font-mono text-emerald-400">{totalFtds}</td>
-                  <td className="py-4 px-6 text-center"></td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      </div>
+                    {/* Day Summary Pills */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-slate-300 border border-slate-800 font-mono font-semibold">
+                        ⏱ {dayLive.toFixed(1)}h live
+                      </span>
+                      {dayChats > 0 && (
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-slate-400 border border-slate-800 font-mono font-semibold">
+                          💬 {dayChats.toLocaleString()} chat
+                        </span>
+                      )}
+                      {dayRegs > 0 && (
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-mono font-semibold">
+                          👤 {dayRegs} reg
+                        </span>
+                      )}
+                      {dayFtds > 0 ? (
+                        <span className="text-[11px] px-3 py-1 rounded-lg bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold font-mono shadow-[0_0_8px_rgba(245,158,11,0.2)]">
+                          ✨ {dayFtds} FTD
+                        </span>
+                      ) : (
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-slate-600 border border-slate-800 font-mono">
+                          0 FTD
+                        </span>
+                      )}
+                      <span className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-semibold">
+                        {workedSopCount}/{dayReports.length + missingStreamers.length} SOP (4h)
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Missing Streamers Alert Bar */}
+                  {missingStreamers.length > 0 && (
+                    <div className="p-3.5 rounded-xl border border-rose-900/40 bg-rose-950/20 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+                          <span>❌</span>
+                          <span>{missingStreamers.length} Streamer Belum Melapor:</span>
+                        </span>
+                        <button
+                          onClick={handleSendTelegramReminder}
+                          disabled={telegramSending}
+                          className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shrink-0 flex items-center gap-1.5 shadow-sm transition-all active:scale-95"
+                        >
+                          <Send className="h-3 w-3" />
+                          Kirim Pengingat Telegram
+                        </button>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        {missingStreamers.map(s => (
+                          <span key={s.id} className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-300 font-semibold text-[11px] border border-rose-500/20 flex items-center gap-1">
+                            {s.nama} <span className="text-[9.5px] text-rose-400/70 font-normal">({s.platform || 'TikTok'})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Streamer Cards Grid (Reporting Streamers Only) */}
+                  {dayReports.length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-1">
+                      {dayReports.map((report) => {
+                        const isStreaming = report.kategori === 'Streaming';
+                        const liveHours = parseFloat(report.live_duration || 0);
+                        const isSopMet = liveHours >= MIN_LIVE_HOURS;
+                        const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
+
+                        return (
+                          <div
+                            key={report.id}
+                            className={`relative rounded-2xl border p-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-xl flex flex-col justify-between ${
+                              !isStreaming
+                                ? 'bg-slate-900/60 border-slate-800'
+                                : isSopMet
+                                ? 'bg-gradient-to-b from-slate-900/90 to-emerald-950/20 border-emerald-500/30'
+                                : 'bg-gradient-to-b from-slate-900/90 to-amber-950/20 border-amber-500/30'
+                            }`}
+                          >
+                            {/* Card Top Header */}
+                            <div>
+                              <div className="flex items-start justify-between gap-2 mb-2.5">
+                                <div className="min-w-0 flex-1">
+                                  <h4 className="font-bold text-white text-sm leading-snug truncate">{report.streamer_name}</h4>
+                                  <span className="text-[11px] text-slate-400 font-medium">{report.streamer_platform}</span>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleEditClick(report)}
+                                    className="p-1.5 rounded-lg border border-slate-800 hover:border-indigo-500/40 hover:bg-indigo-500/10 text-slate-400 hover:text-indigo-300 transition-colors"
+                                    title="Edit Laporan"
+                                  >
+                                    <Edit2 className="h-3 w-3" />
+                                  </button>
+                                  {isAdmin && (
+                                    <button
+                                      onClick={() => handleDelete(report.id)}
+                                      className="p-1.5 rounded-lg border border-slate-800 hover:border-red-500/40 hover:bg-red-500/10 text-slate-400 hover:text-red-400 transition-colors"
+                                      title="Hapus Laporan"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* SOP Status Pill Header */}
+                              <div className="mb-3">
+                                {!isStreaming ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-semibold border border-slate-700/60 w-full justify-center truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
+                                    Non-Streaming (Off/Izin)
+                                  </span>
+                                ) : isSopMet ? (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                                    ✅ Live SOP {liveHours.toFixed(1)}h / 4h
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
+                                    ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h)
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Metrics Grid 4-Cols */}
+                              <div className="grid grid-cols-4 gap-1 text-center bg-slate-950/80 p-2.5 rounded-xl border border-slate-800/80 mb-3">
+                                {/* Live */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Live</p>
+                                  {liveHours > 0 ? (
+                                    <p className={`text-xs font-bold font-mono truncate ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`}>
+                                      {liveHours}h
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
+
+                                {/* Chat */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Chat</p>
+                                  {report.chat_count > 0 ? (
+                                    <p className="text-xs font-bold text-slate-200 font-mono truncate">{report.chat_count.toLocaleString()}</p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
+
+                                {/* Reg */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Reg</p>
+                                  {report.registration_count > 0 ? (
+                                    <p className="text-xs font-bold text-indigo-300 font-mono truncate">{report.registration_count}</p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
+
+                                {/* FTD */}
+                                <div className="min-w-0">
+                                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">FTD</p>
+                                  {report.ftd_count > 0 ? (
+                                    <p className="text-xs font-extrabold text-amber-300 font-mono drop-shadow-[0_0_6px_rgba(245,158,11,0.4)] truncate">
+                                      ✨{report.ftd_count}
+                                    </p>
+                                  ) : (
+                                    <p className="text-xs text-slate-600 font-mono">—</p>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Upload Sosmed pills */}
+                            <div className="border-t border-slate-800/80 pt-2.5 mt-1 flex flex-wrap gap-1.5 text-[10px] items-center min-h-[30px]">
+                              {totalUploads > 0 ? (
+                                <>
+                                  {report.tiktok_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700/60">TT·{report.tiktok_upload}</span>
+                                  )}
+                                  {report.youtube_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-rose-950/80 text-rose-300 font-mono font-semibold border border-rose-800/40">YT·{report.youtube_upload}</span>
+                                  )}
+                                  {report.instagram_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-pink-950/80 text-pink-300 font-mono font-semibold border border-pink-800/40">IG·{report.instagram_upload}</span>
+                                  )}
+                                  {report.facebook_upload > 0 && (
+                                    <span className="px-2 py-0.5 rounded-md bg-blue-950/80 text-blue-300 font-mono font-semibold border border-blue-800/40">FB·{report.facebook_upload}</span>
+                                  )}
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 italic font-medium w-full text-center py-0.5">Tidak ada upload konten</span>
+                              )}
+                            </div>
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-slate-500 text-xs italic">
+                      Belum ada streamer yang mengirimkan rekap pada tanggal ini.
+                    </div>
+                  )}
+
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
+
+
 
       {/* Edit Report Modal */}
       {editModalOpen && editingReport && (

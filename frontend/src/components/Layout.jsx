@@ -273,8 +273,8 @@ const Layout = () => {
               >
                 <Bell size={16} />
                 {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-5.5 w-5.5 items-center justify-center rounded-full bg-rose-600 text-[10px] font-extrabold text-white leading-none border-2 border-black">
-                    {unreadCount}
+                  <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 flex items-center justify-center rounded-full bg-rose-600 text-[10px] font-extrabold text-white leading-none border-2 border-black shadow-sm">
+                    {unreadCount > 99 ? '99+' : unreadCount}
                   </span>
                 )}
               </button>
@@ -332,16 +332,16 @@ const Layout = () => {
             </div>
 
             {/* Role pill badge */}
-            <div className={`tactile-sticker font-extrabold ${
-              isAdmin ? 'tactile-sticker-orange text-white' : 'tactile-sticker-cyan text-black'
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border shadow-sm ${
+              isAdmin ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
             }`}>
-              <div className={`h-1.5 w-1.5 rounded-full border border-black ${isAdmin ? 'bg-amber-300 animate-pulse' : 'bg-indigo-300 animate-pulse'}`} />
-              <span>{user?.role}</span>
+              <div className={`h-2 w-2 rounded-full ${isAdmin ? 'bg-amber-400 animate-pulse' : 'bg-indigo-400 animate-pulse'}`} />
+              <span className="uppercase">{user?.role}</span>
             </div>
             
             {/* Simple profile card */}
-            <div className="flex items-center gap-2.5 px-3.5 py-1.5 rounded-lg border-2 border-black bg-dark-panel shadow-tactile-sm">
-              <span className="text-sm font-bold text-slate-300">Welcome, <strong className="text-tactile-yellow font-extrabold">{user?.nama.split(' ')[0]}</strong></span>
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/80 shadow-sm">
+              <span className="text-xs font-semibold text-slate-300">Welcome, <strong className="text-white font-bold">{user?.nama?.split(' ')[0]}</strong></span>
             </div>
           </div>
         </header>
