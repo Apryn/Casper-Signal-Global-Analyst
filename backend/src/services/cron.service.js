@@ -436,14 +436,26 @@ export const checkMinLiveViolations = async (wibDateStr) => {
  */
 export const cleanupStaleSchedules = async () => {
   try {
-    const res = await query(
+    // 1. Cancel old Scheduled entries (> 24h)
+    const resScheduled = await query(
       `UPDATE schedule
        SET status = 'Cancelled'
        WHERE status = 'Scheduled'
          AND start_time < NOW() - INTERVAL '24 hours'`
     );
-    if (res.rowCount > 0) {
-      console.log(`[Cron] Cleaned up ${res.rowCount} stale Scheduled entries.`);
+
+    // 2. Auto-complete stuck 'Live' entries (> 8h)
+    const resLive = await query(
+      `UPDATE schedule
+       SET status = 'Completed',
+           actual_end_time = COALESCE(actual_end_time, actual_start_time + INTERVAL '2 hours'),
+           live_duration = COALESCE(live_duration, 2.0)
+       WHERE status = 'Live'
+         AND (actual_start_time < NOW() - INTERVAL '8 hours' OR start_time < NOW() - INTERVAL '12 hours')`
+    );
+
+    if (resScheduled.rowCount > 0 || resLive.rowCount > 0) {
+      console.log(`[Cron] Cleaned up ${resScheduled.rowCount || 0} stale Scheduled and ${resLive.rowCount || 0} stuck Live entries.`);
     }
   } catch (error) {
     console.error('[Cron] Error cleaning up stale schedules:', error.message);
@@ -459,6 +471,7 @@ export const startCronJobs = (botInstance) => {
   }
   console.log('Cron Service Engine started (node-cron with Asia/Jakarta timezone).');
   setTimeout(() => {
+    cleanupStaleSchedules();
     checkPerformanceDrops();
     checkTargetAchievements();
   }, 5000);

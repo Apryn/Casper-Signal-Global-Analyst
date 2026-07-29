@@ -107,11 +107,13 @@ export const getDashboardSummary = async (req, res) => {
           SELECT 1 FROM schedule sc
           WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
+            AND (sc.actual_start_time >= NOW() - INTERVAL '12 hours' OR sc.start_time >= NOW() - INTERVAL '12 hours')
         ) THEN TRUE ELSE FALSE END as is_currently_live,
         (
           SELECT sc.actual_start_time FROM schedule sc
           WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
+            AND (sc.actual_start_time >= NOW() - INTERVAL '12 hours' OR sc.start_time >= NOW() - INTERVAL '12 hours')
           ORDER BY sc.actual_start_time DESC LIMIT 1
         ) as actual_start_time,
         COALESCE(
@@ -120,6 +122,7 @@ export const getDashboardSummary = async (req, res) => {
             FROM schedule sc
             WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
               AND sc.status = 'Live'
+              AND (sc.actual_start_time >= NOW() - INTERVAL '12 hours' OR sc.start_time >= NOW() - INTERVAL '12 hours')
             ORDER BY sc.actual_start_time DESC LIMIT 1
           ),
           (
