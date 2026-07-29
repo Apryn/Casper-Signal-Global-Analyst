@@ -45,16 +45,17 @@ export const checkTikTokLiveStatus = async (username) => {
     }
 
     // 1. Deteksi lewat regex roomId (Angka Room ID TikTok Live)
-    const roomIdMatch = html.match(/"roomId":"(\d+)"/) || html.match(/"room_id":\s*"?(\d+)"?/) || html.match(/"liveRoom"[\s\S]{0,100}?"id":"(\d+)"/);
+    const roomIdMatch = html.match(/"roomId":"(\d+)"/) || html.match(/"room_id":\s*"?(\d+)"?/);
     const roomId = roomIdMatch ? roomIdMatch[1] : null;
 
-    // 2. Deteksi status live di state JSON
-    const isLiveState = html.includes('"status":2') || 
+    // 2. Deteksi status live di state JSON (status:2 -> Live, status:4 -> Offline/Ended)
+    const isLiveState = (html.includes('"status":2') || 
                         html.includes('"status": 2') || 
                         html.includes('"isRoomLive":true') || 
                         html.includes('"liveStatus":2') ||
-                        html.includes('"liveStatus": 2') ||
-                        html.includes('"liveRoom":');
+                        html.includes('"liveStatus": 2')) &&
+                        !html.includes('"status":4') &&
+                        !html.includes('"status": 4');
 
     // 3. Deteksi jumlah penonton (Viewer/User Count)
     const viewerMatch = html.match(/"userCount":(\d+)/) || 
@@ -63,8 +64,8 @@ export const checkTikTokLiveStatus = async (username) => {
                         html.match(/"stats":\{"userCount":(\d+)/);
     const viewerCount = viewerMatch ? parseInt(viewerMatch[1], 10) : 0;
 
-    // Jika ada roomId aktif dan indikator live state terpenuhi (atau roomId valid != '0')
-    if ((roomId && roomId !== '0' && isLiveState) || (isLiveState && html.includes('SIG_LIVE'))) {
+    // Jika ada roomId aktif dan indikator live state terpenuhi
+    if (roomId && roomId !== '0' && isLiveState) {
       console.log(`[TikTok Scraper]: 🔴 Akun @${cleanUsername} terdeteksi LIVE! Room ID: ${roomId} (Viewer: ${viewerCount})`);
       return { isLive: true, roomId, viewerCount };
     }
