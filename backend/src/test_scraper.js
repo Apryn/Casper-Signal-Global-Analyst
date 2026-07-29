@@ -113,16 +113,19 @@ async function testTikWMDirect(videoUrl) {
   info(`URL: ${videoUrl}`);
 
   try {
-    const encodedUrl = encodeURIComponent(videoUrl);
-    const apiUrl = `https://www.tikwm.com/api/?url=${encodedUrl}`;
-    info(`API: ${apiUrl.slice(0, 80)}...`);
+    const params = new URLSearchParams();
+    params.append('url', videoUrl);
+    params.append('web', '1');
 
-    const res = await fetch(apiUrl, {
+    const res = await fetch('https://www.tikwm.com/api/', {
+      method: 'POST',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'Accept': 'application/json, text/plain, */*',
         'Referer': 'https://www.tikwm.com/'
       },
+      body: params,
       signal: AbortSignal.timeout(15000)
     });
 

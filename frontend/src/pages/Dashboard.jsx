@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/api';
-import { 
-  Users, 
-  Tv, 
-  Video, 
-  MessageSquare, 
-  UserCheck, 
-  Coins, 
-  Sparkles, 
-  Play, 
+import {
+  Users,
+  Tv,
+  Video,
+  MessageSquare,
+  UserCheck,
+  Coins,
+  Sparkles,
+  Play,
   ArrowRight,
   TrendingUp,
   Calendar,
@@ -52,15 +52,15 @@ const parseBoldItalic = (text) => {
   const regex = /(\*\*.*?\*\*|\*.*?\*)/g;
   let match;
   let lastIndex = 0;
-  
+
   while ((match = regex.exec(text)) !== null) {
     const matchIndex = match.index;
     const matchStr = match[0];
-    
+
     if (matchIndex > lastIndex) {
       parts.push(text.substring(lastIndex, matchIndex));
     }
-    
+
     if (matchStr.startsWith('**') && matchStr.endsWith('**')) {
       parts.push(
         <strong key={matchIndex} className="font-semibold text-indigo-300">
@@ -74,26 +74,26 @@ const parseBoldItalic = (text) => {
         </em>
       );
     }
-    
+
     lastIndex = regex.lastIndex;
   }
-  
+
   if (lastIndex < text.length) {
     parts.push(text.substring(lastIndex));
   }
-  
+
   return parts.length > 0 ? parts : text;
 };
 
 // Helper to convert Markdown structure to styled React elements
 const renderMarkdown = (text) => {
   if (!text) return null;
-  
+
   const lines = text.split('\n');
   const elements = [];
   let currentList = [];
   let listType = null; // 'bullet' | 'number' | null
-  
+
   const flushList = (key) => {
     if (currentList.length === 0) return;
     if (listType === 'bullet') {
@@ -108,7 +108,7 @@ const renderMarkdown = (text) => {
   lines.forEach((line, idx) => {
     const cleanLine = line.trim();
     if (cleanLine === '') return;
-    
+
     const isBullet = cleanLine.startsWith('-') || (cleanLine.startsWith('*') && !cleanLine.startsWith('**'));
     const numberedMatch = cleanLine.match(/^(\d+)\.\s*(.*)/);
 
@@ -138,7 +138,7 @@ const renderMarkdown = (text) => {
       if (listType) {
         flushList(`flush-end-${idx}`);
       }
-      
+
       if (cleanLine.startsWith('###')) {
         const content = cleanLine.replace(/^###\s*/, '');
         elements.push(
@@ -169,11 +169,11 @@ const renderMarkdown = (text) => {
       }
     }
   });
-  
+
   if (listType) {
     flushList(`flush-final`);
   }
-  
+
   return elements;
 };
 
@@ -185,12 +185,12 @@ const Dashboard = () => {
   const [chartTab, setChartTab] = useState('daily'); // 'daily' | 'weekly' | 'monthly'
   const [comparison, setComparison] = useState(null);
   const [aiReport, setAiReport] = useState(null);
-  
+
   // AI Analyst Engine States
   const [aiEngine, setAiEngine] = useState('rule-based');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState(null);
-  
+
   // Telegram Bot Simulator state
   const [simulatorOpen, setSimulatorOpen] = useState(false);
   const [rawMessage, setRawMessage] = useState('');
@@ -262,7 +262,7 @@ const Dashboard = () => {
       const res = await api.post('/reports/simulate', { rawText: rawMessage });
       setSimResult(res.data);
       setRawMessage('');
-      
+
       // Reload stats
       await fetchDashboardData();
     } catch (err) {
@@ -285,10 +285,10 @@ const Dashboard = () => {
   // Prep Chart Configurations
   const getChartJsData = () => {
     if (!chartData || !chartData[chartTab]) return { labels: [], datasets: [] };
-    
+
     const points = chartData[chartTab];
     const labels = points.map(p => p.label);
-    
+
     return {
       labels,
       datasets: [
@@ -421,7 +421,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
-      
+
       {/* Top Filter and Actions Row */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -449,11 +449,10 @@ const Dashboard = () => {
           {/* Telegram Ingestion Simulator Toggle */}
           <button
             onClick={() => setSimulatorOpen(!simulatorOpen)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-extrabold uppercase border-2 transition-all duration-100 shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed ${
-              simulatorOpen 
-                ? 'bg-cyan-500 text-black border-black' 
-                : 'bg-indigo-600 hover:bg-indigo-500 text-white border-black'
-            }`}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-extrabold uppercase border-2 transition-all duration-100 shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed ${simulatorOpen
+              ? 'bg-cyan-500 text-black border-black'
+              : 'bg-indigo-600 hover:bg-indigo-500 text-white border-black'
+              }`}
           >
             <Terminal className="h-4.5 w-4.5" />
             {simulatorOpen ? 'Hide Simulator' : 'Bot Simulator'}
@@ -473,7 +472,7 @@ const Dashboard = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
+
             {/* Input Form */}
             <form onSubmit={handleSimulateSubmit} className="space-y-4">
               <div>
@@ -528,7 +527,7 @@ const Dashboard = () => {
                     <CheckCircle2 className="h-5 w-5" />
                     <span>SUCCESFULLY SAVED TO DATABASE</span>
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-2 text-cyan-300">
                     <div>Streamer: <strong className="text-white font-bold">{simResult.streamerName}</strong></div>
                     <div>Date: <strong className="text-white font-bold">{simResult.parsedData.tanggal}</strong></div>
@@ -598,18 +597,18 @@ const Dashboard = () => {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
             </span>
-            <h3 className="text-lg font-black text-white tracking-wide uppercase">🔴 Streamer Sedang Live Sekarang</h3>
+            <h3 className="text-lg font-black text-white tracking-wide uppercase"> Streamer Sedang Live Sekarang</h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {summary.todayReportsStatus
               .filter(item => item.isCurrentlyLive)
               .map(item => {
-                const startTimeText = item.actualStartTime 
+                const startTimeText = item.actualStartTime
                   ? new Date(item.actualStartTime).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })
                   : '';
                 return (
-                  <div 
+                  <div
                     key={`live-${item.streamerId}`}
                     className="p-4 rounded-lg border-2 border-rose-500 bg-rose-950/20 flex flex-col justify-between min-h-[120px]"
                   >
@@ -624,9 +623,9 @@ const Dashboard = () => {
                       )}
                     </div>
                     {item.liveLink ? (
-                      <a 
-                        href={item.liveLink} 
-                        target="_blank" 
+                      <a
+                        href={item.liveLink}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className="mt-3 block text-center py-1.5 px-3 rounded text-[10px] font-extrabold uppercase bg-rose-600 hover:bg-rose-550 text-white border border-black shadow-tactile-sm transition-all duration-100 active:translate-y-0.5 active:shadow-tactile-pressed"
                       >
@@ -658,32 +657,29 @@ const Dashboard = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {summary?.todayReportsStatus?.map((item) => (
-            <div 
+            <div
               key={item.streamerId}
-              className={`p-3.5 rounded-lg border-2 transition-all duration-200 ${
-                item.hasSubmitted 
-                  ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm' 
-                  : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
-              }`}
+              className={`p-3.5 rounded-lg border-2 transition-all duration-200 ${item.hasSubmitted
+                ? 'bg-emerald-950/15 border-emerald-500 shadow-tactile-sm'
+                : 'bg-rose-950/15 border-rose-500 shadow-tactile-sm'
+                }`}
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-sm text-white">{item.nama}</span>
-                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide ${
-                  item.hasSubmitted 
-                    ? 'bg-emerald-500 text-black border-black shadow-tactile-sm' 
-                    : 'bg-rose-500 text-white border-black shadow-tactile-sm'
-                }`}>
+                <span className={`text-[9px] font-extrabold px-2.5 py-0.5 rounded border-2 uppercase tracking-wide ${item.hasSubmitted
+                  ? 'bg-emerald-500 text-black border-black shadow-tactile-sm'
+                  : 'bg-rose-500 text-white border-black shadow-tactile-sm'
+                  }`}>
                   {item.hasSubmitted ? 'Sudah' : 'Belum'}
                 </span>
               </div>
               <div className="mt-2.5 text-[10px] text-slate-400 flex items-center justify-between">
                 <span>Platform: <strong className="text-slate-350">{item.platform}</strong></span>
                 {(item.hasSubmitted || item.liveDuration > 0) && (
-                  <span className={`font-bold ${
-                    item.hasSubmitted && Math.abs(item.reportedLiveDuration - item.liveDuration) > 0.2
-                      ? 'text-rose-400 flex items-center gap-1 bg-rose-950/20 px-1.5 py-0.5 rounded border border-rose-500/20'
-                      : 'text-slate-300'
-                  }`}>
+                  <span className={`font-bold ${item.hasSubmitted && Math.abs(item.reportedLiveDuration - item.liveDuration) > 0.2
+                    ? 'text-rose-400 flex items-center gap-1 bg-rose-950/20 px-1.5 py-0.5 rounded border border-rose-500/20'
+                    : 'text-slate-300'
+                    }`}>
                     {item.hasSubmitted && Math.abs(item.reportedLiveDuration - item.liveDuration) > 0.2 ? (
                       <span title={`Selisih laporan! Bot mencatat ${item.liveDuration} jam, sedangkan streamer melapor ${item.reportedLiveDuration} jam.`}>
                         Live: {item.liveDuration}h (Lap: {item.reportedLiveDuration}h) ⚠️
@@ -708,7 +704,7 @@ const Dashboard = () => {
             <Sparkles className="h-5 w-5 text-indigo-400 animate-pulse" />
             <h3 className="text-sm font-extrabold text-white tracking-wider uppercase">AI Business Analyst Insights</h3>
           </div>
-          
+
           {/* Engine Selector */}
           <div className="flex items-center gap-2.5 self-start sm:self-center">
             <div className="flex rounded-md p-0.5 bg-slate-950 border-2 border-black shadow-inset-screen shrink-0">
@@ -720,11 +716,10 @@ const Dashboard = () => {
                   key={engine.id}
                   disabled={aiLoading}
                   onClick={() => handleEngineChange(engine.id)}
-                  className={`px-3 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    aiEngine === engine.id 
-                      ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
-                      : 'text-slate-400 hover:text-white border-2 border-transparent'
-                  }`}
+                  className={`px-3 py-1 rounded text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${aiEngine === engine.id
+                    ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm'
+                    : 'text-slate-400 hover:text-white border-2 border-transparent'
+                    }`}
                 >
                   {engine.label}
                 </button>
@@ -732,11 +727,10 @@ const Dashboard = () => {
             </div>
 
             {aiReport && !aiLoading && !aiError && (
-              <span className={`text-[9px] font-extrabold px-2.5 py-1.5 rounded border-2 uppercase tracking-wider shadow-tactile-sm ${
-                aiReport.isAI 
-                  ? 'bg-tactile-purple text-white border-black' 
-                  : 'bg-slate-800 text-white border-black'
-              }`}>
+              <span className={`text-[9px] font-extrabold px-2.5 py-1.5 rounded border-2 uppercase tracking-wider shadow-tactile-sm ${aiReport.isAI
+                ? 'bg-tactile-purple text-white border-black'
+                : 'bg-slate-800 text-white border-black'
+                }`}>
                 {aiReport.isAI ? 'Gemini Active' : 'Rule-Based Active'}
               </span>
             )}
@@ -755,7 +749,7 @@ const Dashboard = () => {
               <div>
                 <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider mb-1">Gagal Memuat Analisis AI</h4>
                 <p className="text-[11px] text-slate-300 leading-relaxed mb-3">{aiError}</p>
-                <button 
+                <button
                   onClick={() => handleEngineChange('rule-based')}
                   className="px-3 py-1 bg-slate-900 hover:bg-slate-850 text-white text-[9px] font-bold uppercase rounded border-2 border-black shadow-tactile-sm cursor-pointer transition-all"
                 >
@@ -782,18 +776,17 @@ const Dashboard = () => {
             <TrendingUp className="h-5 w-5 text-indigo-400" />
             <h3 className="text-lg font-black text-white tracking-wide uppercase">Historical Acquisition & Engagement</h3>
           </div>
-          
+
           {/* Chart View Toggles */}
           <div className="flex rounded-lg p-1 bg-slate-950 border-2 border-black shadow-inset-screen shrink-0 self-start sm:self-center">
             {['daily', 'weekly', 'monthly'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setChartTab(tab)}
-                className={`px-4 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-all ${
-                  chartTab === tab 
-                    ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm' 
-                    : 'text-slate-400 hover:text-white border-2 border-transparent'
-                }`}
+                className={`px-4 py-1.5 rounded-md text-xs font-black uppercase tracking-wider transition-all ${chartTab === tab
+                  ? 'bg-indigo-600 text-white border-2 border-black shadow-tactile-sm'
+                  : 'text-slate-400 hover:text-white border-2 border-transparent'
+                  }`}
               >
                 {tab}
               </button>

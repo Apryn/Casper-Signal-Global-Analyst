@@ -70,38 +70,63 @@ export const getYouTubeConcurrentViewers = async (videoId, apiKey) => {
 
 // ── Helper: Smart HTML Scraper untuk YouTube Live Status (0 Quota / Gratis / Immune 429) ──
 export const checkYouTubeLiveViaScrape = async (channelId) => {
-  try {
-    const url = `https://www.youtube.com/channel/${channelId}/live`;
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(8000),
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
-    });
-    if (!response.ok) return { isLive: false, videoId: null, title: null };
+  if (!channelId) return { isLive: false, videoId: null, title: null };
+  const cleanId = channelId.trim();
 
-    const html = await response.text();
-    const isLive = html.includes('"isLive":true') || html.includes('"style":"LIVE"') || html.includes('liveStreamabilityRenderer');
-
-    if (!isLive) {
-      return { isLive: false, videoId: null, title: null };
-    }
-
-    const videoIdMatch = html.match(/"videoId":"([^"]+)"/) || html.match(/href="\/watch\?v=([^"]+)"/);
-    const videoId = videoIdMatch ? videoIdMatch[1] : null;
-
-    const titleMatch = html.match(/<title>(.*?)<\/title>/) || html.match(/"title":{"runs":\[{"text":"([^"]+)"}/);
-    let title = titleMatch ? (titleMatch[1] || titleMatch[2]) : null;
-    if (title) {
-      title = title.replace(/ - YouTube$/, '').trim();
-    }
-
-    return { isLive: true, videoId, title };
-  } catch (err) {
-    console.warn(`[YouTube Scraper] Failed to scrape channel ${channelId}: ${err.message}`);
-    return { isLive: false, videoId: null, title: null };
+  // Support @handle, UC... channel ID, or legacy channel name
+  const urlsToTry = [];
+  if (cleanId.startsWith('@')) {
+    urlsToTry.push(`https://www.youtube.com/${cleanId}/live`);
+  } else if (cleanId.startsWith('UC')) {
+    urlsToTry.push(`https://www.youtube.com/channel/${cleanId}/live`);
+  } else {
+    urlsToTry.push(`https://www.youtube.com/@${cleanId}/live`);
+    urlsToTry.push(`https://www.youtube.com/channel/${cleanId}/live`);
   }
+
+  for (const url of urlsToTry) {
+    try {
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+      });
+      if (!response.ok) continue;
+
+      const html = await response.text();
+      const isLive = html.includes('"isLive":true') || 
+                     html.includes('"isLiveContent":true') || 
+                     html.includes('"style":"LIVE"') || 
+                     html.includes('"status":"LIVE"') || 
+                     html.includes('liveStreamabilityRenderer') || 
+                     html.includes('"isLiveNow":true');
+
+      if (!isLive) continue;
+
+      const videoIdMatch = html.match(/"videoId":"([^"]+)"/) || 
+                           html.match(/href="\/watch\?v=([^"]+)"/) || 
+                           html.match(/canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/) ||
+                           html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/);
+      const videoId = videoIdMatch ? videoIdMatch[1] : null;
+
+      const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/) || 
+                         html.match(/<title>(.*?)<\/title>/) || 
+                         html.match(/"title":\{"runs":\[\{"text":"([^"]+)"\}/);
+      let title = titleMatch ? (titleMatch[1] || titleMatch[2]) : null;
+      if (title) {
+        title = title.replace(/ - YouTube$/, '').trim();
+      }
+
+      return { isLive: true, videoId, title };
+    } catch (err) {
+      console.warn(`[YouTube Scraper] Failed to scrape ${url}: ${err.message}`);
+    }
+  }
+
+  return { isLive: false, videoId: null, title: null };
 };
 
 // ── Core: Cek satu channel apakah sedang live ─────────────────────────────
@@ -419,9 +444,12 @@ const STREAMER_KEYWORD_ALIASES = [
   { keywords: ['tizza', 'teizza', 'got'], canonicalName: 'tizza' },
   { keywords: ['ratu', 'valencia'], canonicalName: 'ratu' },
   { keywords: ['aline'], canonicalName: 'aline' },
-  { keywords: ['keyla'], canonicalName: 'keyla' },
-  { keywords: ['qamil', 'alvaro', 'alvano'], canonicalName: 'qamil alvaro' },
+  { keywords: ['keyla', 'keylaa'], canonicalName: 'keylaa' },
+  { keywords: ['qamil', 'alvaro', 'alvano', 'laflanca'], canonicalName: 'laflanca' },
   { keywords: ['syabila', 'bila'], canonicalName: 'syabila' },
+  { keywords: ['bagas', 'bgbas'], canonicalName: 'bagas' },
+  { keywords: ['katrine', 'katrineely', 'dara'], canonicalName: 'katrineely' },
+  { keywords: ['chen', 'chenn', 'bg chenn', 'anandarioo'], canonicalName: 'bg chenn' },
 ];
 
 // Helper to match streamer by live title

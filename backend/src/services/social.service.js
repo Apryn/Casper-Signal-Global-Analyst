@@ -180,41 +180,57 @@ const fetchTikTokVideosFromTikWM = async (cleanUsername) => {
  */
 const fetchTikTokVideoMetricsFromTikWM = async (videoUrl) => {
   try {
-    const encodedUrl = encodeURIComponent(videoUrl);
-    const apiUrl = `https://www.tikwm.com/api/?url=${encodedUrl}`;
-    const res = await fetch(apiUrl, {
+    // Try POST request first (TikWM API handles POST params best for long TikTok URLs)
+    const params = new URLSearchParams();
+    params.append('url', videoUrl);
+    params.append('web', '1');
+
+    let res = await fetch('https://www.tikwm.com/api/', {
+      method: 'POST',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
         'Accept': 'application/json, text/plain, */*',
         'Referer': 'https://www.tikwm.com/'
       },
+      body: params,
       signal: AbortSignal.timeout(15000)
-    });
+    }).catch(() => null);
 
-    if (!res.ok) {
-      console.warn(`[Social Service]: TikWM video API returned ${res.status} for ${videoUrl}`);
-      return null;
+    let data = res && res.ok ? await res.json().catch(() => null) : null;
+
+    // Fallback to GET if POST failed
+    if (!data || data?.code !== 0 || !data?.data) {
+      const encodedUrl = encodeURIComponent(videoUrl);
+      const apiUrl = `https://www.tikwm.com/api/?url=${encodedUrl}`;
+      res = await fetch(apiUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json, text/plain, */*',
+          'Referer': 'https://www.tikwm.com/'
+        },
+        signal: AbortSignal.timeout(15000)
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        data = await res.json().catch(() => null);
+      }
     }
 
-    const data = await res.json();
-    if (data?.code !== 0 || !data?.data) {
-      console.warn(`[Social Service]: TikWM video API code=${data?.code} for ${videoUrl}`);
-      return null;
+    if (data?.code === 0 && data?.data) {
+      const v = data.data;
+      const views   = parseInt(v.play_count,    10) || 0;
+      const likes   = parseInt(v.digg_count,    10) || 0;
+      const comments = parseInt(v.comment_count, 10) || 0;
+      const shares  = parseInt(v.share_count,   10) || 0;
+
+      if (views > 0 || likes > 0) {
+        console.log(`[Social Service]: TikWM direct fetch — ${views} views for ${videoUrl}`);
+        return { views, likes, comments, shares };
+      }
     }
 
-    const v = data.data;
-    const views   = parseInt(v.play_count,    10) || 0;
-    const likes   = parseInt(v.digg_count,    10) || 0;
-    const comments = parseInt(v.comment_count, 10) || 0;
-    const shares  = parseInt(v.share_count,   10) || 0;
-
-    if (views > 0 || likes > 0) {
-      console.log(`[Social Service]: TikWM direct fetch — ${views} views for ${videoUrl}`);
-      return { views, likes, comments, shares };
-    }
-
-    // TikWM returned zero metrics — treat as failure to avoid overwriting real data with zeros
-    console.warn(`[Social Service]: TikWM returned all-zero metrics for ${videoUrl}, skipping`);
+    console.warn(`[Social Service]: TikWM could not fetch valid metrics for ${videoUrl}`);
   } catch (error) {
     console.warn(`[Social Service]: TikWM direct video fetch failed for ${videoUrl}: ${error.message}`);
   }

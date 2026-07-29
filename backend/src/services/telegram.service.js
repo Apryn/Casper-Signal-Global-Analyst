@@ -573,6 +573,15 @@ const upsertStreamer = async (rawName, uploads) => {
     if (res.rows.length > 0) return res.rows[0].id;
   }
 
+  // Fuzzy DB Lookup: Check if lowerName contains DB streamer name or vice versa
+  const allStreamersRes = await query('SELECT id, nama FROM streamers');
+  for (const s of allStreamersRes.rows) {
+    const sLower = s.nama.toLowerCase().trim();
+    if (sLower.length >= 3 && (sLower.includes(lowerName) || lowerName.includes(sLower))) {
+      return s.id;
+    }
+  }
+
   // Instead of auto-creating, throw an error to keep database clean
   throw new Error(`Streamer "${name}" tidak terdaftar di database.`);
 };
