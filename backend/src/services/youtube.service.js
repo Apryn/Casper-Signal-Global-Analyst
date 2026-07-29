@@ -106,23 +106,47 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
       if (!response.ok) continue;
 
       const html = await response.text();
-      const isLive = html.includes('"isLive":true') || 
-                     html.includes('"isLiveContent":true') || 
-                     html.includes('"style":"LIVE"') || 
-                     html.includes('"status":"LIVE"') || 
-                     html.includes('liveStreamabilityRenderer') || 
-                     html.includes('"isLiveNow":true');
 
-      if (!isLive) continue;
+      // ── STEP 1: Cek apakah ada indikator live ──────────────────────────────
+      const hasIsLiveMarker = html.includes('"isLive":true') ||
+                              html.includes('"isLiveNow":true') ||
+                              html.includes('"style":"LIVE"') ||
+                              html.includes('"status":"LIVE"');
 
-      const videoIdMatch = html.match(/"videoId":"([^"]+)"/) || 
-                           html.match(/href="\/watch\?v=([^"]+)"/) || 
+      if (!hasIsLiveMarker) continue;
+
+      // ── STEP 2: Reject Waiting Room / Upcoming streams ─────────────────────
+      // YouTube menaruh isLive:true juga di halaman Waiting Room (stream terjadwal
+      // yang belum mulai). Harus reject kondisi ini agar tidak false positive.
+      const isWaitingRoom = html.includes('"isUpcoming":true') ||
+                            html.includes('"isUpcoming": true') ||
+                            html.includes('upcomingEventData');
+
+      if (isWaitingRoom) {
+        console.log(`[YouTube Scraper] ${url} → Waiting Room / Upcoming, BUKAN live aktif. Skip.`);
+        continue;
+      }
+
+      // ── STEP 3: Konfirmasi ada broadcast aktif (manifest URL) ──────────────
+      // activeDashManifestUrl / hlsManifestUrl HANYA muncul saat stream benar-benar
+      // sedang broadcast. Ini adalah indikator paling reliable untuk live aktif.
+      const hasActiveBroadcast = html.includes('activeDashManifestUrl') ||
+                                 html.includes('hlsManifestUrl');
+
+      if (!hasActiveBroadcast) {
+        console.log(`[YouTube Scraper] ${url} → isLive:true tapi tidak ada manifest aktif. Skip.`);
+        continue;
+      }
+
+      // ── Semua validasi lolos → stream benar-benar live ─────────────────────
+      const videoIdMatch = html.match(/"videoId":"([^"]+)"/) ||
+                           html.match(/href="\/watch\?v=([^"]+)"/) ||
                            html.match(/canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/) ||
                            html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/);
       const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
-      const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/) || 
-                         html.match(/<title>(.*?)<\/title>/) || 
+      const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/) ||
+                         html.match(/<title>(.*?)<\/title>/) ||
                          html.match(/"title":\{"runs":\[\{"text":"([^"]+)"\}/);
       let title = titleMatch ? (titleMatch[1] || titleMatch[2]) : null;
       if (title) {
@@ -137,6 +161,7 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
 
   return { isLive: false, videoId: null, title: null };
 };
+
 
 // ── Core: Cek satu channel apakah sedang live ─────────────────────────────
 /**
