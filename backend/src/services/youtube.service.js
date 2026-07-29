@@ -14,7 +14,9 @@
  */
 
 import { query } from '../config/db.js';
-import { checkTikTokLiveStatus } from './tiktok.service.js';
+// TikTok auto-detection via HTML scraping sengaja DINONAKTIFKAN dari cron.
+// HTML TikTok tidak reliable (offline pages embed liveRoom JSON, Cloudflare blocks).
+// TikTok live dikelola manual via Telegram bot command /startlive tiktok
 
 // ── Konstanta ──────────────────────────────────────────────────────────────
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
@@ -25,6 +27,13 @@ const SCHEDULE_MATCH_WINDOW_MINUTES = 45;
 
 // Toleransi keterlambatan sebelum alert dikirim (menit)
 const LATENESS_ALERT_THRESHOLD_MINUTES = 10;
+
+// ── 2-Strike Confirmation Buffer ────────────────────────────────────────────
+// Mencegah false positive flash detection: channel harus terdeteksi live
+// di 2 cron cycle berturut-turut (>15 menit) sebelum auto-schedule dibuat.
+// Key: channelId, Value: { firstSeenAt: Date, videoId: string }
+const pendingLiveMap = new Map();
+const PENDING_CONFIRM_MS = 16 * 60 * 1000; // 16 menit (lebih dari satu 15-min cron cycle)
 
 // ── Helper: format menit ke string "X jam Y menit" ───────────────────────
 const formatDuration = (minutes) => {
@@ -616,32 +625,65 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
               // Panggil handleChannelLive dengan defaultAcc (akan membaca update status/substitute terbaru)
               await handleChannelLive(defaultAcc, liveInfo, sendNotification);
             } else {
-              // Live di luar jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
+              // Live di luar jadwal → pertimbangkan auto-create schedule instan
               if (defaultAcc) {
-                // Cek apakah video link yang sama baru saja diselesaikan dalam 15 menit terakhir (mencegah duplikasi saat reconnect)
                 const targetStreamerId = substituteStreamerId || defaultAcc.streamer_id;
                 const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
+                const displayName = matchedStreamer ? matchedStreamer.nama : defaultAcc.nama;
+
+                // ── Guard 1: Deduplication — skip jika sudah ada sesi Live aktif ──────────
+                const existingLive = await query(
+                  `SELECT id FROM schedule
+                   WHERE streamer_id = $1
+                     AND platform = 'YouTube'
+                     AND status = 'Live'
+                   LIMIT 1`,
+                  [targetStreamerId]
+                );
+                if (existingLive.rows.length > 0) {
+                  console.log(`[YouTube Service] Dedup: ${displayName} sudah punya sesi Live aktif. Skip auto-create.`);
+                  continue;
+                }
+
+                // ── Guard 2: Cek video yang sama baru saja selesai (< 5 menit) ───────────
                 const recentCompletion = await query(
                   `SELECT id FROM schedule
                    WHERE streamer_id = $1
                      AND status = 'Completed'
                      AND live_link = $2
-                     AND actual_end_time >= NOW() - INTERVAL '3 minutes'
+                     AND actual_end_time >= NOW() - INTERVAL '5 minutes'
                    LIMIT 1`,
                   [targetStreamerId, liveLink]
                 );
- 
                 if (recentCompletion.rows.length > 0) {
-                  console.log(`[YouTube Service] Streamer ${matchedStreamer ? matchedStreamer.nama : defaultAcc.nama} baru saja selesai stream (< 3 menit). Menolak auto-create schedule ganda.`);
+                  console.log(`[YouTube Service] ${displayName} baru saja selesai stream (< 5 mnt). Menolak auto-create schedule ganda.`);
                   continue;
                 }
- 
-                const displayName = matchedStreamer ? matchedStreamer.nama : defaultAcc.nama;
-                console.log(`[YouTube Service] 🔴 Streamer ${displayName} live YouTube di luar jadwal. Membuat schedule instan...`);
-                
+
+                // ── Guard 3: 2-Strike Confirmation ────────────────────────────────────────
+                // Hanya buat schedule setelah terdeteksi live di 2 cron cycle berturut-turut
                 const now = new Date();
-                const startTime = liveInfo.actualStartTime || new Date(now.getTime() - 15 * 60 * 1000); 
-                const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);  // estimasi 2 jam lagi
+                const pending = pendingLiveMap.get(account.channel_id);
+
+                if (!pending || pending.videoId !== liveInfo.videoId) {
+                  // Deteksi pertama kali → simpan ke buffer, tunggu siklus berikutnya
+                  pendingLiveMap.set(account.channel_id, { firstSeenAt: now, videoId: liveInfo.videoId, displayName });
+                  console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Menunggu konfirmasi siklus ke-2 (~15 menit)...`);
+                  continue;
+                }
+
+                const elapsedMs = now.getTime() - pending.firstSeenAt.getTime();
+                if (elapsedMs < PENDING_CONFIRM_MS) {
+                  console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi (${Math.floor(elapsedMs/60000)} mnt < 16 mnt). Menunggu...`);
+                  continue;
+                }
+
+                // ── Confirmed! 2 siklus berturut-turut → buat schedule instan ─────────────
+                pendingLiveMap.delete(account.channel_id);
+                console.log(`[YouTube Service] 🔴 ${displayName} DIKONFIRMASI live YouTube di luar jadwal. Membuat schedule instan...`);
+                
+                const startTime = liveInfo.actualStartTime || new Date(now.getTime() - 15 * 60 * 1000);
+                const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
  
                 const insertRes = await query(
                   `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time, substitute_streamer_id, live_link)
@@ -657,8 +699,6 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                   [newScheduleId, targetStreamerId, liveInfo.viewerCount || 0]
                 );
 
-                // Kirim notifikasi Telegram Japri
-                // Dapatkan telegram_chat_id dari target streamer
                 const chatRes = await query('SELECT telegram_username, telegram_chat_id FROM streamers WHERE id = $1', [targetStreamerId]);
                 const targetChatId = chatRes.rows[0]?.telegram_chat_id;
                 const teleUser = chatRes.rows[0]?.telegram_username;
@@ -673,7 +713,8 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
               }
             }
           } else {
-            // Channel offline → cek apakah ada sesi yang perlu ditutup
+            // Channel offline → hapus dari pending confirmation buffer + tutup sesi aktif
+            pendingLiveMap.delete(account.channel_id);
             const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
             for (const acc of channelAccounts) {
               await handleChannelOffline(acc, sendNotification);
@@ -689,84 +730,14 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
       console.log('[YouTube Service] Live status check complete.');
     }
  
-  // ── NEW: DETEKSI LIVE TIKTOK (Smart HTML Scraping) ────────────────────────
-  try {
-    console.log('[TikTok Service] Running TikTok live status detection...');
-    // Ambil semua akun TikTok yang aktif dan punya username
-    const ttAccountsRes = await query(
-      `SELECT sa.id, sa.streamer_id, sa.username, s.nama, s.telegram_username
-       FROM streamer_accounts sa
-       JOIN streamers s ON sa.streamer_id = s.id
-       WHERE sa.platform = 'TikTok'
-         AND sa.username IS NOT NULL
-         AND sa.username <> ''`
-    );
-    const ttAccounts = ttAccountsRes.rows;
- 
-    for (const account of ttAccounts) {
-      try {
-        // Pengecekan TikTok live selalu berjalan tanpa perlu filter jadwal aktif (karena streamer live mandiri tanpa jadwal)
-        const liveInfo = await checkTikTokLiveStatus(account.username);
- 
-        if (liveInfo.isLive) {
-          const schedule = await findMatchingSchedule(account.streamer_id);
-          
-          if (schedule) {
-            // Pasang platform untuk log
-            const ttAccount = { ...account, platform: 'TikTok' };
-            const ttLiveInfo = {
-              isLive: true,
-              viewerCount: liveInfo.viewerCount,
-              liveLink: `https://www.tiktok.com/@${account.username.trim().replace(/^@/, '')}/live`
-            };
-            await handleChannelLive(ttAccount, ttLiveInfo, sendNotification);
-          } else {
-            // Murni live mandiri tanpa jadwal -> Auto-create schedule instan agar muncul "On Air" di dashboard
-            console.log(`[TikTok Service] 🔴 Streamer @${account.username} live mandiri tanpa jadwal. Membuat schedule instan...`);
-            const now = new Date();
-            const startTime = new Date(now.getTime() - 15 * 60 * 1000); // diasumsikan mulai 15 menit lalu
-            const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000);  // estimasi selesai 2 jam lagi
-
-            const insertRes = await query(
-              `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time)
-               VALUES ($1, 'TikTok', $2, $3, 'Live', $4)
-               RETURNING id`,
-              [account.streamer_id, startTime.toISOString(), endTime.toISOString(), startTime.toISOString()]
-            );
-
-            // Rekam viewer count perdana untuk schedule instan ini
-            const newScheduleId = insertRes.rows[0].id;
-            await query(
-              `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
-               VALUES ($1, $2, 'TikTok', $3)`,
-              [newScheduleId, account.streamer_id, liveInfo.viewerCount || 0]
-            );
-
-            // Kirim notifikasi Telegram Japri
-            const mention = account.telegram_username ? `@${account.telegram_username.trim()}` : `*${account.nama}*`;
-            const msg = `🔴 *LIVE TIKTOK DIMULAI — ${account.nama}* (Self-development)\n\n${mention} sudah mulai live TikTok secara mandiri!\n• Jam: *${now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' })} WIB*\n_Sesi ini dicatat otomatis untuk pengembangan channel._`;
-            
-            // Mengambil telegram_chat_id
-            const chatRes = await query('SELECT telegram_chat_id FROM streamers WHERE id = $1', [account.streamer_id]);
-            const targetChatId = chatRes.rows[0]?.telegram_chat_id;
-            if (targetChatId) {
-              await sendNotification(msg, targetChatId);
-            }
-          }
-        } else {
-          // Jika offline, cek dan tutup sesi live yang aktif
-          const ttAccount = { ...account, platform: 'TikTok' };
-          await handleChannelOffline(ttAccount, sendNotification);
-        }
- 
-        // Delay 2 detik antar check TikTok agar tidak dicurigai bot oleh Cloudflare
-        await new Promise(r => setTimeout(r, 2000));
-      } catch (ttErr) {
-        console.error(`[TikTok Service] Error processing @${account.username}:`, ttErr.message);
-      }
-    }
-    console.log('[TikTok Service] TikTok live status check complete.');
-  } catch (ttGlobalErr) {
-    console.error('[TikTok Service] Global error in TikTok live status loop:', ttGlobalErr.message);
-  }
+  // ── CATATAN: TikTok auto-detection via HTML scraping telah DINONAKTIFKAN ──────
+  // TikTok HTML sangat tidak reliable untuk scraping eksternal:
+  //   - Halaman offline embed JSON "liveRoom" meski status=4 (ended)
+  //   - Cloudflare sering block bot scraper
+  //   - Struktur HTML bisa berubah kapan saja tanpa notice
+  // 
+  // TikTok live sekarang dikelola MANUAL via Telegram bot:
+  //   /startlive tiktok   → mulai sesi live TikTok
+  //   /endlive            → selesai live
+  // ─────────────────────────────────────────────────────────────────────────────
 };

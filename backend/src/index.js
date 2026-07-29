@@ -324,19 +324,40 @@ const launchBot = () => {
         }
       });
 
-      // ── [NEW] Command: /startlive ─────────────────────────────────────────────
-      // Manual fallback — dipakai jika YouTube Auto-detection tidak tersedia
+      // ── Command: /startlive [platform] [link] ─────────────────────────────────
+      // Platform: youtube (default) | tiktok
+      // Link: URL live opsional (untuk YouTube)
+      // Contoh: /startlive
+      //         /startlive tiktok
+      //         /startlive youtube https://youtube.com/watch?v=xxx
       bot.command('startlive', async (ctx) => {
         const replyOptions = { parse_mode: 'Markdown', reply_parameters: { message_id: ctx.message.message_id } };
         const senderUsername = ctx.message?.from?.username;
         const senderName = ctx.message?.from?.first_name || 'Unknown';
 
+        // Parse args: /startlive [platform?] [link?]
+        const args = ctx.message.text.split(' ').slice(1);
+        let platform = 'YouTube';
+        let liveLink = null;
+
+        for (const arg of args) {
+          const lower = arg.toLowerCase();
+          if (lower === 'tiktok' || lower === 'tt') {
+            platform = 'TikTok';
+          } else if (lower === 'youtube' || lower === 'yt') {
+            platform = 'YouTube';
+          } else if (arg.startsWith('http')) {
+            liveLink = arg;
+          }
+        }
+
         try {
-          const streamerRes = await import('./config/db.js').then(m =>
-            m.query(
-              `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
-              [senderUsername || '']
-            )
+          const { query: dbQuery } = await import('./config/db.js');
+
+          // Cari streamer berdasarkan telegram_username
+          const streamerRes = await dbQuery(
+            `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
+            [senderUsername || '']
           );
 
           if (!streamerRes.rows || streamerRes.rows.length === 0) {
@@ -348,60 +369,180 @@ const launchBot = () => {
 
           const streamer = streamerRes.rows[0];
           const now = new Date();
-          const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
-          const todayStart = `${dateStr}T00:00:00+07:00`;
-          const todayEnd   = `${dateStr}T23:59:59+07:00`;
 
-          // Cari jadwal yang paling cocok (terdekat sekarang, belum live)
-          const scheduleRes = await import('./config/db.js').then(m =>
-            m.query(
-              `SELECT * FROM schedule
-               WHERE streamer_id = $1
-                 AND status = 'Scheduled'
-                 AND start_time BETWEEN $2 AND $3
-               ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $4))) ASC
-               LIMIT 1`,
-              [streamer.id, todayStart, todayEnd, now.toISOString()]
-            )
+          // ── Cek apakah sudah ada sesi Live aktif untuk platform ini ──
+          const existingLiveRes = await dbQuery(
+            `SELECT id FROM schedule
+             WHERE streamer_id = $1
+               AND platform = $2
+               AND status = 'Live'
+             LIMIT 1`,
+            [streamer.id, platform]
           );
-
-          if (scheduleRes.rows.length === 0) {
+          if (existingLiveRes.rows.length > 0) {
             return ctx.reply(
-              `⚠️ *Tidak ada jadwal live terdaftar untuk hari ini.*\n_Pastikan jadwal kamu sudah di-input ke sistem oleh admin._`,
+              `⚠️ *${streamer.nama} sudah dalam sesi live ${platform} yang aktif.*\n_Gunakan /endlive untuk mengakhiri sesi saat ini terlebih dahulu._`,
               replyOptions
             );
           }
 
-          const schedule = scheduleRes.rows[0];
-          const scheduledStart = new Date(schedule.start_time);
-          const latenessMs = now.getTime() - scheduledStart.getTime();
-          const latenessMinutes = Math.max(0, Math.round(latenessMs / 60000));
+          // ── Cari jadwal terdaftar hari ini yang belum live ──
+          const dateStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+          const todayStart = `${dateStr}T00:00:00+07:00`;
+          const todayEnd   = `${dateStr}T23:59:59+07:00`;
 
-          await import('./config/db.js').then(m =>
-            m.query(
+          const scheduleRes = await dbQuery(
+            `SELECT * FROM schedule
+             WHERE streamer_id = $1
+               AND platform = $2
+               AND status = 'Scheduled'
+               AND start_time BETWEEN $3 AND $4
+             ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $5))) ASC
+             LIMIT 1`,
+            [streamer.id, platform, todayStart, todayEnd, now.toISOString()]
+          );
+
+          let scheduleId;
+          let latenessMinutes = 0;
+          let isInstant = false;
+
+          if (scheduleRes.rows.length > 0) {
+            // Ada jadwal terdaftar → update status ke Live
+            const schedule = scheduleRes.rows[0];
+            const scheduledStart = new Date(schedule.start_time);
+            latenessMinutes = Math.max(0, Math.round((now.getTime() - scheduledStart.getTime()) / 60000));
+            scheduleId = schedule.id;
+
+            await dbQuery(
               `UPDATE schedule
                SET actual_start_time = $1,
                    lateness_minutes = $2,
                    status = 'Live'
+                   ${liveLink ? `, live_link = '${liveLink.replace(/'/g, "''")}'` : ''}
                WHERE id = $3`,
-              [now.toISOString(), latenessMinutes, schedule.id]
-            )
-          );
+              [now.toISOString(), latenessMinutes, scheduleId]
+            );
+          } else {
+            // Tidak ada jadwal → buat sesi instan
+            isInstant = true;
+            const endTime = new Date(now.getTime() + 2 * 60 * 60 * 1000); // estimasi 2 jam
+            
+            // Untuk TikTok, auto-set live link
+            if (platform === 'TikTok' && !liveLink) {
+              const ttRes = await dbQuery(
+                `SELECT username FROM streamer_accounts WHERE streamer_id = $1 AND platform = 'TikTok' LIMIT 1`,
+                [streamer.id]
+              );
+              if (ttRes.rows[0]?.username) {
+                const cleanUsername = ttRes.rows[0].username.replace(/^@/, '');
+                liveLink = `https://www.tiktok.com/@${cleanUsername}/live`;
+              }
+            }
+
+            const insertRes = await dbQuery(
+              `INSERT INTO schedule (streamer_id, platform, start_time, end_time, status, actual_start_time, live_link)
+               VALUES ($1, $2, $3, $4, 'Live', $3, $5)
+               RETURNING id`,
+              [streamer.id, platform, now.toISOString(), endTime.toISOString(), liveLink]
+            );
+            scheduleId = insertRes.rows[0].id;
+          }
 
           const startWib = now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
           const latenessText = latenessMinutes > 0
             ? `⚠️ Terlambat *${latenessMinutes} menit* dari jadwal.`
-            : `✅ *Ontime!*`;
+            : isInstant ? `📝 Sesi instan (di luar jadwal)` : `✅ *Ontime!*`;
+
+          const platformEmoji = platform === 'TikTok' ? '🎵' : '▶️';
+          const linkText = liveLink ? `\n• Link: ${liveLink}` : '';
 
           await ctx.reply(
-            `🔴 *${streamer.nama} mulai live!*\n\n` +
+            `🔴 *${streamer.nama} mulai live ${platform}!* ${platformEmoji}\n\n` +
             `• Jam aktual: *${startWib} WIB*\n` +
-            `• ${latenessText}\n\n` +
-            `_Live kamu sudah tercatat. Semangat! 💪_`,
+            `• ${latenessText}${linkText}\n\n` +
+            `_Live kamu sudah tercatat. Semangat! 💪_\n_Ketik /endlive saat selesai._`,
             replyOptions
           );
         } catch (err) {
           console.error('[Bot /startlive] Error:', err.message);
+          await ctx.reply(`❌ Error: ${err.message}`, replyOptions);
+        }
+      });
+
+      // ── Command: /endlive ─────────────────────────────────────────────────────
+      // Menandai sesi live yang sedang aktif sebagai selesai.
+      // Menghitung live_duration otomatis dari actual_start_time hingga sekarang.
+      bot.command('endlive', async (ctx) => {
+        const replyOptions = { parse_mode: 'Markdown', reply_parameters: { message_id: ctx.message.message_id } };
+        const senderUsername = ctx.message?.from?.username;
+        const senderName = ctx.message?.from?.first_name || 'Unknown';
+
+        try {
+          const { query: dbQuery } = await import('./config/db.js');
+
+          const streamerRes = await dbQuery(
+            `SELECT id, nama FROM streamers WHERE LOWER(telegram_username) = LOWER($1)`,
+            [senderUsername || '']
+          );
+
+          if (!streamerRes.rows || streamerRes.rows.length === 0) {
+            return ctx.reply(
+              `❌ *Username Telegram kamu tidak terdaftar.*\n_Hubungi admin untuk mendaftarkan @${senderUsername || senderName}._`,
+              replyOptions
+            );
+          }
+
+          const streamer = streamerRes.rows[0];
+
+          // Cari sesi Live yang aktif
+          const liveRes = await dbQuery(
+            `SELECT id, platform, actual_start_time FROM schedule
+             WHERE streamer_id = $1
+               AND status = 'Live'
+             ORDER BY actual_start_time DESC
+             LIMIT 1`,
+            [streamer.id]
+          );
+
+          if (liveRes.rows.length === 0) {
+            return ctx.reply(
+              `⚠️ *${streamer.nama} tidak sedang dalam sesi live aktif.*\n_Gunakan /startlive untuk memulai sesi live._`,
+              replyOptions
+            );
+          }
+
+          const session = liveRes.rows[0];
+          const now = new Date();
+          const startTime = new Date(session.actual_start_time);
+          const durationMs = now.getTime() - startTime.getTime();
+          const durationHours = Math.max(0, parseFloat((durationMs / 3600000).toFixed(2)));
+          const durationMinutes = Math.round(durationMs / 60000);
+
+          await dbQuery(
+            `UPDATE schedule
+             SET status = 'Completed',
+                 actual_end_time = $1,
+                 live_duration = $2
+             WHERE id = $3`,
+            [now.toISOString(), durationHours, session.id]
+          );
+
+          const endWib = now.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+          const startWib = startTime.toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+          const hours = Math.floor(durationMinutes / 60);
+          const mins = durationMinutes % 60;
+          const durationText = hours > 0 ? `${hours} jam ${mins} menit` : `${mins} menit`;
+
+          await ctx.reply(
+            `✅ *Sesi live ${session.platform} ${streamer.nama} selesai!*\n\n` +
+            `• Mulai: *${startWib} WIB*\n` +
+            `• Selesai: *${endWib} WIB*\n` +
+            `• Durasi: *${durationText}*\n\n` +
+            `_Data dicatat otomatis. Istirahat dulu! 😊_`,
+            replyOptions
+          );
+        } catch (err) {
+          console.error('[Bot /endlive] Error:', err.message);
           await ctx.reply(`❌ Error: ${err.message}`, replyOptions);
         }
       });
