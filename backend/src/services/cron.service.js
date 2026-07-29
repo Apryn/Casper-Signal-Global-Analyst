@@ -2,7 +2,7 @@ import { query } from '../config/db.js';
 import cron from 'node-cron';
 import { syncSocialMetrics, discoverNewContent } from './social.service.js';
 import { autoGenerateWeeklyEvaluations } from '../controllers/evaluation.controller.js';
-import { checkYouTubeLiveStatus } from './youtube.service.js';
+import { checkYouTubeLiveStatus, checkYouTubeLiveViaScrape } from './youtube.service.js';
 
 let bot = null;
 
@@ -433,6 +433,7 @@ export const checkMinLiveViolations = async (wibDateStr) => {
 
 /**
  * Clean up stale 'Scheduled' entries older than 24 hours.
+ * Also sweeps Live schedules that are YouTube Waiting Rooms (false positives).
  */
 export const cleanupStaleSchedules = async () => {
   try {
@@ -454,8 +455,41 @@ export const cleanupStaleSchedules = async () => {
          AND (actual_start_time < NOW() - INTERVAL '8 hours' OR start_time < NOW() - INTERVAL '12 hours')`
     );
 
-    if (resScheduled.rowCount > 0 || resLive.rowCount > 0) {
-      console.log(`[Cron] Cleaned up ${resScheduled.rowCount || 0} stale Scheduled and ${resLive.rowCount || 0} stuck Live entries.`);
+    // 3. Sweep YouTube Live schedules that are actually Waiting Rooms (false positives)
+    //    Runs only if there are active Live schedules with a YouTube live_link
+    const liveYouTubeRes = await query(
+      `SELECT sc.id, sc.live_link
+       FROM schedule sc
+       WHERE sc.status = 'Live'
+         AND sc.platform = 'YouTube'
+         AND sc.live_link LIKE '%/watch?v=%'
+         AND sc.actual_start_time > NOW() - INTERVAL '8 hours'`
+    );
+
+    let waitingRoomCancelled = 0;
+    for (const row of liveYouTubeRes.rows) {
+      try {
+        const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]+)/)?.[1];
+        if (!videoId) continue;
+
+        // Quick scrape check using the same strict logic
+        const scraped = await checkYouTubeLiveViaScrape(videoId);
+        if (!scraped.isLive) {
+          // Stream is no longer live (or was a waiting room) → cancel
+          await query(
+            `UPDATE schedule SET status = 'Cancelled', actual_end_time = NOW() WHERE id = $1`,
+            [row.id]
+          );
+          waitingRoomCancelled++;
+          console.log(`[Cron Cleanup] Schedule #${row.id} cancelled — YouTube not broadcasting (waiting room or offline).`);
+        }
+      } catch (scrapeErr) {
+        // Non-blocking: if scrape fails, leave schedule as-is
+      }
+    }
+
+    if (resScheduled.rowCount > 0 || resLive.rowCount > 0 || waitingRoomCancelled > 0) {
+      console.log(`[Cron] Cleaned up ${resScheduled.rowCount || 0} stale Scheduled, ${resLive.rowCount || 0} stuck Live, ${waitingRoomCancelled} waiting room false positives.`);
     }
   } catch (error) {
     console.error('[Cron] Error cleaning up stale schedules:', error.message);
@@ -521,11 +555,12 @@ export const startCronJobs = (botInstance) => {
   }, { timezone: 'Asia/Jakarta' });
 
   // ⏰ [YouTube Live Detection] — tiap 15 menit, 24/7 (24 jam nonstop)
-  // Pure live detection: selalu cek semua channel tanpa filter jadwal
-  // Estimasi quota: ~9.600 units/hari (di bawah free tier 10K API units) ✅
-  cron.schedule('*/15 * * * *', () => {
+  // Setelah tiap live check, jalankan cleanupStaleSchedules untuk sweep waiting room false positives
+  cron.schedule('*/15 * * * *', async () => {
     console.log('[Cron] Running YouTube live status detection (24/7 15-min pure poll)...');
-    checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
+    await checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
+    // Langsung sweep schedule yang mungkin false positive (waiting room)
+    await cleanupStaleSchedules().catch(err => console.error('[Cron] Error running post-detection cleanupStaleSchedules:', err));
   }, { timezone: 'Asia/Jakarta' });
 };
 
