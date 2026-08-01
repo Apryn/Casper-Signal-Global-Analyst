@@ -206,6 +206,25 @@ const Reports = () => {
     const printWindow = window.open('', '_blank');
     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
+    const formatShortDate = (dateInput) => {
+      if (!dateInput) return '';
+      let dateStr = '';
+      if (dateInput instanceof Date) {
+        const y = dateInput.getFullYear();
+        const m = String(dateInput.getMonth() + 1).padStart(2, '0');
+        const d = String(dateInput.getDate()).padStart(2, '0');
+        dateStr = `${y}-${m}-${d}`;
+      } else {
+        dateStr = String(dateInput).split('T')[0];
+      }
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return dateStr;
+      const day = parseInt(parts[2], 10);
+      const monthIdx = parseInt(parts[1], 10) - 1;
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      return `${day} ${months[monthIdx] || parts[1]}`;
+    };
+
     // Determine date range for absence tracking
     let rangeStart = startDate;
     let rangeEnd = endDate;
@@ -235,8 +254,6 @@ const Reports = () => {
 
     // Build Streamer Audit Summary
     const summaryMap = {};
-    
-    // Seed with all streamers if available
     const activeStreamers = streamers.length > 0 ? streamers : Array.from(new Set(reports.map(r => r.streamer_name))).map((name, idx) => ({ id: idx, nama: name }));
 
     activeStreamers.forEach(s => {
@@ -285,11 +302,11 @@ const Reports = () => {
 
       if (r.kategori === 'Non Streaming' || dur === 0) {
         summaryMap[name].offDays++;
-        summaryMap[name].offDates.push({ date: dateStr, reason: 'Lapor Off' });
+        summaryMap[name].offDates.push(formatShortDate(dateStr));
       } else if (dur < 4.0) {
         summaryMap[name].liveDays++;
         summaryMap[name].under4hDays++;
-        summaryMap[name].under4hDates.push({ date: dateStr, duration: dur });
+        summaryMap[name].under4hDates.push({ shortDate: formatShortDate(dateStr), duration: dur });
       } else {
         summaryMap[name].liveDays++;
       }
@@ -307,7 +324,7 @@ const Reports = () => {
           });
           if (!hasReport) {
             s.noReportDays++;
-            s.noReportDates.push(dateStr);
+            s.noReportDates.push(formatShortDate(dateStr));
           }
         });
       });
@@ -316,17 +333,15 @@ const Reports = () => {
     let summaryRows = '';
     Object.values(summaryMap).forEach((s, idx) => {
       summaryRows += `
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 6px 8px; text-align: center;">${idx + 1}</td>
-          <td style="padding: 6px 8px; font-weight: bold; color: #0f172a;">${s.name}</td>
-          <td style="padding: 6px 8px; text-align: center; font-weight: bold; color: #4f46e5;">${s.totalLive.toFixed(1)} hrs</td>
-          <td style="padding: 6px 8px; text-align: center;">${s.liveDays} hari</td>
-          <td style="padding: 6px 8px; text-align: center; ${s.under4hDays > 0 ? 'color: #e11d48; font-weight: bold;' : ''}">${s.under4hDays} hari</td>
-          <td style="padding: 6px 8px; text-align: center;">${s.offDays} hari</td>
-          <td style="padding: 6px 8px; text-align: center; ${s.noReportDays > 10 ? 'color: #be123c; font-weight: bold;' : ''}">${s.noReportDays} hari</td>
-          <td style="padding: 6px 8px; text-align: right;">${s.totalChats.toLocaleString()}</td>
-          <td style="padding: 6px 8px; text-align: right;">${s.totalRegs}</td>
-          <td style="padding: 6px 8px; text-align: right; color: #059669; font-weight: bold;">${s.totalFtds} FTD</td>
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+          <td style="padding: 6px; text-align: center;">${idx + 1}</td>
+          <td style="padding: 6px; font-weight: bold; color: #0f172a;">${s.name}</td>
+          <td style="padding: 6px; text-align: center; font-weight: bold; color: #4f46e5;">${s.totalLive.toFixed(1)} hrs</td>
+          <td style="padding: 6px; text-align: center;">${s.liveDays} hr</td>
+          <td style="padding: 6px; text-align: center; ${s.under4hDays > 0 ? 'color: #e11d48; font-weight: bold;' : 'color: #64748b;'}">${s.under4hDays} hr</td>
+          <td style="padding: 6px; text-align: center; ${s.offDays > 0 ? 'color: #d97706; font-weight: bold;' : 'color: #64748b;'}">${s.offDays} hr</td>
+          <td style="padding: 6px; text-align: center; ${s.noReportDays > 10 ? 'color: #be123c; font-weight: bold;' : 'color: #64748b;'}">${s.noReportDays} hr</td>
+          <td style="padding: 6px; text-align: right; font-weight: bold; color: #059669;">${s.totalFtds} FTD</td>
         </tr>
       `;
     });
@@ -334,12 +349,11 @@ const Reports = () => {
     let under4hSectionHtml = '';
     Object.values(summaryMap).forEach(s => {
       if (s.under4hDates.length > 0) {
+        const pills = s.under4hDates.map(d => `<span style="display: inline-block; background: #ffe4e6; color: #be123c; padding: 2px 7px; border-radius: 5px; font-size: 10.5px; font-weight: 600; margin: 2px 4px 2px 0;">${d.shortDate} (${d.duration}h)</span>`).join('');
         under4hSectionHtml += `
-          <div style="margin-bottom: 10px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px;">
-            <strong style="color: #be123c; font-size: 12px;">📌 ${s.name} (${s.under4hDates.length} hari &lt; 4 jam SOP):</strong>
-            <div style="font-size: 11px; color: #9f1239; margin-top: 4px;">
-              ${s.under4hDates.map(d => `<span style="display: inline-block; margin-right: 12px; margin-top: 2px;">• <strong>${d.date}</strong>: ${d.duration.toFixed(1)} jam</span>`).join('')}
-            </div>
+          <div style="display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid #f1f5f9; padding: 6px 0;">
+            <div style="width: 140px; font-weight: bold; font-size: 11.5px; color: #0f172a; flex-shrink: 0;">${s.name} <span style="font-size: 10px; color: #be123c; font-weight: normal;">(${s.under4hDates.length}x)</span>:</div>
+            <div style="flex: 1; flex-wrap: wrap;">${pills}</div>
           </div>
         `;
       }
@@ -348,11 +362,14 @@ const Reports = () => {
     let offAbsenSectionHtml = '';
     Object.values(summaryMap).forEach(s => {
       if (s.offDates.length > 0 || s.noReportDates.length > 0) {
+        const offPills = s.offDates.map(d => `<span style="display: inline-block; background: #fef3c7; color: #d97706; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px 3px 2px 0;">${d}</span>`).join('');
+        const absenPills = s.noReportDates.map(d => `<span style="display: inline-block; background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin: 2px 3px 2px 0;">${d}</span>`).join('');
+        
         offAbsenSectionHtml += `
-          <div style="margin-bottom: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
-            <strong style="color: #1e293b; font-size: 12px;">📌 ${s.name}:</strong>
-            ${s.offDates.length > 0 ? `<div style="font-size: 11px; color: #d97706; margin-top: 3px;"><strong>Hari Off (${s.offDates.length} hari):</strong> ${s.offDates.map(d => d.date).join(', ')}</div>` : ''}
-            ${s.noReportDates.length > 0 ? `<div style="font-size: 11px; color: #e11d48; margin-top: 3px;"><strong>Absen/Tidak Melapor (${s.noReportDates.length} hari):</strong> ${s.noReportDates.join(', ')}</div>` : ''}
+          <div style="border-bottom: 1px solid #f1f5f9; padding: 6px 0;">
+            <div style="font-weight: bold; font-size: 11.5px; color: #0f172a; margin-bottom: 3px;">${s.name}</div>
+            ${s.offDates.length > 0 ? `<div style="font-size: 11px; margin-bottom: 2px;"><span style="color: #d97706; font-weight: 600; width: 90px; display: inline-block;">Hari Off (${s.offDates.length}):</span> ${offPills}</div>` : ''}
+            ${s.noReportDates.length > 0 ? `<div style="font-size: 11px;"><span style="color: #be123c; font-weight: 600; width: 90px; display: inline-block;">Absen (${s.noReportDates.length}):</span> ${absenPills}</div>` : ''}
           </div>
         `;
       }
@@ -362,17 +379,17 @@ const Reports = () => {
     reports.forEach((r, idx) => {
       const convRate = r.registration_count > 0 ? Math.round((r.ftd_count / r.registration_count) * 100) : 0;
       tableRows += `
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 6px 8px; text-align: center;">${idx + 1}</td>
-          <td style="padding: 6px 8px;">${r.tanggal ? r.tanggal.split('T')[0] : ''}</td>
-          <td style="padding: 6px 8px; font-weight: bold;">${r.streamer_name}</td>
-          <td style="padding: 6px 8px; text-align: center;">${r.kategori}</td>
-          <td style="padding: 6px 8px; text-align: center; ${parseFloat(r.live_duration) < 4 && r.kategori === 'Streaming' ? 'color: #e11d48; font-weight: bold;' : ''}">${parseFloat(r.live_duration).toFixed(1)} hrs</td>
-          <td style="padding: 6px 8px; text-align: center;">${(r.tiktok_upload || 0) + (r.youtube_upload || 0) + (r.instagram_upload || 0) + (r.facebook_upload || 0)}</td>
-          <td style="padding: 6px 8px; text-align: right;">${(r.chat_count || 0).toLocaleString()}</td>
-          <td style="padding: 6px 8px; text-align: right;">${r.registration_count || 0}</td>
-          <td style="padding: 6px 8px; text-align: right; color: #10b981; font-weight: bold;">${r.ftd_count || 0}</td>
-          <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${convRate}%</td>
+        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+          <td style="padding: 6px; text-align: center;">${idx + 1}</td>
+          <td style="padding: 6px;">${formatShortDate(r.tanggal)}</td>
+          <td style="padding: 6px; font-weight: bold;">${r.streamer_name}</td>
+          <td style="padding: 6px; text-align: center;">${r.kategori}</td>
+          <td style="padding: 6px; text-align: center; ${parseFloat(r.live_duration) < 4 && r.kategori === 'Streaming' ? 'color: #e11d48; font-weight: bold;' : ''}">${parseFloat(r.live_duration).toFixed(1)} hrs</td>
+          <td style="padding: 6px; text-align: center;">${(r.tiktok_upload || 0) + (r.youtube_upload || 0) + (r.instagram_upload || 0) + (r.facebook_upload || 0)}</td>
+          <td style="padding: 6px; text-align: right;">${(r.chat_count || 0).toLocaleString()}</td>
+          <td style="padding: 6px; text-align: right;">${r.registration_count || 0}</td>
+          <td style="padding: 6px; text-align: right; color: #10b981; font-weight: bold;">${r.ftd_count || 0}</td>
+          <td style="padding: 6px; text-align: right; font-weight: bold;">${convRate}%</td>
         </tr>
       `;
     });
@@ -382,16 +399,16 @@ const Reports = () => {
         <head>
           <title>Casper Signal BI Audit Report - PDF</title>
           <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #334155; padding: 20px; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 16px; }
-            h1 { font-size: 20px; color: #0f172a; margin: 0; }
-            .meta { font-size: 11px; color: #64748b; text-align: right; }
-            .section-title { font-size: 13px; font-weight: bold; color: #0f172a; margin: 18px 0 8px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
-            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
-            th { background-color: #f8fafc; padding: 8px; font-weight: bold; border-bottom: 2px solid #cbd5e1; text-align: left; text-transform: uppercase; font-size: 9px; color: #64748b; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 20px; line-height: 1.4; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #4f46e5; padding-bottom: 10px; margin-bottom: 14px; }
+            h1 { font-size: 18px; color: #0f172a; margin: 0; font-weight: 800; }
+            .meta { font-size: 10px; color: #64748b; text-align: right; }
+            .section-title { font-size: 12px; font-weight: 700; color: #0f172a; margin: 16px 0 6px 0; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 3px; text-transform: uppercase; letter-spacing: 0.5px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            th { background-color: #f8fafc; padding: 6px; font-weight: 700; border-bottom: 2px solid #cbd5e1; text-align: left; text-transform: uppercase; font-size: 9px; color: #475569; letter-spacing: 0.5px; }
             tr:nth-child(even) { background-color: #f8fafc; }
             @media print {
-              @page { size: landscape; margin: 0.8cm; }
+              @page { size: landscape; margin: 0.7cm; }
               body { padding: 0; }
             }
           </style>
@@ -399,17 +416,17 @@ const Reports = () => {
         <body>
           <div class="header">
             <div>
-              <h1>Casper Signal BI Report — Audit Live Streamer</h1>
+              <h1>Casper Signal BI Report — Audit Presensi &amp; Live Streamer</h1>
               <span style="font-size: 11px; color: #64748b;">Monitoring Performa, Evaluasi Durasi SOP (4h), dan Konversi FTD</span>
             </div>
             <div class="meta">
               <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
-              <strong>Periode Filter:</strong> ${rangeStart || 'Semua'} s/d ${rangeEnd || 'Semua'}<br/>
+              <strong>Periode Filter:</strong> ${formatShortDate(rangeStart) || 'Semua'} s/d ${formatShortDate(rangeEnd) || 'Semua'}<br/>
               <strong>Total Records:</strong> ${reports.length}
             </div>
           </div>
 
-          <div class="section-title">1. Ringkasan Evaluasi Akumulasi Per Streamer</div>
+          <div class="section-title">1. Ringkasan Presensi &amp; FTD Streamer</div>
           <table>
             <thead>
               <tr>
@@ -417,11 +434,9 @@ const Reports = () => {
                 <th>Nama Streamer</th>
                 <th style="text-align: center;">Total Live</th>
                 <th style="text-align: center;">Hari Live</th>
-                <th style="text-align: center;">Live &lt; 4h SOP</th>
+                <th style="text-align: center;">Live &lt; 4h</th>
                 <th style="text-align: center;">Hari Off</th>
                 <th style="text-align: center;">Absen</th>
-                <th style="text-align: right;">Total Chat</th>
-                <th style="text-align: right;">Registrasi</th>
                 <th style="text-align: right;">Total FTD</th>
               </tr>
             </thead>
@@ -431,21 +446,25 @@ const Reports = () => {
           </table>
 
           ${under4hSectionHtml ? `
-            <div class="section-title" style="color: #be123c; margin-top: 20px;">2. Rincian Tanggal Pelanggaran Durasi Live (&lt; 4 Jam SOP)</div>
-            ${under4hSectionHtml}
+            <div class="section-title" style="color: #be123c; margin-top: 16px;">2. Rincian Tanggal Live Durasi Kurang (&lt; 4 Jam SOP)</div>
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
+              ${under4hSectionHtml}
+            </div>
           ` : ''}
 
           ${offAbsenSectionHtml ? `
-            <div class="section-title" style="color: #d97706; margin-top: 20px;">3. Rincian Tanggal Off &amp; Tidak Melapor (Absen)</div>
-            ${offAbsenSectionHtml}
+            <div class="section-title" style="color: #d97706; margin-top: 16px;">3. Rincian Tanggal Off &amp; Absen</div>
+            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
+              ${offAbsenSectionHtml}
+            </div>
           ` : ''}
 
-          <div class="section-title" style="margin-top: 24px;">4. Detail Log Rekap Harian</div>
+          <div class="section-title" style="margin-top: 20px;">4. Detail Log Rekap Harian</div>
           <table>
             <thead>
               <tr>
                 <th style="text-align: center; width: 30px;">No</th>
-                <th style="width: 75px;">Tanggal</th>
+                <th style="width: 65px;">Tanggal</th>
                 <th>Nama Streamer</th>
                 <th style="text-align: center;">Kategori</th>
                 <th style="text-align: center;">Live Durasi</th>
