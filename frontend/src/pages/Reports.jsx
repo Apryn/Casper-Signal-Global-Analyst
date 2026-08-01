@@ -436,7 +436,7 @@ const Reports = () => {
           ` : ''}
 
           ${offAbsenSectionHtml ? `
-            <div class="section-title" style="color: #d97706; margin-top: 16px;">3. Rincian Tanggal Off &amp; Absen</div>
+            <div class="section-title" style="color: #d97706; margin-top: 24px; page-break-before: always; break-before: page;">3. Rincian Tanggal Off &amp; Absen</div>
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
               ${offAbsenSectionHtml}
             </div>
