@@ -391,7 +391,7 @@ const Reports = () => {
             th { background-color: #f8fafc; padding: 6px; font-weight: 700; border-bottom: 2px solid #cbd5e1; text-align: left; text-transform: uppercase; font-size: 9px; color: #475569; letter-spacing: 0.5px; }
             tr:nth-child(even) { background-color: #f8fafc; }
             @media print {
-              @page { size: landscape; margin: 0.7cm; }
+              @page { size: A4 portrait; margin: 10mm; }
               body { padding: 0; }
             }
           </style>
