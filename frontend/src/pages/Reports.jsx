@@ -206,23 +206,78 @@ const Reports = () => {
     const printWindow = window.open('', '_blank');
     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
+    // Determine date range for absence tracking
+    let rangeStart = startDate;
+    let rangeEnd = endDate;
+
+    if (!rangeStart || !rangeEnd) {
+      const datesFromReports = reports.map(r => r.tanggal ? r.tanggal.split('T')[0] : '').filter(Boolean).sort();
+      if (datesFromReports.length > 0) {
+        if (!rangeStart) rangeStart = datesFromReports[0];
+        if (!rangeEnd) rangeEnd = datesFromReports[datesFromReports.length - 1];
+      }
+    }
+
+    const dateList = [];
+    if (rangeStart && rangeEnd) {
+      let curr = new Date(rangeStart + 'T00:00:00+07:00');
+      const end = new Date(rangeEnd + 'T00:00:00+07:00');
+      while (curr <= end) {
+        const y = curr.getFullYear();
+        const m = String(curr.getMonth() + 1).padStart(2, '0');
+        const d = String(curr.getDate()).padStart(2, '0');
+        const dateStr = `${y}-${m}-${d}`;
+        const isSunday = curr.getDay() === 0;
+        dateList.push({ dateStr, isSunday });
+        curr.setDate(curr.getDate() + 1);
+      }
+    }
+
     // Build Streamer Audit Summary
     const summaryMap = {};
+    
+    // Seed with all streamers if available
+    const activeStreamers = streamers.length > 0 ? streamers : Array.from(new Set(reports.map(r => r.streamer_name))).map((name, idx) => ({ id: idx, nama: name }));
+
+    activeStreamers.forEach(s => {
+      summaryMap[s.nama] = {
+        name: s.nama,
+        streamerId: s.id,
+        totalLive: 0,
+        liveDays: 0,
+        under4hDays: 0,
+        offDays: 0,
+        noReportDays: 0,
+        totalFtds: 0,
+        totalRegs: 0,
+        totalChats: 0,
+        under4hDates: [],
+        offDates: [],
+        noReportDates: []
+      };
+    });
+
     reports.forEach(r => {
       const name = r.streamer_name || 'Unknown';
       if (!summaryMap[name]) {
         summaryMap[name] = {
           name,
+          streamerId: r.streamer_id,
           totalLive: 0,
           liveDays: 0,
           under4hDays: 0,
           offDays: 0,
+          noReportDays: 0,
           totalFtds: 0,
           totalRegs: 0,
-          totalChats: 0
+          totalChats: 0,
+          under4hDates: [],
+          offDates: [],
+          noReportDates: []
         };
       }
       const dur = parseFloat(r.live_duration || 0);
+      const dateStr = r.tanggal ? r.tanggal.split('T')[0] : '';
       summaryMap[name].totalLive += dur;
       summaryMap[name].totalFtds += (r.ftd_count || 0);
       summaryMap[name].totalRegs += (r.registration_count || 0);
@@ -230,13 +285,33 @@ const Reports = () => {
 
       if (r.kategori === 'Non Streaming' || dur === 0) {
         summaryMap[name].offDays++;
+        summaryMap[name].offDates.push({ date: dateStr, reason: 'Lapor Off' });
       } else if (dur < 4.0) {
         summaryMap[name].liveDays++;
         summaryMap[name].under4hDays++;
+        summaryMap[name].under4hDates.push({ date: dateStr, duration: dur });
       } else {
         summaryMap[name].liveDays++;
       }
     });
+
+    // Check absent dates
+    if (dateList.length > 0) {
+      dateList.forEach(({ dateStr, isSunday }) => {
+        if (isSunday) return; // Skip Sundays
+        Object.values(summaryMap).forEach(s => {
+          const hasReport = reports.some(r => {
+            const rName = r.streamer_name || '';
+            const rDate = r.tanggal ? r.tanggal.split('T')[0] : '';
+            return rName === s.name && rDate === dateStr;
+          });
+          if (!hasReport) {
+            s.noReportDays++;
+            s.noReportDates.push(dateStr);
+          }
+        });
+      });
+    }
 
     let summaryRows = '';
     Object.values(summaryMap).forEach((s, idx) => {
@@ -248,11 +323,39 @@ const Reports = () => {
           <td style="padding: 6px 8px; text-align: center;">${s.liveDays} hari</td>
           <td style="padding: 6px 8px; text-align: center; ${s.under4hDays > 0 ? 'color: #e11d48; font-weight: bold;' : ''}">${s.under4hDays} hari</td>
           <td style="padding: 6px 8px; text-align: center;">${s.offDays} hari</td>
+          <td style="padding: 6px 8px; text-align: center; ${s.noReportDays > 10 ? 'color: #be123c; font-weight: bold;' : ''}">${s.noReportDays} hari</td>
           <td style="padding: 6px 8px; text-align: right;">${s.totalChats.toLocaleString()}</td>
           <td style="padding: 6px 8px; text-align: right;">${s.totalRegs}</td>
           <td style="padding: 6px 8px; text-align: right; color: #059669; font-weight: bold;">${s.totalFtds} FTD</td>
         </tr>
       `;
+    });
+
+    let under4hSectionHtml = '';
+    Object.values(summaryMap).forEach(s => {
+      if (s.under4hDates.length > 0) {
+        under4hSectionHtml += `
+          <div style="margin-bottom: 10px; background: #fff1f2; border: 1px solid #fecdd3; border-radius: 6px; padding: 10px;">
+            <strong style="color: #be123c; font-size: 12px;">📌 ${s.name} (${s.under4hDates.length} hari &lt; 4 jam SOP):</strong>
+            <div style="font-size: 11px; color: #9f1239; margin-top: 4px;">
+              ${s.under4hDates.map(d => `<span style="display: inline-block; margin-right: 12px; margin-top: 2px;">• <strong>${d.date}</strong>: ${d.duration.toFixed(1)} jam</span>`).join('')}
+            </div>
+          </div>
+        `;
+      }
+    });
+
+    let offAbsenSectionHtml = '';
+    Object.values(summaryMap).forEach(s => {
+      if (s.offDates.length > 0 || s.noReportDates.length > 0) {
+        offAbsenSectionHtml += `
+          <div style="margin-bottom: 10px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px;">
+            <strong style="color: #1e293b; font-size: 12px;">📌 ${s.name}:</strong>
+            ${s.offDates.length > 0 ? `<div style="font-size: 11px; color: #d97706; margin-top: 3px;"><strong>Hari Off (${s.offDates.length} hari):</strong> ${s.offDates.map(d => d.date).join(', ')}</div>` : ''}
+            ${s.noReportDates.length > 0 ? `<div style="font-size: 11px; color: #e11d48; margin-top: 3px;"><strong>Absen/Tidak Melapor (${s.noReportDates.length} hari):</strong> ${s.noReportDates.join(', ')}</div>` : ''}
+          </div>
+        `;
+      }
     });
 
     let tableRows = '';
@@ -283,7 +386,7 @@ const Reports = () => {
             .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 16px; }
             h1 { font-size: 20px; color: #0f172a; margin: 0; }
             .meta { font-size: 11px; color: #64748b; text-align: right; }
-            .section-title { font-size: 13px; font-weight: bold; color: #0f172a; margin: 16px 0 8px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+            .section-title { font-size: 13px; font-weight: bold; color: #0f172a; margin: 18px 0 8px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
             table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
             th { background-color: #f8fafc; padding: 8px; font-weight: bold; border-bottom: 2px solid #cbd5e1; text-align: left; text-transform: uppercase; font-size: 9px; color: #64748b; }
             tr:nth-child(even) { background-color: #f8fafc; }
@@ -301,6 +404,7 @@ const Reports = () => {
             </div>
             <div class="meta">
               <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
+              <strong>Periode Filter:</strong> ${rangeStart || 'Semua'} s/d ${rangeEnd || 'Semua'}<br/>
               <strong>Total Records:</strong> ${reports.length}
             </div>
           </div>
@@ -315,6 +419,7 @@ const Reports = () => {
                 <th style="text-align: center;">Hari Live</th>
                 <th style="text-align: center;">Live &lt; 4h SOP</th>
                 <th style="text-align: center;">Hari Off</th>
+                <th style="text-align: center;">Absen</th>
                 <th style="text-align: right;">Total Chat</th>
                 <th style="text-align: right;">Registrasi</th>
                 <th style="text-align: right;">Total FTD</th>
@@ -325,7 +430,17 @@ const Reports = () => {
             </tbody>
           </table>
 
-          <div class="section-title" style="margin-top: 24px;">2. Detail Laporan Rekap Harian</div>
+          ${under4hSectionHtml ? `
+            <div class="section-title" style="color: #be123c; margin-top: 20px;">2. Rincian Tanggal Pelanggaran Durasi Live (&lt; 4 Jam SOP)</div>
+            ${under4hSectionHtml}
+          ` : ''}
+
+          ${offAbsenSectionHtml ? `
+            <div class="section-title" style="color: #d97706; margin-top: 20px;">3. Rincian Tanggal Off &amp; Tidak Melapor (Absen)</div>
+            ${offAbsenSectionHtml}
+          ` : ''}
+
+          <div class="section-title" style="margin-top: 24px;">4. Detail Log Rekap Harian</div>
           <table>
             <thead>
               <tr>
