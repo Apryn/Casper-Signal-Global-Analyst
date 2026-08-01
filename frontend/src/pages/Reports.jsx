@@ -206,17 +206,19 @@ const Reports = () => {
     const printWindow = window.open('', '_blank');
     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
-    const formatShortDate = (dateInput) => {
+    const getWibDateStr = (dateInput) => {
       if (!dateInput) return '';
-      let dateStr = '';
-      if (dateInput instanceof Date) {
-        const y = dateInput.getFullYear();
-        const m = String(dateInput.getMonth() + 1).padStart(2, '0');
-        const d = String(dateInput.getDate()).padStart(2, '0');
-        dateStr = `${y}-${m}-${d}`;
-      } else {
-        dateStr = String(dateInput).split('T')[0];
+      if (typeof dateInput === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateInput.trim())) {
+        return dateInput.trim();
       }
+      const d = new Date(dateInput);
+      if (isNaN(d.getTime())) return String(dateInput).split('T')[0];
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta' }).format(d);
+    };
+
+    const formatShortDate = (dateInput) => {
+      const dateStr = getWibDateStr(dateInput);
+      if (!dateStr) return '';
       const parts = dateStr.split('-');
       if (parts.length !== 3) return dateStr;
       const day = parseInt(parts[2], 10);
