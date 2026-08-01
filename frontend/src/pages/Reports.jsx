@@ -377,25 +377,6 @@ const Reports = () => {
       }
     });
 
-    let tableRows = '';
-    reports.forEach((r, idx) => {
-      const convRate = r.registration_count > 0 ? Math.round((r.ftd_count / r.registration_count) * 100) : 0;
-      tableRows += `
-        <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
-          <td style="padding: 6px; text-align: center;">${idx + 1}</td>
-          <td style="padding: 6px;">${formatShortDate(r.tanggal)}</td>
-          <td style="padding: 6px; font-weight: bold;">${r.streamer_name}</td>
-          <td style="padding: 6px; text-align: center;">${r.kategori}</td>
-          <td style="padding: 6px; text-align: center; ${parseFloat(r.live_duration) < 4 && r.kategori === 'Streaming' ? 'color: #e11d48; font-weight: bold;' : ''}">${parseFloat(r.live_duration).toFixed(1)} hrs</td>
-          <td style="padding: 6px; text-align: center;">${(r.tiktok_upload || 0) + (r.youtube_upload || 0) + (r.instagram_upload || 0) + (r.facebook_upload || 0)}</td>
-          <td style="padding: 6px; text-align: right;">${(r.chat_count || 0).toLocaleString()}</td>
-          <td style="padding: 6px; text-align: right;">${r.registration_count || 0}</td>
-          <td style="padding: 6px; text-align: right; color: #10b981; font-weight: bold;">${r.ftd_count || 0}</td>
-          <td style="padding: 6px; text-align: right; font-weight: bold;">${convRate}%</td>
-        </tr>
-      `;
-    });
-
     const htmlContent = `
       <html>
         <head>
@@ -461,26 +442,6 @@ const Reports = () => {
             </div>
           ` : ''}
 
-          <div class="section-title" style="margin-top: 20px;">4. Detail Log Rekap Harian</div>
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align: center; width: 30px;">No</th>
-                <th style="width: 65px;">Tanggal</th>
-                <th>Nama Streamer</th>
-                <th style="text-align: center;">Kategori</th>
-                <th style="text-align: center;">Live Durasi</th>
-                <th style="text-align: center;">Uploads</th>
-                <th style="text-align: right;">Chat</th>
-                <th style="text-align: right;">Regs</th>
-                <th style="text-align: right;">FTD</th>
-                <th style="text-align: right;">Conv Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${tableRows}
-            </tbody>
-          </table>
           <script>
             window.onload = function() {
               window.print();
