@@ -51,7 +51,9 @@ const Reports = () => {
     live_duration: 0.0,
     chat_count: 0,
     registration_count: 0,
-    ftd_count: 0
+    ftd_count: 0,
+    status_izin: 'Normal',
+    catatan_izin: ''
   });
   const [streamers, setStreamers] = useState([]);
   const [modalError, setModalError] = useState('');
@@ -82,7 +84,9 @@ const Reports = () => {
       live_duration: 0.0,
       chat_count: 0,
       registration_count: 0,
-      ftd_count: 0
+      ftd_count: 0,
+      status_izin: 'Normal',
+      catatan_izin: ''
     });
     setModalError('');
     setModalSuccess('');
@@ -302,13 +306,15 @@ const Reports = () => {
       summaryMap[name].totalRegs += (r.registration_count || 0);
       summaryMap[name].totalChats += (r.chat_count || 0);
 
+      const statusBadgeText = (r.status_izin && r.status_izin !== 'Normal') ? ` [${r.status_izin}]` : '';
+
       if (r.kategori === 'Non Streaming' || dur === 0) {
         summaryMap[name].offDays++;
-        summaryMap[name].offDates.push(formatShortDate(dateStr));
+        summaryMap[name].offDates.push(formatShortDate(dateStr) + statusBadgeText);
       } else if (dur < 4.0) {
         summaryMap[name].liveDays++;
         summaryMap[name].under4hDays++;
-        summaryMap[name].under4hDates.push({ shortDate: formatShortDate(dateStr), duration: dur });
+        summaryMap[name].under4hDates.push({ shortDate: formatShortDate(dateStr) + statusBadgeText, duration: dur, statusIzin: r.status_izin });
       } else {
         summaryMap[name].liveDays++;
       }
@@ -473,7 +479,9 @@ const Reports = () => {
   const handleEditClick = (report) => {
     setEditingReport({
       ...report,
-      tanggal: report.tanggal ? report.tanggal.split('T')[0] : ''
+      tanggal: report.tanggal ? report.tanggal.split('T')[0] : '',
+      status_izin: report.status_izin || 'Normal',
+      catatan_izin: report.catatan_izin || ''
     });
     setModalError('');
     setModalSuccess('');
@@ -973,23 +981,30 @@ const Reports = () => {
                                 </div>
                               </div>
 
-                              {/* SOP Status Pill Header */}
-                              <div className="mb-3">
+                              {/* SOP Status Pill Header & Izin Badge */}
+                              <div className="mb-3 space-y-1.5">
                                 {!isStreaming ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-semibold border border-slate-700/60 w-full justify-center truncate">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-semibold border border-slate-700/60 w-full justify-center truncate">
                                     <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
-                                    Non-Streaming (Off/Izin)
+                                    {report.status_izin && report.status_izin !== 'Normal' ? `🔵 ${report.status_izin}` : 'Non-Streaming (Off/Izin)'}
                                   </span>
                                 ) : isSopMet ? (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center truncate">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center truncate">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
                                     ✅ Live SOP {liveHours.toFixed(1)}h / 4h
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center truncate">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center truncate">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
                                     ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h)
                                   </span>
+                                )}
+
+                                {report.status_izin && report.status_izin !== 'Normal' && isStreaming && (
+                                  <div className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800 flex items-center justify-between gap-1">
+                                    <span className="font-semibold text-amber-400">Status: {report.status_izin}</span>
+                                    {report.catatan_izin && <span className="text-slate-400 italic truncate max-w-[120px]" title={report.catatan_izin}>"{report.catatan_izin}"</span>}
+                                  </div>
                                 )}
                               </div>
 
@@ -1202,6 +1217,35 @@ const Reports = () => {
                 </div>
               </div>
 
+              {/* Status Izin & Catatan Izin */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Status Izin / Presensi</label>
+                  <select
+                    value={editingReport.status_izin || 'Normal'}
+                    onChange={(e) => setEditingReport({ ...editingReport, status_izin: e.target.value })}
+                    className="w-full p-2.5 text-xs rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="Normal">🟢 Normal (SOP Standard)</option>
+                    <option value="Izin Telat">🟡 Izin Telat (Utang Jam)</option>
+                    <option value="Izin Off">🔵 Izin Off / Cuti Resmi</option>
+                    <option value="Mati Lampu">⚡ Mati Lampu / Kendala PLN</option>
+                    <option value="Sakit">🏥 Sakit</option>
+                    <option value="Tanpa Izin">🔴 Tanpa Izin / Mangkir</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Catatan / Alasan Izin</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Izin telat urusan keluarga..."
+                    value={editingReport.catatan_izin || ''}
+                    onChange={(e) => setEditingReport({ ...editingReport, catatan_izin: e.target.value })}
+                    className="w-full p-2.5 text-xs rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
               {/* Submit button */}
               <button
                 type="submit"
@@ -1352,6 +1396,35 @@ const Reports = () => {
                     value={newReport.ftd_count}
                     onChange={(e) => setNewReport({ ...newReport, ftd_count: parseInt(e.target.value) || 0 })}
                     className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Status Izin & Catatan Izin */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Status Izin / Presensi</label>
+                  <select
+                    value={newReport.status_izin || 'Normal'}
+                    onChange={(e) => setNewReport({ ...newReport, status_izin: e.target.value })}
+                    className="w-full p-2.5 text-xs rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    <option value="Normal">🟢 Normal (SOP Standard)</option>
+                    <option value="Izin Telat">🟡 Izin Telat (Utang Jam)</option>
+                    <option value="Izin Off">🔵 Izin Off / Cuti Resmi</option>
+                    <option value="Mati Lampu">⚡ Mati Lampu / Kendala PLN</option>
+                    <option value="Sakit">🏥 Sakit</option>
+                    <option value="Tanpa Izin">🔴 Tanpa Izin / Mangkir</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Catatan / Alasan Izin</label>
+                  <input
+                    type="text"
+                    placeholder="Contoh: Izin telat urusan keluarga..."
+                    value={newReport.catatan_izin || ''}
+                    onChange={(e) => setNewReport({ ...newReport, catatan_izin: e.target.value })}
+                    className="w-full p-2.5 text-xs rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
                   />
                 </div>
               </div>

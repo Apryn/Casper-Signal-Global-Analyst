@@ -89,7 +89,9 @@ export const updateReport = async (req, res) => {
     live_duration,
     chat_count,
     registration_count,
-    ftd_count
+    ftd_count,
+    status_izin,
+    catatan_izin
   } = req.body;
 
   try {
@@ -122,8 +124,10 @@ export const updateReport = async (req, res) => {
            live_duration = $7,
            chat_count = $8,
            registration_count = $9,
-           ftd_count = $10
-       WHERE id = $11 
+           ftd_count = $10,
+           status_izin = $11,
+           catatan_izin = $12
+       WHERE id = $13 
        RETURNING *`,
       [
         finalTanggal,
@@ -136,6 +140,8 @@ export const updateReport = async (req, res) => {
         chat_count || 0,
         registration_count || 0,
         ftd_count || 0,
+        status_izin || checkReport.rows[0].status_izin || 'Normal',
+        catatan_izin !== undefined ? catatan_izin : checkReport.rows[0].catatan_izin,
         id
       ]
     );
@@ -181,7 +187,9 @@ export const createReport = async (req, res) => {
     live_duration = 0.0,
     chat_count = 0,
     registration_count = 0,
-    ftd_count = 0
+    ftd_count = 0,
+    status_izin = 'Normal',
+    catatan_izin = ''
   } = req.body;
 
   if (!streamer_id || !tanggal) {
@@ -193,8 +201,8 @@ export const createReport = async (req, res) => {
       `INSERT INTO daily_reports (
          streamer_id, tanggal, kategori,
          tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
-         live_duration, chat_count, registration_count, ftd_count, raw_message
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         live_duration, chat_count, registration_count, ftd_count, status_izin, catatan_izin, raw_message
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
        RETURNING *`,
       [
         streamer_id,
@@ -208,6 +216,8 @@ export const createReport = async (req, res) => {
         chat_count,
         registration_count,
         ftd_count,
+        status_izin,
+        catatan_izin,
         'Manually logged via Web Dashboard'
       ]
     );
