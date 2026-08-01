@@ -16,7 +16,8 @@ import {
   Coins,
   CheckCircle2,
   Tv,
-  Send
+  Send,
+  RotateCcw
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
@@ -205,21 +206,70 @@ const Reports = () => {
     const printWindow = window.open('', '_blank');
     const todayStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 
+    // Build Streamer Audit Summary
+    const summaryMap = {};
+    reports.forEach(r => {
+      const name = r.streamer_name || 'Unknown';
+      if (!summaryMap[name]) {
+        summaryMap[name] = {
+          name,
+          totalLive: 0,
+          liveDays: 0,
+          under4hDays: 0,
+          offDays: 0,
+          totalFtds: 0,
+          totalRegs: 0,
+          totalChats: 0
+        };
+      }
+      const dur = parseFloat(r.live_duration || 0);
+      summaryMap[name].totalLive += dur;
+      summaryMap[name].totalFtds += (r.ftd_count || 0);
+      summaryMap[name].totalRegs += (r.registration_count || 0);
+      summaryMap[name].totalChats += (r.chat_count || 0);
+
+      if (r.kategori === 'Non Streaming' || dur === 0) {
+        summaryMap[name].offDays++;
+      } else if (dur < 4.0) {
+        summaryMap[name].liveDays++;
+        summaryMap[name].under4hDays++;
+      } else {
+        summaryMap[name].liveDays++;
+      }
+    });
+
+    let summaryRows = '';
+    Object.values(summaryMap).forEach((s, idx) => {
+      summaryRows += `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="padding: 6px 8px; text-align: center;">${idx + 1}</td>
+          <td style="padding: 6px 8px; font-weight: bold; color: #0f172a;">${s.name}</td>
+          <td style="padding: 6px 8px; text-align: center; font-weight: bold; color: #4f46e5;">${s.totalLive.toFixed(1)} hrs</td>
+          <td style="padding: 6px 8px; text-align: center;">${s.liveDays} hari</td>
+          <td style="padding: 6px 8px; text-align: center; ${s.under4hDays > 0 ? 'color: #e11d48; font-weight: bold;' : ''}">${s.under4hDays} hari</td>
+          <td style="padding: 6px 8px; text-align: center;">${s.offDays} hari</td>
+          <td style="padding: 6px 8px; text-align: right;">${s.totalChats.toLocaleString()}</td>
+          <td style="padding: 6px 8px; text-align: right;">${s.totalRegs}</td>
+          <td style="padding: 6px 8px; text-align: right; color: #059669; font-weight: bold;">${s.totalFtds} FTD</td>
+        </tr>
+      `;
+    });
+
     let tableRows = '';
     reports.forEach((r, idx) => {
       const convRate = r.registration_count > 0 ? Math.round((r.ftd_count / r.registration_count) * 100) : 0;
       tableRows += `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 8px; text-align: center;">${idx + 1}</td>
-          <td style="padding: 8px;">${r.tanggal ? r.tanggal.split('T')[0] : ''}</td>
-          <td style="padding: 8px; font-weight: bold;">${r.streamer_name}</td>
-          <td style="padding: 8px; text-align: center;">${r.kategori}</td>
-          <td style="padding: 8px; text-align: center;">${parseFloat(r.live_duration).toFixed(1)} hrs</td>
-          <td style="padding: 8px; text-align: center;">${r.tiktok_upload + r.youtube_upload + r.instagram_upload + r.facebook_upload}</td>
-          <td style="padding: 8px; text-align: right;">${r.chat_count.toLocaleString()}</td>
-          <td style="padding: 8px; text-align: right;">${r.registration_count}</td>
-          <td style="padding: 8px; text-align: right; color: #10b981; font-weight: bold;">${r.ftd_count}</td>
-          <td style="padding: 8px; text-align: right; font-weight: bold;">${convRate}%</td>
+          <td style="padding: 6px 8px; text-align: center;">${idx + 1}</td>
+          <td style="padding: 6px 8px;">${r.tanggal ? r.tanggal.split('T')[0] : ''}</td>
+          <td style="padding: 6px 8px; font-weight: bold;">${r.streamer_name}</td>
+          <td style="padding: 6px 8px; text-align: center;">${r.kategori}</td>
+          <td style="padding: 6px 8px; text-align: center; ${parseFloat(r.live_duration) < 4 && r.kategori === 'Streaming' ? 'color: #e11d48; font-weight: bold;' : ''}">${parseFloat(r.live_duration).toFixed(1)} hrs</td>
+          <td style="padding: 6px 8px; text-align: center;">${(r.tiktok_upload || 0) + (r.youtube_upload || 0) + (r.instagram_upload || 0) + (r.facebook_upload || 0)}</td>
+          <td style="padding: 6px 8px; text-align: right;">${(r.chat_count || 0).toLocaleString()}</td>
+          <td style="padding: 6px 8px; text-align: right;">${r.registration_count || 0}</td>
+          <td style="padding: 6px 8px; text-align: right; color: #10b981; font-weight: bold;">${r.ftd_count || 0}</td>
+          <td style="padding: 6px 8px; text-align: right; font-weight: bold;">${convRate}%</td>
         </tr>
       `;
     });
@@ -227,17 +277,18 @@ const Reports = () => {
     const htmlContent = `
       <html>
         <head>
-          <title>Casper Signal BI Report - PDF</title>
+          <title>Casper Signal BI Audit Report - PDF</title>
           <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #334155; padding: 25px; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #cbd5e1; padding-bottom: 15px; margin-bottom: 20px; }
-            h1 { font-size: 22px; color: #0f172a; margin: 0; }
+            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #334155; padding: 20px; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #6366f1; padding-bottom: 12px; margin-bottom: 16px; }
+            h1 { font-size: 20px; color: #0f172a; margin: 0; }
             .meta { font-size: 11px; color: #64748b; text-align: right; }
-            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 10px; }
-            th { background-color: #f8fafc; padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #cbd5e1; text-align: left; text-transform: uppercase; font-size: 9px; color: #64748b; }
+            .section-title { font-size: 13px; font-weight: bold; color: #0f172a; margin: 16px 0 8px 0; border-bottom: 1px solid #cbd5e1; padding-bottom: 4px; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 6px; }
+            th { background-color: #f8fafc; padding: 8px; font-weight: bold; border-bottom: 2px solid #cbd5e1; text-align: left; text-transform: uppercase; font-size: 9px; color: #64748b; }
             tr:nth-child(even) { background-color: #f8fafc; }
             @media print {
-              @page { size: landscape; margin: 1cm; }
+              @page { size: landscape; margin: 0.8cm; }
               body { padding: 0; }
             }
           </style>
@@ -245,25 +296,47 @@ const Reports = () => {
         <body>
           <div class="header">
             <div>
-              <h1>Casper Signal Analytics Dashboard</h1>
-              <span style="font-size: 11px; color: #64748b;">Laporan Buku Besar Harian (Daily Recaps Ledger)</span>
+              <h1>Casper Signal BI Report — Audit Live Streamer</h1>
+              <span style="font-size: 11px; color: #64748b;">Monitoring Performa, Evaluasi Durasi SOP (4h), dan Konversi FTD</span>
             </div>
             <div class="meta">
               <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
-              <strong>Total Baris Laporan:</strong> ${reports.length}
+              <strong>Total Records:</strong> ${reports.length}
             </div>
           </div>
+
+          <div class="section-title">1. Ringkasan Evaluasi Akumulasi Per Streamer</div>
           <table>
             <thead>
               <tr>
-                <th style="text-align: center; width: 40px;">No</th>
-                <th style="width: 80px;">Tanggal</th>
+                <th style="text-align: center; width: 30px;">No</th>
+                <th>Nama Streamer</th>
+                <th style="text-align: center;">Total Live</th>
+                <th style="text-align: center;">Hari Live</th>
+                <th style="text-align: center;">Live &lt; 4h SOP</th>
+                <th style="text-align: center;">Hari Off</th>
+                <th style="text-align: right;">Total Chat</th>
+                <th style="text-align: right;">Registrasi</th>
+                <th style="text-align: right;">Total FTD</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${summaryRows}
+            </tbody>
+          </table>
+
+          <div class="section-title" style="margin-top: 24px;">2. Detail Laporan Rekap Harian</div>
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: center; width: 30px;">No</th>
+                <th style="width: 75px;">Tanggal</th>
                 <th>Nama Streamer</th>
                 <th style="text-align: center;">Kategori</th>
                 <th style="text-align: center;">Live Durasi</th>
                 <th style="text-align: center;">Uploads</th>
-                <th style="text-align: right;">Chat Masuk</th>
-                <th style="text-align: right;">Registrasi</th>
+                <th style="text-align: right;">Chat</th>
+                <th style="text-align: right;">Regs</th>
                 <th style="text-align: right;">FTD</th>
                 <th style="text-align: right;">Conv Rate</th>
               </tr>
@@ -464,66 +537,79 @@ const Reports = () => {
       {/* Stat Cards Overview Bar */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Reports */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all flex flex-col justify-between">
+        <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-900/70 shadow-lg relative overflow-hidden group hover:border-indigo-500/40 transition-all flex flex-col justify-between min-h-[140px]">
           <div className="flex justify-between items-start gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Total Laporan</p>
-              <h3 className="text-2xl font-extrabold text-white mt-1">{reports.length} <span className="text-xs text-slate-500 font-normal">rekap</span></h3>
+              <h3 className="text-2xl font-black text-white mt-1 flex items-baseline gap-1.5">
+                {reports.length} <span className="text-xs text-slate-400 font-normal">rekap</span>
+              </h3>
             </div>
             <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
               <Tv className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-2 text-xs">
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]">
+          <div className="mt-3 text-xs flex items-center justify-between border-t border-slate-800/80 pt-2.5 min-h-[32px]">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]">
               {reports.filter(r => r.kategori === 'Streaming').length} Streaming
             </span>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-slate-800 text-slate-400 font-semibold border border-slate-700/50 text-[11px]">
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-slate-800/90 text-slate-400 font-semibold border border-slate-700/60 text-[11px]">
               {reports.filter(r => r.kategori === 'Non Streaming').length} Off
             </span>
           </div>
         </div>
 
         {/* Card 2: Total Live Hours */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-purple-500/30 transition-all flex flex-col justify-between">
+        <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-900/70 shadow-lg relative overflow-hidden group hover:border-purple-500/40 transition-all flex flex-col justify-between min-h-[140px]">
           <div className="flex justify-between items-start gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Total Jam Live</p>
-              <h3 className="text-2xl font-extrabold text-purple-300 mt-1">{totalLive.toFixed(1)} <span className="text-xs text-slate-500 font-normal">Jam</span></h3>
+              <h3 className="text-2xl font-black text-purple-300 mt-1 flex items-baseline gap-1.5">
+                {totalLive.toFixed(1)} <span className="text-xs text-slate-400 font-normal">Jam</span>
+              </h3>
             </div>
             <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-400 shrink-0">
               <Video className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 text-[11px] text-purple-300/80 font-medium">
-            Akumulasi durasi tayang live streamer
+          <div className="mt-3 text-[11px] text-slate-400 flex items-center gap-1.5 border-t border-slate-800/80 pt-2.5 min-h-[32px]">
+            <Video className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+            <span className="truncate">Akumulasi durasi tayang live</span>
           </div>
         </div>
 
         {/* Card 3: Total Registrations & Chats */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-lg relative overflow-hidden group hover:border-indigo-500/30 transition-all flex flex-col justify-between">
+        <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-900/70 shadow-lg relative overflow-hidden group hover:border-sky-500/40 transition-all flex flex-col justify-between min-h-[140px]">
           <div className="flex justify-between items-start gap-2">
             <div className="min-w-0 flex-1">
               <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 truncate">Registrasi & Chat</p>
-              <h3 className="text-2xl font-extrabold text-indigo-300 mt-1">{totalRegs.toLocaleString()} <span className="text-xs text-slate-500 font-normal">Regs</span></h3>
+              <h3 className="text-2xl font-black text-sky-300 mt-1 flex items-baseline gap-1.5">
+                {totalRegs.toLocaleString()} <span className="text-xs text-slate-400 font-normal">Regs</span>
+              </h3>
             </div>
-            <div className="p-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 shrink-0">
+            <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sky-400 shrink-0">
               <UserCheck className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between gap-2 border-t border-slate-800/60 pt-2">
-            <span>Total Chat Masuk:</span>
-            <span className="font-bold text-white font-mono bg-slate-800 px-2 py-0.5 rounded-md border border-slate-700/60">{totalChats.toLocaleString()}</span>
+          <div className="mt-3 text-[11px] text-slate-400 flex items-center justify-between gap-2 border-t border-slate-800/80 pt-2.5 min-h-[32px]">
+            <span className="flex items-center gap-1">
+              <MessageSquare className="w-3.5 h-3.5 text-sky-400 shrink-0" /> Total Chat:
+            </span>
+            <span className="font-bold text-white font-mono bg-slate-800/90 px-2 py-0.5 rounded-md border border-slate-700/60 text-xs">
+              {totalChats.toLocaleString()}
+            </span>
           </div>
         </div>
 
         {/* Card 4: Total FTD */}
-        <div className="glass-panel p-4.5 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900/80 via-slate-900/60 to-amber-950/20 shadow-lg relative overflow-hidden group hover:border-amber-400/50 transition-all flex flex-col justify-between">
+        <div className="glass-panel p-4 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-slate-900/90 via-slate-900/70 to-amber-950/20 shadow-lg relative overflow-hidden group hover:border-amber-400/50 transition-all flex flex-col justify-between min-h-[140px]">
           <div className="flex justify-between items-start gap-2">
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 truncate">Total FTD</p>
-              <p className="text-[9px] font-semibold text-amber-500/80 uppercase tracking-widest -mt-0.5">Deposit Baru</p>
-              <h3 className="text-2xl font-extrabold text-amber-400 mt-1 tracking-tight drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-400/90 truncate">Total FTD</p>
+                <span className="text-[9px] font-bold text-amber-400 bg-amber-500/20 px-1.5 py-0.5 rounded border border-amber-500/30 uppercase tracking-wider">Deposit Baru</span>
+              </div>
+              <h3 className="text-2xl font-black text-amber-400 mt-1 flex items-baseline gap-1.5 tracking-tight drop-shadow-[0_0_12px_rgba(245,158,11,0.3)]">
                 {totalFtds.toLocaleString()} <span className="text-xs text-amber-300 font-normal">FTD</span>
               </h3>
             </div>
@@ -531,7 +617,7 @@ const Reports = () => {
               <Coins className="h-5 w-5" />
             </div>
           </div>
-          <div className="mt-3 text-[11px] text-amber-400/90 font-semibold flex items-center gap-1.5 border-t border-amber-500/20 pt-2">
+          <div className="mt-3 text-[11px] text-amber-400/90 font-semibold flex items-center gap-1.5 border-t border-amber-500/20 pt-2.5 min-h-[32px]">
             <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
             <span className="truncate">Puncak pencapaian konversi</span>
           </div>
@@ -539,56 +625,56 @@ const Reports = () => {
       </div>
 
       {/* Filter Control Bar */}
-      <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-950/40 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+      <div className="glass-panel p-4 rounded-2xl border border-slate-800 bg-slate-900/60 shadow-md grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5 items-end">
         
         {/* Name Search */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Cari Streamer</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">Cari Streamer</label>
           <div className="relative">
-            <Search className="absolute inset-y-0 left-0 pl-3 h-full w-4 text-slate-500 flex items-center pointer-events-none" />
+            <Search className="absolute inset-y-0 left-0 pl-3 h-full w-4 text-slate-400 flex items-center pointer-events-none" />
             <input
               type="text"
               value={searchName}
               onChange={(e) => setSearchName(e.target.value)}
               placeholder="Nama streamer..."
-              className="block w-full h-10 pl-9 pr-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+              className="block w-full h-10 pl-9 pr-3 text-xs rounded-xl border border-slate-800 bg-slate-950 text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
             />
           </div>
         </div>
 
         {/* Start Date */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Mulai Tanggal</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">Mulai Tanggal</label>
           <div className="relative">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-950 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer [color-scheme:dark]"
             />
           </div>
         </div>
 
         {/* End Date */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Sampai Tanggal</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">Sampai Tanggal</label>
           <div className="relative">
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+              className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-950 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer [color-scheme:dark]"
             />
           </div>
         </div>
 
         {/* Category Filter */}
         <div className="space-y-1.5">
-          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-widest">Kategori Status</label>
+          <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">Kategori Status</label>
           <select
             value={kategori}
             onChange={(e) => setKategori(e.target.value)}
-            className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+            className="block w-full h-10 px-3 text-xs rounded-xl border border-slate-800 bg-slate-950 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
           >
             <option value="">Semua Kategori</option>
             <option value="Streaming">Streaming Only</option>
@@ -599,8 +685,9 @@ const Reports = () => {
         {/* Reset button */}
         <button
           onClick={handleResetFilters}
-          className="w-full h-10 flex items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 hover:bg-slate-800 text-xs font-semibold text-slate-300 hover:text-white transition-colors"
+          className="w-full h-10 flex items-center justify-center gap-2 rounded-xl border border-slate-700/80 bg-slate-800/80 hover:bg-slate-700 text-xs font-semibold text-slate-200 hover:text-white transition-all active:scale-95 shadow-sm group"
         >
+          <RotateCcw className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors" />
           Reset Filters
         </button>
 
