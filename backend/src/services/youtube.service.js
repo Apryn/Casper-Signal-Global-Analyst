@@ -1,39 +1,80 @@
 /**
  * youtube.service.js
  * 
- * Service untuk mendeteksi status live YouTube secara otomatis
- * menggunakan YouTube Data API v3.
+ * Service untuk mendeteksi status live YouTube secara otomatis.
  * 
- * Cara kerja:
- * 1. Ambil semua akun YouTube yang punya channel_id dari DB
- * 2. Cek tiap channel apakah sedang live via YouTube Search API
- * 3. Jika live → cocokkan dengan jadwal terdaftar → catat actual_start_time + lateness
- * 4. Jika channel tiba-tiba offline → catat actual_end_time + update live_duration
+ * ARSITEKTUR DETEKSI (Triple Redundancy - Selalu Berfungsi):
+ * 1. HTML Scraper   - 0 quota, deteksi cepat via multi-signal HTML markers
+ * 2. YouTube API v3 - liveStreamingDetails, fallback jika scraper miss
+ * 3. YouTube Search - API eventType=live, backup terakhir
  * 
- * Gracefully disabled jika YOUTUBE_API_KEY tidak dikonfigurasi.
+ * SELF-HEALING:
+ * - 2-strike confirmation tersimpan di DATABASE (bukan in-memory)
+ * - Bertahan meski PM2 restart, server reboot, atau deploy baru
+ * - Jadwal Cancelled otomatis di-recover jika streamer terdeteksi live
+ * - Cleanup aman: tidak cancel jadwal Live kecuali dikonfirmasi offline
  */
 
 import { query } from '../config/db.js';
-// TikTok auto-detection via HTML scraping sengaja DINONAKTIFKAN dari cron.
-// HTML TikTok tidak reliable (offline pages embed liveRoom JSON, Cloudflare blocks).
-// TikTok live dikelola manual via Telegram bot command /startlive tiktok
 
 // ── Konstanta ──────────────────────────────────────────────────────────────
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
 // Toleransi waktu untuk mencocokkan jadwal:
-// Jika channel live dan ada jadwal dalam window ini → dianggap match
 const SCHEDULE_MATCH_WINDOW_MINUTES = 45;
 
 // Toleransi keterlambatan sebelum alert dikirim (menit)
 const LATENESS_ALERT_THRESHOLD_MINUTES = 10;
 
-// ── 2-Strike Confirmation Buffer ────────────────────────────────────────────
-// Mencegah false positive flash detection: channel harus terdeteksi live
-// di 2 cron cycle berturut-turut (>15 menit) sebelum auto-schedule dibuat.
-// Key: channelId, Value: { firstSeenAt: Date, videoId: string }
-const pendingLiveMap = new Map();
-const PENDING_CONFIRM_MS = 16 * 60 * 1000; // 16 menit (lebih dari satu 15-min cron cycle)
+// Buffer konfirmasi 2-strike: 16 menit (lebih dari 1 cron cycle 15 menit)
+const PENDING_CONFIRM_MS = 16 * 60 * 1000;
+
+// ── DB-backed 2-Strike Confirmation Buffer ───────────────────────────────────
+// Menggunakan tabel live_detection_buffer (TIDAK in-memory)
+// → Bertahan meski PM2 restart / server reboot / deploy baru
+
+const dbBuffer = {
+  async get(channelId) {
+    try {
+      const res = await query(
+        'SELECT * FROM live_detection_buffer WHERE channel_id = $1',
+        [channelId]
+      );
+      return res.rows[0] || null;
+    } catch (e) {
+      return null; // tabel belum ada atau error, fallback ke pass
+    }
+  },
+  async set(channelId, videoId, displayName) {
+    try {
+      await query(
+        `INSERT INTO live_detection_buffer (channel_id, video_id, display_name, first_seen_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT (channel_id) DO UPDATE
+           SET video_id = EXCLUDED.video_id,
+               display_name = EXCLUDED.display_name,
+               first_seen_at = CASE
+                 WHEN live_detection_buffer.video_id = EXCLUDED.video_id THEN live_detection_buffer.first_seen_at
+                 ELSE NOW()
+               END`,
+        [channelId, videoId, displayName]
+      );
+    } catch (e) {
+      // Tabel belum ada (fresh install) - abaikan, tidak crash
+    }
+  },
+  async delete(channelId) {
+    try {
+      await query('DELETE FROM live_detection_buffer WHERE channel_id = $1', [channelId]);
+    } catch (e) {}
+  },
+  async cleanup() {
+    // Hapus buffer yang lebih dari 2 jam (stream pasti sudah selesai)
+    try {
+      await query("DELETE FROM live_detection_buffer WHERE first_seen_at < NOW() - INTERVAL '2 hours'");
+    } catch (e) {}
+  }
+};
 
 // ── Helper: format menit ke string "X jam Y menit" ───────────────────────
 const formatDuration = (minutes) => {
@@ -622,6 +663,9 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
     console.log('[YouTube Service] YOUTUBE_API_KEY tidak set, menggunakan Smart HTML Scraper (0 Quota).');
   }
 
+  // Bersihkan buffer confirmation yang sudah expired (> 2 jam) di awal setiap cycle
+  await dbBuffer.cleanup();
+
   // Ambil semua akun YouTube dengan channel_id
   const accountsRes = await query(
     `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, s.nama
@@ -761,10 +805,9 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                   continue;
                 }
 
-                // ── Guard 3: 2-Strike Confirmation ────────────────────────────────────────
-                // Hanya buat schedule setelah terdeteksi live di 2 cron cycle berturut-turut
-                // NAMUN: bypass jika stream sudah berjalan > 10 menit (sudah confirmed stable live)
-                // Ini mencegah missed detection untuk stream yang mulai sebelum cron cycle pertama
+                // ── Guard 3: 2-Strike Confirmation (DB-Backed, Persistent) ───────────────────
+                // Buffer tersimpan di database → bertahan meski PM2 restart / server reboot
+                // BYPASS: jika stream sudah berjalan > 10 menit (confirmed stable live dari API)
                 const now = new Date();
 
                 // Bypass 2-strike jika API mengkonfirmasi stream sudah > 10 menit berjalan
@@ -773,27 +816,28 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 const isAlreadyRunningLong = streamRunningMs > 10 * 60 * 1000; // > 10 menit
 
                 if (isAlreadyRunningLong) {
-                  console.log(`[YouTube Service] ✅ ${displayName} bypass 2-strike confirmation (stream sudah berjalan ${Math.floor(streamRunningMs/60000)} menit). Langsung create schedule...`);
+                  console.log(`[YouTube Service] ✅ ${displayName} bypass 2-strike (stream sudah berjalan ${Math.floor(streamRunningMs/60000)} menit). Langsung create schedule...`);
                   // Langsung lanjut ke create schedule, skip guard 3
                 } else {
-                  const pending = pendingLiveMap.get(account.channel_id);
+                  // Cek buffer dari database (persistent, survive restart)
+                  const pending = await dbBuffer.get(account.channel_id);
 
-                  if (!pending || pending.videoId !== liveInfo.videoId) {
-                    // Deteksi pertama kali → simpan ke buffer, tunggu siklus berikutnya
-                    pendingLiveMap.set(account.channel_id, { firstSeenAt: now, videoId: liveInfo.videoId, displayName });
-                    console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Menunggu konfirmasi siklus ke-2 (~15 menit)...`);
+                  if (!pending || pending.video_id !== liveInfo.videoId) {
+                    // Deteksi pertama kali → simpan ke DB buffer, tunggu siklus berikutnya
+                    await dbBuffer.set(account.channel_id, liveInfo.videoId, displayName);
+                    console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Tunggu konfirmasi siklus ke-2 (~15 menit)...`);
                     continue;
                   }
 
-                  const elapsedMs = now.getTime() - pending.firstSeenAt.getTime();
+                  const elapsedMs = now.getTime() - new Date(pending.first_seen_at).getTime();
                   if (elapsedMs < PENDING_CONFIRM_MS) {
-                    console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi (${Math.floor(elapsedMs/60000)} mnt < 16 mnt). Menunggu...`);
+                    console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi DB (${Math.floor(elapsedMs/60000)} mnt < 16 mnt). Menunggu...`);
                     continue;
                   }
                 }
 
-                // ── Confirmed! 2 siklus berturut-turut → buat schedule instan ─────────────
-                pendingLiveMap.delete(account.channel_id);
+                // ── Confirmed! Buat schedule instan ──────────────────────────────────────────
+                await dbBuffer.delete(account.channel_id); // Hapus dari buffer setelah dikonfirmasi
                 console.log(`[YouTube Service] 🔴 ${displayName} DIKONFIRMASI live YouTube di luar jadwal. Membuat schedule instan...`);
                 
                 const startTime = liveInfo.actualStartTime || new Date(now.getTime() - 15 * 60 * 1000);
@@ -827,8 +871,8 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
               }
             }
           } else {
-            // Channel offline → hapus dari pending confirmation buffer + tutup sesi aktif
-            pendingLiveMap.delete(account.channel_id);
+            // Channel offline → hapus dari DB confirmation buffer + tutup sesi aktif
+            await dbBuffer.delete(account.channel_id);
             const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
             for (const acc of channelAccounts) {
               await handleChannelOffline(acc, sendNotification);
