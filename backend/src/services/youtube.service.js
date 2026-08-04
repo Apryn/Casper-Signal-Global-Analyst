@@ -118,14 +118,16 @@ export const getYouTubeConcurrentViewers = async (videoId, apiKey) => {
   }
 };
 
-// ── Helper: Smart HTML Scraper untuk YouTube Live Status (0 Quota / Gratis / Immune 429) ──
-export const checkYouTubeLiveViaScrape = async (channelId) => {
-  if (!channelId) return { isLive: false, videoId: null, title: null };
-  const cleanId = channelId.trim();
+export const checkYouTubeLiveViaScrape = async (identifier) => {
+  if (!identifier) return { isLive: false, videoId: null, title: null };
+  const cleanId = identifier.trim();
 
-  // Support @handle, UC... channel ID, or legacy channel name
+  // Support videoId (11 chars), @handle, UC... channel ID, or legacy channel name
   const urlsToTry = [];
-  if (cleanId.startsWith('@')) {
+  if (cleanId.length === 11 && !cleanId.startsWith('UC') && !cleanId.startsWith('@')) {
+    // Exact videoId URL
+    urlsToTry.push(`https://www.youtube.com/watch?v=${cleanId}`);
+  } else if (cleanId.startsWith('@')) {
     urlsToTry.push(`https://www.youtube.com/${cleanId}/live`);
   } else if (cleanId.startsWith('UC')) {
     urlsToTry.push(`https://www.youtube.com/channel/${cleanId}/live`);
@@ -149,8 +151,10 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
       const html = await response.text();
 
       // ── STEP 1: Cek apakah ada indikator live ──────────────────────────────
-      const hasIsLiveMarker = html.includes('"isLive":true') ||
-                              html.includes('"isLiveNow":true') ||
+      const hasIsLiveMarker = /"isLive"\s*:\s*true/.test(html) ||
+                              /"isLiveNow"\s*:\s*true/.test(html) ||
+                              /"style"\s*:\s*"LIVE"/.test(html) ||
+                              /"status"\s*:\s*"LIVE"/.test(html) ||
                               html.includes('"style":"LIVE"') ||
                               html.includes('"status":"LIVE"');
 
@@ -159,8 +163,7 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
       // ── STEP 2: Reject Waiting Room / Upcoming streams ─────────────────────
       // YouTube menaruh isLive:true juga di halaman Waiting Room (stream terjadwal
       // yang belum mulai). Harus reject kondisi ini agar tidak false positive.
-      const isWaitingRoom = html.includes('"isUpcoming":true') ||
-                            html.includes('"isUpcoming": true') ||
+      const isWaitingRoom = /"isUpcoming"\s*:\s*true/.test(html) ||
                             html.includes('upcomingEventData');
 
       if (isWaitingRoom) {
@@ -190,6 +193,8 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
         html.includes('"style":"LIVE"'),
         html.includes('liveChunkReadahead'),
         html.includes('broadcastEventId'),
+        /"isLive"\s*:\s*true/.test(html),
+        /"isLiveContent"\s*:\s*true/.test(html),
       ];
       const confirmedCount = confirmationSignals.filter(Boolean).length;
 
@@ -222,6 +227,46 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
   }
 
   return { isLive: false, videoId: null, title: null };
+};
+
+/**
+ * Verifikasi apakah video ID YouTube tertentu saat ini benar-benar live (menggunakan API key jika tersedia).
+ */
+export const checkVideoLiveStatus = async (videoId) => {
+  const apiKey = getApiKey();
+
+  // 1. Scrape check
+  const scraped = await checkYouTubeLiveViaScrape(videoId);
+  if (scraped.isLive) {
+    return true;
+  }
+
+  // 2. API fallback (jika scrape meleset)
+  if (apiKey) {
+    try {
+      const vUrl = new URL(`${YOUTUBE_API_BASE}/videos`);
+      vUrl.searchParams.set('part', 'snippet,liveStreamingDetails');
+      vUrl.searchParams.set('id', videoId);
+      vUrl.searchParams.set('key', apiKey);
+      const vRes = await fetch(vUrl.toString(), { signal: AbortSignal.timeout(6000) });
+      if (vRes.ok) {
+        const vData = await vRes.json();
+        const item = vData.items?.[0];
+        if (item) {
+          const liveDetails = item.liveStreamingDetails;
+          // Live stream aktif jika ada liveStreamingDetails, actualStartTime ada, dan actualEndTime belum tercatat
+          if (liveDetails && liveDetails.actualStartTime && !liveDetails.actualEndTime) {
+            console.log(`[YouTube Service API] Video ${videoId} terkonfirmasi LIVE via API.`);
+            return true;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`[YouTube Service API checkVideoLiveStatus]: ${err.message}`);
+    }
+  }
+
+  return false;
 };
 
 

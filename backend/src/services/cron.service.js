@@ -2,7 +2,7 @@ import { query } from '../config/db.js';
 import cron from 'node-cron';
 import { syncSocialMetrics, discoverNewContent } from './social.service.js';
 import { autoGenerateWeeklyEvaluations } from '../controllers/evaluation.controller.js';
-import { checkYouTubeLiveStatus, checkYouTubeLiveViaScrape } from './youtube.service.js';
+import { checkYouTubeLiveStatus, checkYouTubeLiveViaScrape, checkVideoLiveStatus } from './youtube.service.js';
 
 let bot = null;
 
@@ -465,7 +465,8 @@ export const cleanupStaleSchedules = async () => {
        WHERE sc.status = 'Live'
          AND sc.platform = 'YouTube'
          AND sc.live_link LIKE '%/watch?v=%'
-         AND sc.actual_start_time > NOW() - INTERVAL '8 hours'`
+         AND sc.actual_start_time > NOW() - INTERVAL '8 hours'
+         AND sc.actual_start_time < NOW() - INTERVAL '30 minutes'`
     );
 
     let waitingRoomCancelled = 0;
@@ -474,26 +475,26 @@ export const cleanupStaleSchedules = async () => {
         const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]+)/)?.[1];
         if (!videoId) continue;
 
-        // Quick scrape check - HANYA cancel jika BENAR-BENAR tidak live
-        // Jika scrape error/timeout, biarkan (jangan cancel, ambiguous)
-        let scrapeResult = null;
+        // Robust check (Scrape + API fallback) - HANYA cancel jika BENAR-BENAR tidak live
+        // Jika check error/timeout, biarkan (jangan cancel, ambiguous)
+        let isLive = true;
         try {
-          scrapeResult = await checkYouTubeLiveViaScrape(videoId);
-        } catch (scrapeErr) {
-          console.log(`[Cron Cleanup] Scrape error untuk schedule #${row.id}, skip cancel (ambiguous):`, scrapeErr.message);
-          continue; // Jangan cancel jika scrape error
+          isLive = await checkVideoLiveStatus(videoId);
+        } catch (err) {
+          console.log(`[Cron Cleanup] Error checking video status for schedule #${row.id}, skip cancel (ambiguous):`, err.message);
+          continue; // Jangan cancel jika check error
         }
 
-        if (scrapeResult && !scrapeResult.isLive) {
+        if (!isLive) {
           // Stream benar-benar tidak live → cancel
           await query(
             `UPDATE schedule SET status = 'Cancelled', actual_end_time = NOW() WHERE id = $1`,
             [row.id]
           );
           waitingRoomCancelled++;
-          console.log(`[Cron Cleanup] Schedule #${row.id} cancelled — YouTube scraper konfirmasi tidak live (waiting room atau offline).`);
+          console.log(`[Cron Cleanup] Schedule #${row.id} cancelled — YouTube checker konfirmasi tidak live (waiting room atau offline).`);
         }
-        // Jika scrapeResult.isLive = true → berarti masih live, biarkan saja
+        // Jika isLive = true → berarti masih live, biarkan saja
       } catch (err) {
         // Non-blocking: jangan crash seluruh cleanup karena satu schedule
         console.error(`[Cron Cleanup] Error checking schedule #${row.id}:`, err.message);

@@ -33,14 +33,16 @@ const checkChannelOrVideoLive = async (identifier) => {
     const html = await response.text();
 
     // STEP 1: Ada marker live?
-    const hasIsLiveMarker = html.includes('"isLive":true') ||
-                            html.includes('"isLiveNow":true') ||
-                            html.includes('"style":"LIVE"');
+    const hasIsLiveMarker = /"isLive"\s*:\s*true/.test(html) ||
+                            /"isLiveNow"\s*:\s*true/.test(html) ||
+                            /"style"\s*:\s*"LIVE"/.test(html) ||
+                            /"status"\s*:\s*"LIVE"/.test(html) ||
+                            html.includes('"style":"LIVE"') ||
+                            html.includes('"status":"LIVE"');
     if (!hasIsLiveMarker) return false;
 
     // STEP 2: Reject waiting room
-    const isWaitingRoom = html.includes('"isUpcoming":true') ||
-                          html.includes('"isUpcoming": true') ||
+    const isWaitingRoom = /"isUpcoming"\s*:\s*true/.test(html) ||
                           html.includes('upcomingEventData');
     if (isWaitingRoom) return false;
 
@@ -53,6 +55,9 @@ const checkChannelOrVideoLive = async (identifier) => {
       html.includes('activeDashManifestUrl'),
       html.includes('"style":"LIVE"'),
       html.includes('liveChunkReadahead'),
+      html.includes('broadcastEventId'),
+      /"isLive"\s*:\s*true/.test(html),
+      /"isLiveContent"\s*:\s*true/.test(html),
     ];
     const confirmedCount = signals.filter(Boolean).length;
     return confirmedCount >= 2;

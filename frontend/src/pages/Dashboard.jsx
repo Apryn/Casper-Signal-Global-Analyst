@@ -247,6 +247,24 @@ const Dashboard = () => {
     fetchDashboardData();
   }, [range]);
 
+  useEffect(() => {
+    // Setup silent background polling every 60 seconds to auto-update live tracker list & metrics
+    const interval = setInterval(async () => {
+      try {
+        const [summaryRes, comparisonRes] = await Promise.all([
+          api.get(`/dashboard/summary?range=${range}`),
+          api.get(`/dashboard/comparison?range=${range}`)
+        ]);
+        setSummary(summaryRes.data);
+        setComparison(comparisonRes.data);
+      } catch (error) {
+        console.error('Error auto-refreshing dashboard metrics:', error);
+      }
+    }, 60000);
+
+    return () => clearInterval(interval);
+  }, [range]);
+
   const handleSimulateSubmit = async (e) => {
     e.preventDefault();
     if (!rawMessage.trim()) {
