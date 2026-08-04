@@ -127,22 +127,42 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
         continue;
       }
 
-      // ── STEP 3: Konfirmasi ada broadcast aktif (manifest URL) ──────────────
-      // activeDashManifestUrl / hlsManifestUrl HANYA muncul saat stream benar-benar
-      // sedang broadcast. Ini adalah indikator paling reliable untuk live aktif.
-      const hasActiveBroadcast = html.includes('activeDashManifestUrl') ||
-                                 html.includes('hlsManifestUrl');
+      // ── STEP 3: Konfirmasi stream benar-benar live (multi-signal robust check) ────────
+      // NOTE: activeDashManifestUrl sering TIDAK MUNCUL di HTML meskipun stream benar-benar live
+      // karena YouTube menyimpannya di signed URL internal atau deliver via JS runtime.
+      //
+      // Sinyal yang PALING RELIABLE untuk live aktif (bukan waiting room):
+      //   - isLiveContent: true      → YouTube sendiri mengkonfirmasi ini live content
+      //   - streamingData            → ada data streaming delivery (confirmed live feed)
+      //   - videoDetails             → metadata video tersedia (confirmed video exists)
+      //   - hlsManifestUrl           → HLS stream manifest (jika ada, 100% live)
+      //   - activeDashManifestUrl    → DASH stream manifest (jika ada, 100% live)
+      //   - style:LIVE               → badge LIVE di halaman YouTube
+      //
+      // Minimal 2 dari sinyal konfirmasi harus ada untuk konfirmasi live aktif:
+      const confirmationSignals = [
+        html.includes('isLiveContent'),
+        html.includes('streamingData'),
+        html.includes('videoDetails'),
+        html.includes('hlsManifestUrl'),
+        html.includes('activeDashManifestUrl'),
+        html.includes('"style":"LIVE"'),
+        html.includes('liveChunkReadahead'),
+        html.includes('broadcastEventId'),
+      ];
+      const confirmedCount = confirmationSignals.filter(Boolean).length;
 
-      if (!hasActiveBroadcast) {
-        console.log(`[YouTube Scraper] ${url} → isLive:true tapi tidak ada manifest aktif. Skip.`);
+      if (confirmedCount < 2) {
+        console.log(`[YouTube Scraper] ${url} → isLive:true tapi sinyal konfirmasi kurang (${confirmedCount}/2 minimum). Skip.`);
         continue;
       }
 
       // ── Semua validasi lolos → stream benar-benar live ─────────────────────
-      const videoIdMatch = html.match(/"videoId":"([^"]+)"/) ||
-                           html.match(/href="\/watch\?v=([^"]+)"/) ||
-                           html.match(/canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/) ||
-                           html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([^"]+)"/);
+      // Extract videoId: prioritaskan canonical URL og:url karena paling akurat
+      const videoIdMatch = html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
+                           html.match(/canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
+                           html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/) ||
+                           html.match(/href="\/watch\?v=([a-zA-Z0-9_-]{11})"/); 
       const videoId = videoIdMatch ? videoIdMatch[1] : null;
 
       const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/) ||
@@ -153,6 +173,7 @@ export const checkYouTubeLiveViaScrape = async (channelId) => {
         title = title.replace(/ - YouTube$/, '').trim();
       }
 
+      console.log(`[YouTube Scraper] ${url} → ✅ LIVE DIKONFIRMASI (${confirmedCount} sinyal). videoId: ${videoId} | title: ${title}`);
       return { isLive: true, videoId, title };
     } catch (err) {
       console.warn(`[YouTube Scraper] Failed to scrape ${url}: ${err.message}`);
@@ -174,14 +195,36 @@ export const checkChannelLiveStatus = async (channelId, apiKey = null) => {
   const scraped = await checkYouTubeLiveViaScrape(channelId);
   if (scraped.isLive) {
     let viewerCount = 0;
+    let actualStartTime = new Date(); // default ke sekarang jika tidak bisa fetch
+
     if (apiKey && scraped.videoId) {
-      viewerCount = await getYouTubeConcurrentViewers(scraped.videoId, apiKey).catch(() => 0);
+      try {
+        // Ambil actual start time dan concurrent viewers dari YouTube API
+        const vUrl = new URL(`${YOUTUBE_API_BASE}/videos`);
+        vUrl.searchParams.set('part', 'liveStreamingDetails');
+        vUrl.searchParams.set('id', scraped.videoId);
+        vUrl.searchParams.set('key', apiKey);
+        const vRes = await fetch(vUrl.toString(), { signal: AbortSignal.timeout(6000) });
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          const details = vData.items?.[0]?.liveStreamingDetails;
+          if (details) {
+            viewerCount = details.concurrentViewers ? parseInt(details.concurrentViewers, 10) : 0;
+            // actualStartTime dari YouTube = waktu stream BENAR-BENAR mulai broadcast
+            if (details.actualStartTime) {
+              actualStartTime = new Date(details.actualStartTime);
+            }
+          }
+        }
+      } catch (e) {
+        viewerCount = await getYouTubeConcurrentViewers(scraped.videoId, apiKey).catch(() => 0);
+      }
     }
     return {
       isLive: true,
       videoId: scraped.videoId,
       title: scraped.title,
-      actualStartTime: new Date(),
+      actualStartTime,
       viewerCount
     };
   }
@@ -282,13 +325,46 @@ const findMatchingSchedule = async (streamerId, videoId = null) => {
     [streamerId, windowStart.toISOString(), windowEnd.toISOString(), now.toISOString()]
   );
 
-  return result.rows[0];
+  if (result.rows.length > 0) return result.rows[0];
+
+  // 3. FALLBACK: Jika tidak ada 'Scheduled', cari jadwal 'Cancelled' hari ini yang
+  //    sebenarnya sudah waktunya live tapi di-cancel sistem terlalu cepat.
+  //    Ini terjadi saat cleanupStaleSchedules() berjalan sebelum streamer sempat live.
+  //    Window lebih lebar: 3 jam ke belakang sampai 30 menit ke depan
+  const cancelledWindowStart = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+  const cancelledWindowEnd   = new Date(now.getTime() + 30 * 60 * 1000);
+
+  const cancelledRes = await query(
+    `SELECT * FROM schedule
+     WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
+       AND status = 'Cancelled'
+       AND platform = 'YouTube'
+       AND start_time BETWEEN $2 AND $3
+     ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $4))) ASC
+     LIMIT 1`,
+    [streamerId, cancelledWindowStart.toISOString(), cancelledWindowEnd.toISOString(), now.toISOString()]
+  );
+
+  if (cancelledRes.rows.length > 0) {
+    const sch = cancelledRes.rows[0];
+    // Pulihkan jadwal Cancelled ke Scheduled agar bisa diproses sebagai Live
+    await query(
+      `UPDATE schedule SET status = 'Scheduled' WHERE id = $1`,
+      [sch.id]
+    );
+    sch.status = 'Scheduled';
+    console.log(`[YouTube Service] 🔄 Recover jadwal #${sch.id} dari Cancelled → Scheduled (streamer ternyata live). Start: ${sch.start_time}`);
+    return sch;
+  }
+
+  return undefined;
 };
 
 // ── Core: Catat aktivitas live ke DB (actual_start_time, lateness) & kirim tele ──
 const handleChannelLive = async (account, liveInfo, sendNotification) => {
   const { streamer_id } = account;
-  const schedule = await findMatchingSchedule(streamer_id);
+  // Pass videoId agar findMatchingSchedule bisa recover jadwal Completed yang masih live
+  const schedule = await findMatchingSchedule(streamer_id, liveInfo.videoId || null);
 
   if (!schedule) {
     console.log(`[YouTube/TikTok Service] Terdeteksi live untuk streamer ID ${streamer_id}, tapi tidak ada jadwal matching.`);
@@ -687,20 +763,33 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
 
                 // ── Guard 3: 2-Strike Confirmation ────────────────────────────────────────
                 // Hanya buat schedule setelah terdeteksi live di 2 cron cycle berturut-turut
+                // NAMUN: bypass jika stream sudah berjalan > 10 menit (sudah confirmed stable live)
+                // Ini mencegah missed detection untuk stream yang mulai sebelum cron cycle pertama
                 const now = new Date();
-                const pending = pendingLiveMap.get(account.channel_id);
 
-                if (!pending || pending.videoId !== liveInfo.videoId) {
-                  // Deteksi pertama kali → simpan ke buffer, tunggu siklus berikutnya
-                  pendingLiveMap.set(account.channel_id, { firstSeenAt: now, videoId: liveInfo.videoId, displayName });
-                  console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Menunggu konfirmasi siklus ke-2 (~15 menit)...`);
-                  continue;
-                }
+                // Bypass 2-strike jika API mengkonfirmasi stream sudah > 10 menit berjalan
+                const actualStartTime = liveInfo.actualStartTime || null;
+                const streamRunningMs = actualStartTime ? (now.getTime() - new Date(actualStartTime).getTime()) : 0;
+                const isAlreadyRunningLong = streamRunningMs > 10 * 60 * 1000; // > 10 menit
 
-                const elapsedMs = now.getTime() - pending.firstSeenAt.getTime();
-                if (elapsedMs < PENDING_CONFIRM_MS) {
-                  console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi (${Math.floor(elapsedMs/60000)} mnt < 16 mnt). Menunggu...`);
-                  continue;
+                if (isAlreadyRunningLong) {
+                  console.log(`[YouTube Service] ✅ ${displayName} bypass 2-strike confirmation (stream sudah berjalan ${Math.floor(streamRunningMs/60000)} menit). Langsung create schedule...`);
+                  // Langsung lanjut ke create schedule, skip guard 3
+                } else {
+                  const pending = pendingLiveMap.get(account.channel_id);
+
+                  if (!pending || pending.videoId !== liveInfo.videoId) {
+                    // Deteksi pertama kali → simpan ke buffer, tunggu siklus berikutnya
+                    pendingLiveMap.set(account.channel_id, { firstSeenAt: now, videoId: liveInfo.videoId, displayName });
+                    console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Menunggu konfirmasi siklus ke-2 (~15 menit)...`);
+                    continue;
+                  }
+
+                  const elapsedMs = now.getTime() - pending.firstSeenAt.getTime();
+                  if (elapsedMs < PENDING_CONFIRM_MS) {
+                    console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi (${Math.floor(elapsedMs/60000)} mnt < 16 mnt). Menunggu...`);
+                    continue;
+                  }
                 }
 
                 // ── Confirmed! 2 siklus berturut-turut → buat schedule instan ─────────────

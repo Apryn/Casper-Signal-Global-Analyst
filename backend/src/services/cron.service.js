@@ -437,15 +437,16 @@ export const checkMinLiveViolations = async (wibDateStr) => {
  */
 export const cleanupStaleSchedules = async () => {
   try {
-    // 1. Cancel old Scheduled entries (> 24h)
+    // 1. Cancel Scheduled entries yang sudah lewat 36 jam (buffer cukup untuk late streamer)
+    // Dulu 24 jam, terlalu agresif mencancel jadwal hari ini yang belum sempat live
     const resScheduled = await query(
       `UPDATE schedule
        SET status = 'Cancelled'
        WHERE status = 'Scheduled'
-         AND start_time < NOW() - INTERVAL '24 hours'`
+         AND start_time < NOW() - INTERVAL '36 hours'`
     );
 
-    // 2. Auto-complete stuck 'Live' entries (> 8h)
+    // 2. Auto-complete stuck 'Live' entries (> 8h actual_start_time, atau > 12h dari start_time)
     const resLive = await query(
       `UPDATE schedule
        SET status = 'Completed',
@@ -455,8 +456,9 @@ export const cleanupStaleSchedules = async () => {
          AND (actual_start_time < NOW() - INTERVAL '8 hours' OR start_time < NOW() - INTERVAL '12 hours')`
     );
 
-    // 3. Sweep YouTube Live schedules that are actually Waiting Rooms (false positives)
-    //    Runs only if there are active Live schedules with a YouTube live_link
+    // 3. Sweep YouTube 'Live' schedules yang ternyata sudah offline (waiting room false positive)
+    //    PENTING: Hanya cancel jika scraper benar-benar KONFIRMASI tidak live.
+    //    Jangan cancel jika scraper error/timeout (itu ambiguous, biarkan saja).
     const liveYouTubeRes = await query(
       `SELECT sc.id, sc.live_link
        FROM schedule sc
@@ -472,19 +474,29 @@ export const cleanupStaleSchedules = async () => {
         const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]+)/)?.[1];
         if (!videoId) continue;
 
-        // Quick scrape check using the same strict logic
-        const scraped = await checkYouTubeLiveViaScrape(videoId);
-        if (!scraped.isLive) {
-          // Stream is no longer live (or was a waiting room) → cancel
+        // Quick scrape check - HANYA cancel jika BENAR-BENAR tidak live
+        // Jika scrape error/timeout, biarkan (jangan cancel, ambiguous)
+        let scrapeResult = null;
+        try {
+          scrapeResult = await checkYouTubeLiveViaScrape(videoId);
+        } catch (scrapeErr) {
+          console.log(`[Cron Cleanup] Scrape error untuk schedule #${row.id}, skip cancel (ambiguous):`, scrapeErr.message);
+          continue; // Jangan cancel jika scrape error
+        }
+
+        if (scrapeResult && !scrapeResult.isLive) {
+          // Stream benar-benar tidak live → cancel
           await query(
             `UPDATE schedule SET status = 'Cancelled', actual_end_time = NOW() WHERE id = $1`,
             [row.id]
           );
           waitingRoomCancelled++;
-          console.log(`[Cron Cleanup] Schedule #${row.id} cancelled — YouTube not broadcasting (waiting room or offline).`);
+          console.log(`[Cron Cleanup] Schedule #${row.id} cancelled — YouTube scraper konfirmasi tidak live (waiting room atau offline).`);
         }
-      } catch (scrapeErr) {
-        // Non-blocking: if scrape fails, leave schedule as-is
+        // Jika scrapeResult.isLive = true → berarti masih live, biarkan saja
+      } catch (err) {
+        // Non-blocking: jangan crash seluruh cleanup karena satu schedule
+        console.error(`[Cron Cleanup] Error checking schedule #${row.id}:`, err.message);
       }
     }
 
