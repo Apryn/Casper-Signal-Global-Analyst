@@ -7,7 +7,27 @@ export const getReports = async (req, res) => {
 
   try {
     let sql = `
-      SELECT r.*, s.nama as streamer_name, s.platform as streamer_platform
+      SELECT r.id, 
+             TO_CHAR(r.tanggal, 'YYYY-MM-DD') as tanggal, 
+             r.streamer_id, 
+             r.kategori,
+             r.tiktok_upload, 
+             r.youtube_upload, 
+             r.instagram_upload, 
+             r.facebook_upload,
+             r.live_duration, 
+             r.reported_live_duration, 
+             r.chat_count, 
+             r.registration_count, 
+             r.ftd_count,
+             r.raw_message, 
+             r.created_at, 
+             r.content_submitted, 
+             r.content_link, 
+             r.status_izin, 
+             r.catatan_izin,
+             s.nama as streamer_name, 
+             s.platform as streamer_platform
       FROM daily_reports r
       JOIN streamers s ON r.streamer_id = s.id
       WHERE 1=1
