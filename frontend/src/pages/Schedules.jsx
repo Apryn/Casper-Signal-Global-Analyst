@@ -87,8 +87,9 @@ const Schedules = () => {
   useEffect(() => {
     fetchSchedules();
     
-    // Set default active tab to Today's date in local YYYY-MM-DD format
+    // Set default active tab to Today's date in Asia/Jakarta YYYY-MM-DD format
     const todayStr = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Jakarta',
       year: 'numeric', month: '2-digit', day: '2-digit'
     }).format(new Date());
     setActiveDateStr(todayStr);
@@ -279,10 +280,12 @@ const Schedules = () => {
       <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b-2 border-black/40">
         {weeklyDates.map((dateObj, idx) => {
           const dateStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Jakarta',
             year: 'numeric', month: '2-digit', day: '2-digit'
           }).format(dateObj);
 
           const todayStr = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'Asia/Jakarta',
             year: 'numeric', month: '2-digit', day: '2-digit'
           }).format(new Date());
 
