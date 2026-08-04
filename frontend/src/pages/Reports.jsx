@@ -23,13 +23,36 @@ import * as XLSX from 'xlsx';
 
 const Reports = () => {
   const { isAdmin } = useAuth();
+
+  const getTodayWibStr = () => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+    const parts = formatter.formatToParts(new Date());
+    const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    return `${partMap.year}-${partMap.month}-${partMap.day}`;
+  };
+
+  const getFirstDayOfMonthWibStr = () => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Jakarta',
+      year: 'numeric',
+      month: '2-digit'
+    });
+    const parts = formatter.formatToParts(new Date());
+    const partMap = Object.fromEntries(parts.map(p => [p.type, p.value]));
+    return `${partMap.year}-${partMap.month}-01`;
+  };
   
   // Filtering states
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchName, setSearchName] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(getFirstDayOfMonthWibStr());
+  const [endDate, setEndDate] = useState(getTodayWibStr());
   const [kategori, setKategori] = useState('');
   
   // Modal states
@@ -510,8 +533,8 @@ const Reports = () => {
 
   const handleResetFilters = () => {
     setSearchName('');
-    setStartDate('');
-    setEndDate('');
+    setStartDate(getFirstDayOfMonthWibStr());
+    setEndDate(getTodayWibStr());
     setKategori('');
   };
 
