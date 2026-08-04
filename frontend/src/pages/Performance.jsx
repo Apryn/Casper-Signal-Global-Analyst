@@ -18,7 +18,8 @@ import {
   PlusCircle,
   FileSpreadsheet,
   X,
-  Users
+  Users,
+  Flame
 } from 'lucide-react';
 import { Line, Bar } from 'react-chartjs-2';
 
@@ -40,9 +41,10 @@ const Performance = () => {
   const [selectedStreamerDetail, setSelectedStreamerDetail] = useState(null);
 
   // State for Viewer History analysis (Opsi 3)
-  const [viewerHistoryData, setViewerHistoryData] = useState([]);
+  const [viewerData, setViewerData] = useState(null);
   const [viewerLoading, setViewerLoading] = useState(false);
-  const [viewerDate, setViewerDate] = useState('');
+  const [viewerRange, setViewerRange] = useState('thisMonth');
+  const [viewerPlatform, setViewerPlatform] = useState('all');
   const [viewerStreamerId, setViewerStreamerId] = useState('all');
 
   // Rate settings for penalties
@@ -69,10 +71,6 @@ const Performance = () => {
     const today = new Date();
     const curMonth = today.toISOString().slice(0, 7);
     setSelectedMonth(curMonth);
-
-    // Set default date for viewer analysis to today YYYY-MM-DD
-    const curDate = today.toISOString().split('T')[0];
-    setViewerDate(curDate);
   }, []);
 
   // Fetch performance details when streamer or range changes
@@ -119,18 +117,19 @@ const Performance = () => {
     fetchPenaltyReport();
   }, [selectedMonth, activeTab]);
 
-  // Fetch viewer history data
+  // Fetch viewer history data & 24-hour gacor distribution
   const fetchViewerHistory = async () => {
-    if (!viewerDate || activeTab !== 'viewer') return;
+    if (activeTab !== 'viewer') return;
     setViewerLoading(true);
     try {
       const res = await api.get('/analytics/viewer-history', {
         params: {
-          date: viewerDate,
+          range: viewerRange,
+          platform: viewerPlatform === 'all' ? undefined : viewerPlatform,
           streamerId: viewerStreamerId === 'all' ? undefined : viewerStreamerId
         }
       });
-      setViewerHistoryData(res.data);
+      setViewerData(res.data);
     } catch (err) {
       console.error('Error fetching viewer history:', err);
     } finally {
@@ -140,7 +139,7 @@ const Performance = () => {
 
   useEffect(() => {
     fetchViewerHistory();
-  }, [viewerDate, viewerStreamerId, activeTab]);
+  }, [viewerRange, viewerPlatform, viewerStreamerId, activeTab]);
 
   const handleApplyRates = (e) => {
     e.preventDefault();
@@ -202,41 +201,43 @@ const Performance = () => {
     };
   };
 
-  // Setup Chart configs for Viewer History per platform
+  // Setup Chart configs for 24-Hour Viewer Distribution (Jam Gacor Analysis)
   const getViewerChartData = () => {
-    if (viewerHistoryData.length === 0) return { labels: [], datasets: [] };
-
-    // Format timestamps to HH:MM WIB
-    const labels = viewerHistoryData.map(h => {
-      const d = new Date(h.recorded_at);
-      return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
-    });
-
-    const ytData = viewerHistoryData.map(h => h.platform === 'YouTube' ? h.viewer_count : null);
-    const ttData = viewerHistoryData.map(h => h.platform === 'TikTok' ? h.viewer_count : null);
+    if (!viewerData || !viewerData.hourlyDistribution) return { labels: [], datasets: [] };
+    const dist = viewerData.hourlyDistribution;
 
     return {
-      labels,
+      labels: dist.map(d => d.timeLabel),
       datasets: [
         {
-          label: 'YouTube Viewers',
+          type: 'bar',
+          label: 'YouTube Avg Viewers',
+          backgroundColor: 'rgba(16, 185, 129, 0.65)',
           borderColor: '#10b981',
-          backgroundColor: 'rgba(16, 185, 129, 0.1)',
-          borderWidth: 3.5,
-          tension: 0.3,
-          pointBackgroundColor: '#10b981',
-          spanGaps: true, // Biarkan tersambung jika ada jeda platform
-          data: ytData
+          borderWidth: 1.5,
+          borderRadius: 4,
+          data: dist.map(d => d.youtubeAvg)
         },
         {
-          label: 'TikTok Viewers',
+          type: 'bar',
+          label: 'TikTok Avg Viewers',
+          backgroundColor: 'rgba(244, 63, 94, 0.65)',
           borderColor: '#f43f5e',
-          backgroundColor: 'rgba(244, 63, 94, 0.1)',
-          borderWidth: 3.5,
+          borderWidth: 1.5,
+          borderRadius: 4,
+          data: dist.map(d => d.tiktokAvg)
+        },
+        {
+          type: 'line',
+          label: 'Total Rata-Rata Penonton',
+          borderColor: '#6366f1',
+          backgroundColor: 'rgba(99, 102, 241, 0.1)',
+          borderWidth: 3,
           tension: 0.3,
-          pointBackgroundColor: '#f43f5e',
-          spanGaps: true,
-          data: ttData
+          fill: true,
+          pointBackgroundColor: '#6366f1',
+          pointRadius: 4,
+          data: dist.map(d => d.avgViewers)
         }
       ]
     };
@@ -722,41 +723,64 @@ const Performance = () => {
         </div>
       )}
 
-      {/* RENDER TAB 3: VIEWER TRACKER (Opsi Analisis Jam Ramai) */}
+      {/* RENDER TAB 3: VIEWER TRACKER (Analisis Jam Gacor & Peak Hours) */}
       {activeTab === 'viewer' && (
         <div className="space-y-6">
           
           {/* Filter Bar */}
-          <div className="flex flex-wrap items-center gap-4 bg-dark-panel p-4 rounded-xl border-2 border-black">
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4.5 w-4.5 text-indigo-400" />
-              <span className="text-xs font-black uppercase text-slate-400">Pilih Tanggal:</span>
-              <input
-                type="date"
-                value={viewerDate}
-                onChange={(e) => setViewerDate(e.target.value)}
-                className="p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
-              />
-            </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-dark-panel p-4 rounded-xl border-2 border-black shadow-tactile-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Range Filter */}
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-indigo-400" />
+                <span className="text-xs font-bold text-slate-400 uppercase">Periode:</span>
+                <select
+                  value={viewerRange}
+                  onChange={(e) => setViewerRange(e.target.value)}
+                  className="p-2 text-xs font-extrabold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="thisMonth">Bulan Ini (This Month)</option>
+                  <option value="lastMonth">Bulan Lalu (Last Month)</option>
+                  <option value="7days">7 Hari Terakhir</option>
+                  <option value="today">Hari Ini</option>
+                </select>
+              </div>
 
-            <div className="flex items-center gap-2">
-              <Users className="h-4.5 w-4.5 text-indigo-400" />
-              <span className="text-xs font-black uppercase text-slate-400">Streamer:</span>
-              <select
-                value={viewerStreamerId}
-                onChange={(e) => setViewerStreamerId(e.target.value)}
-                className="p-2 text-xs font-bold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
-              >
-                <option value="all">-- Semua Streamer --</option>
-                {streamers.map(s => (
-                  <option key={s.id} value={s.id}>{s.nama}</option>
-                ))}
-              </select>
+              {/* Platform Filter */}
+              <div className="flex items-center gap-2">
+                <Tv className="h-4 w-4 text-pink-400" />
+                <span className="text-xs font-bold text-slate-400 uppercase">Platform:</span>
+                <select
+                  value={viewerPlatform}
+                  onChange={(e) => setViewerPlatform(e.target.value)}
+                  className="p-2 text-xs font-extrabold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="all">-- Semua Platform --</option>
+                  <option value="YouTube">YouTube</option>
+                  <option value="TikTok">TikTok</option>
+                </select>
+              </div>
+
+              {/* Streamer Filter */}
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-cyan-400" />
+                <span className="text-xs font-bold text-slate-400 uppercase">Streamer:</span>
+                <select
+                  value={viewerStreamerId}
+                  onChange={(e) => setViewerStreamerId(e.target.value)}
+                  className="p-2 text-xs font-extrabold rounded-lg border-2 border-black bg-slate-900 text-white focus:outline-none cursor-pointer"
+                >
+                  <option value="all">-- Semua Streamer --</option>
+                  {streamers.map(s => (
+                    <option key={s.id} value={s.id}>{s.nama}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             <button
               onClick={fetchViewerHistory}
-              className="py-2 px-4 ml-auto rounded-lg bg-slate-900 border-2 border-black hover:bg-slate-800 text-white text-xs font-black uppercase tracking-wider cursor-pointer shadow-tactile-sm"
+              className="py-2 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-black uppercase tracking-wider border-2 border-black cursor-pointer shadow-tactile-sm active:translate-y-px"
             >
               Refresh Data
             </button>
@@ -765,67 +789,163 @@ const Performance = () => {
           {viewerLoading ? (
             <div className="flex h-72 items-center justify-center text-indigo-400">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-400 border-t-transparent"></div>
-              <span className="ml-3 text-xs">Memetakan data history penonton...</span>
+              <span className="ml-3 text-xs font-bold uppercase tracking-wider">Memetakan analisis jam-jam gacor penonton...</span>
             </div>
-          ) : viewerHistoryData.length === 0 ? (
+          ) : !viewerData || (viewerData.hourlyDistribution && viewerData.hourlyDistribution.every(h => h.avgViewers === 0 && h.maxViewers === 0) && (!viewerData.logs || viewerData.logs.length === 0)) ? (
             <div className="tactile-card p-12 text-center text-slate-500 border-2 border-black bg-dark-card flex flex-col items-center justify-center">
               <Users className="h-10 w-10 text-slate-700 mb-2" />
-              <p className="text-xs font-bold uppercase tracking-wider">Tidak ada data penonton tercatat.</p>
-              <p className="text-[10px] text-slate-500 mt-1">Data penonton otomatis terekam setiap 15 menit oleh sistem ketika terdeteksi sedang live.</p>
+              <p className="text-xs font-bold uppercase tracking-wider">Belum ada data penonton tercatat pada periode ini.</p>
+              <p className="text-[10px] text-slate-500 mt-1">Sistem otomatis mencatat data penonton setiap 15 menit ketika streamer sedang sesi live.</p>
             </div>
           ) : (
             <div className="space-y-6">
-              
-              {/* Line Chart */}
-              <div className="tactile-card p-6 border-2 border-black bg-dark-card">
-                <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 border-b-2 border-black pb-2.5 flex items-center justify-between">
-                  <span>Grafik Perbandingan Penonton YouTube vs TikTok</span>
-                  <span className="text-[10px] text-slate-400 normal-case">Waktu Indonesia Barat (WIB)</span>
+
+              {/* Actionable Strategy Recommendation Box */}
+              {viewerData.recommendation && (
+                <div className="p-4 rounded-xl border-2 border-amber-500/40 bg-amber-500/10 flex items-start gap-3 shadow-tactile-sm">
+                  <Flame className="h-6 w-6 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="text-xs font-black text-amber-300 uppercase tracking-wider">Rekomendasi Strategi Jam Streaming Gacor</h4>
+                    <p className="text-xs text-slate-200 mt-1 font-medium leading-relaxed">{viewerData.recommendation}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* TOP 3 JAM GACOR CARDS */}
+              <div>
+                <h3 className="text-xs font-black text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-yellow-400" />
+                  <span>Top 3 Jam Live Paling Gacor (Peak Traffic Slots)</span>
                 </h3>
-                <div className="h-80">
-                  <Line data={getViewerChartData()} options={chartOptions} />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {viewerData.topPeakHours && viewerData.topPeakHours.length > 0 ? (
+                    viewerData.topPeakHours.map((slot) => {
+                      let badgeBg = 'bg-yellow-500/20 text-yellow-300 border-yellow-500/40';
+                      let labelText = '🔥 GACOR #1';
+                      if (slot.rank === 2) {
+                        badgeBg = 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
+                        labelText = '⚡ GACOR #2';
+                      } else if (slot.rank === 3) {
+                        badgeBg = 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+                        labelText = '✨ GACOR #3';
+                      }
+
+                      return (
+                        <div key={slot.rank} className="tactile-card p-4 border-2 border-black bg-dark-card relative overflow-hidden">
+                          <div className="flex items-center justify-between border-b-2 border-black pb-2 mb-2">
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${badgeBg}`}>
+                              {labelText}
+                            </span>
+                            <span className="text-xs font-mono font-black text-slate-400">Slot {slot.rank}</span>
+                          </div>
+                          <div className="flex items-baseline justify-between mt-1">
+                            <strong className="text-2xl font-black text-white font-mono">{slot.timeLabel}</strong>
+                            <span className="text-xs font-bold text-emerald-400">{slot.avgViewers.toLocaleString('id-ID')} avg viewers</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-2 font-mono">
+                            Puncak Penonton: <strong className="text-white">{slot.maxViewers.toLocaleString('id-ID')} viewers</strong> ({slot.dataPoints} sampel)
+                          </p>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <div className="col-span-3 p-4 text-center text-xs text-slate-500 border-2 border-black bg-dark-card rounded-xl">
+                      Data sampel belum cukup untuk meranking jam gacor.
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Data Table */}
-              <div className="tactile-card overflow-x-auto border-2 border-black bg-dark-card p-4">
-                <h4 className="text-xs font-black text-white uppercase tracking-wider mb-3">Log Detil Penonton</h4>
-                <table className="w-full border-collapse text-left text-xs text-slate-300">
-                  <thead>
-                    <tr className="border-b-2 border-black text-slate-450 uppercase tracking-widest text-[9px] font-black">
-                      <th className="py-2.5 px-4">Recorded At</th>
-                      <th className="py-2.5 px-4">Nama Streamer</th>
-                      <th className="py-2.5 px-4">Platform</th>
-                      <th className="py-2.5 px-4 text-right">Viewer Count</th>
-                      <th className="py-2.5 px-4 text-center">Jadwal Sesi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-black/30 font-bold font-mono">
-                    {viewerHistoryData.map((row) => {
-                      const dateObj = new Date(row.recorded_at);
-                      const timeStr = dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
-                      const startStr = new Date(row.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-                      const endStr = new Date(row.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+              {/* Platform Peak Split Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="tactile-card p-4 border-2 border-black bg-dark-card">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Tv className="h-4 w-4" /> YouTube Peak Hours
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono">Platform YouTube</span>
+                  </div>
+                  {viewerData.platformPeaks?.youtube ? (
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/40">
+                      <span className="text-lg font-black text-white font-mono">{viewerData.platformPeaks.youtube.timeLabel}</span>
+                      <span className="text-xs font-extrabold text-emerald-400">Avg {viewerData.platformPeaks.youtube.avgViewers} Viewers</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-2 font-mono">Belum ada data penonton YouTube.</p>
+                  )}
+                </div>
 
-                      return (
-                        <tr key={row.id} className="hover:bg-slate-950/20">
-                          <td className="py-2.5 px-4 text-slate-400">{timeStr}</td>
-                          <td className="py-2.5 px-4 font-black text-white">{row.streamer_name}</td>
-                          <td className="py-2.5 px-4">
-                            <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
-                              row.platform === 'TikTok' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            }`}>
-                              {row.platform}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-4 text-right text-white font-black text-sm">{row.viewer_count.toLocaleString('id-ID')} viewers</td>
-                          <td className="py-2.5 px-4 text-center text-slate-405">{startStr} - {endStr}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                <div className="tactile-card p-4 border-2 border-black bg-dark-card">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <Video className="h-4 w-4" /> TikTok Peak Hours
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 font-mono">Platform TikTok</span>
+                  </div>
+                  {viewerData.platformPeaks?.tiktok ? (
+                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-black/40">
+                      <span className="text-lg font-black text-white font-mono">{viewerData.platformPeaks.tiktok.timeLabel}</span>
+                      <span className="text-xs font-extrabold text-rose-400">Avg {viewerData.platformPeaks.tiktok.avgViewers} Viewers</span>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500 mt-2 font-mono">Belum ada data penonton TikTok.</p>
+                  )}
+                </div>
               </div>
+
+              {/* 24-HOUR HOURLY DENSITY CHART */}
+              <div className="tactile-card p-6 border-2 border-black bg-dark-card">
+                <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4 border-b-2 border-black pb-2.5 flex items-center justify-between">
+                  <span>Grafik Densitas Penonton 24 Jam (00:00 - 23:00 WIB)</span>
+                  <span className="text-[10px] text-slate-400 normal-case">Rata-Rata Penonton per Jam</span>
+                </h3>
+                <div className="h-80">
+                  <Bar data={getViewerChartData()} options={chartOptions} />
+                </div>
+              </div>
+
+              {/* Detailed Viewer Log Table */}
+              {viewerData.logs && viewerData.logs.length > 0 && (
+                <div className="tactile-card overflow-x-auto border-2 border-black bg-dark-card p-4">
+                  <h4 className="text-xs font-black text-white uppercase tracking-wider mb-3">Log Terkini Sampel Penonton</h4>
+                  <table className="w-full border-collapse text-left text-xs text-slate-300">
+                    <thead>
+                      <tr className="border-b-2 border-black text-slate-450 uppercase tracking-widest text-[9px] font-black">
+                        <th className="py-2.5 px-4">Waktu Record</th>
+                        <th className="py-2.5 px-4">Nama Streamer</th>
+                        <th className="py-2.5 px-4">Platform</th>
+                        <th className="py-2.5 px-4 text-right">Viewer Count</th>
+                        <th className="py-2.5 px-4 text-center">Jadwal Sesi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-black/30 font-bold font-mono">
+                      {viewerData.logs.map((row) => {
+                        const dateObj = new Date(row.recorded_at);
+                        const timeStr = dateObj.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) + ' ' + dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+                        const startStr = new Date(row.start_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                        const endStr = new Date(row.end_time).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+                        return (
+                          <tr key={row.id} className="hover:bg-slate-950/20">
+                            <td className="py-2.5 px-4 text-slate-400">{timeStr}</td>
+                            <td className="py-2.5 px-4 font-black text-white">{row.streamer_name}</td>
+                            <td className="py-2.5 px-4">
+                              <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded border ${
+                                row.platform === 'TikTok' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                              }`}>
+                                {row.platform}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 text-right text-white font-black text-sm">{row.viewer_count.toLocaleString('id-ID')} viewers</td>
+                            <td className="py-2.5 px-4 text-center text-slate-405">{startStr} - {endStr}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
             </div>
           )}

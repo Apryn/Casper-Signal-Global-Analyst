@@ -618,30 +618,142 @@ export const getMonthlyPenaltyReport = async (req, res) => {
 
 /**
  * GET /analytics/viewer-history
- * Mengambil history data penonton (YouTube vs TikTok) untuk dianalisa
+ * Mengambil history data penonton (YouTube vs TikTok) & kalkulasi Jam-Jam Gacor 24 jam
  */
 export const getViewerHistory = async (req, res) => {
-  const { date, streamerId } = req.query;
+  const { date, range = 'thisMonth', streamerId, platform } = req.query;
 
   try {
-    let sql = `
+    const today = new Date();
+    let startStr, endStr;
+
+    if (date) {
+      startStr = date;
+      endStr = date;
+    } else if (range && /^\d{4}-\d{2}$/.test(range)) {
+      const [year, month] = range.split('-').map(Number);
+      startStr = new Date(year, month - 1, 1).toISOString().split('T')[0];
+      endStr = new Date(year, month, 0).toISOString().split('T')[0];
+    } else if (range === 'lastMonth') {
+      startStr = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+      endStr = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+    } else if (range === '7days') {
+      const start = new Date();
+      start.setDate(today.getDate() - 7);
+      startStr = start.toISOString().split('T')[0];
+      endStr = today.toISOString().split('T')[0];
+    } else if (range === '30days') {
+      const start = new Date();
+      start.setDate(today.getDate() - 30);
+      startStr = start.toISOString().split('T')[0];
+      endStr = today.toISOString().split('T')[0];
+    } else {
+      // thisMonth or default
+      startStr = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+      endStr = today.toISOString().split('T')[0];
+    }
+
+    // 1. Where clause builder
+    let whereClause = `WHERE DATE(h.recorded_at AT TIME ZONE 'Asia/Jakarta') >= $1 AND DATE(h.recorded_at AT TIME ZONE 'Asia/Jakarta') <= $2`;
+    const params = [startStr, endStr];
+    let paramIndex = 3;
+
+    if (streamerId && streamerId !== 'all') {
+      whereClause += ` AND h.streamer_id = $${paramIndex}`;
+      params.push(parseInt(streamerId, 10));
+      paramIndex++;
+    }
+
+    if (platform && platform !== 'all') {
+      whereClause += ` AND h.platform = $${paramIndex}`;
+      params.push(platform);
+      paramIndex++;
+    }
+
+    // 2. Fetch raw logs (limit 100 most recent)
+    const logsSql = `
       SELECT h.*, s.nama as streamer_name, sc.start_time, sc.end_time
       FROM live_viewer_history h
       JOIN streamers s ON h.streamer_id = s.id
       JOIN schedule sc ON h.schedule_id = sc.id
-      WHERE DATE(h.recorded_at AT TIME ZONE 'Asia/Jakarta') = $1
+      ${whereClause}
+      ORDER BY h.recorded_at DESC
+      LIMIT 100
     `;
-    const params = [date || new Date().toISOString().split('T')[0]];
+    const logsRes = await query(logsSql, params);
 
-    if (streamerId) {
-      sql += ` AND h.streamer_id = $2`;
-      params.push(parseInt(streamerId, 10));
+    // 3. Hourly Aggregation Query (00:00 to 23:00 WIB)
+    const hourlySql = `
+      SELECT 
+        EXTRACT(HOUR FROM h.recorded_at AT TIME ZONE 'Asia/Jakarta')::int as hour,
+        ROUND(AVG(h.viewer_count))::int as avg_viewers,
+        MAX(h.viewer_count)::int as max_viewers,
+        COUNT(h.id)::int as data_points,
+        ROUND(AVG(CASE WHEN h.platform = 'YouTube' THEN h.viewer_count END))::int as youtube_avg,
+        ROUND(AVG(CASE WHEN h.platform = 'TikTok' THEN h.viewer_count END))::int as tiktok_avg
+      FROM live_viewer_history h
+      ${whereClause}
+      GROUP BY EXTRACT(HOUR FROM h.recorded_at AT TIME ZONE 'Asia/Jakarta')
+      ORDER BY hour ASC
+    `;
+    const hourlyRes = await query(hourlySql, params);
+
+    // Map to full 24-hour array (0..23)
+    const hourlyMap = new Map(hourlyRes.rows.map(r => [r.hour, r]));
+    const hourlyDistribution = Array.from({ length: 24 }, (_, h) => {
+      const row = hourlyMap.get(h);
+      return {
+        hour: h,
+        timeLabel: `${String(h).padStart(2, '0')}:00 WIB`,
+        avgViewers: row ? row.avg_viewers || 0 : 0,
+        maxViewers: row ? row.max_viewers || 0 : 0,
+        dataPoints: row ? row.data_points || 0 : 0,
+        youtubeAvg: row ? row.youtube_avg || 0 : 0,
+        tiktokAvg: row ? row.tiktok_avg || 0 : 0
+      };
+    });
+
+    // 4. Calculate Top 3 Gacor Hours Overall
+    const sortedHours = [...hourlyDistribution]
+      .filter(h => h.avgViewers > 0 || h.maxViewers > 0)
+      .sort((a, b) => b.avgViewers - a.avgViewers || b.maxViewers - a.maxViewers);
+
+    const topPeakHours = sortedHours.slice(0, 3).map((item, rank) => ({
+      rank: rank + 1,
+      ...item
+    }));
+
+    // 5. Calculate Best Peak Hour per Platform
+    const ytBest = [...hourlyDistribution]
+      .filter(h => h.youtubeAvg > 0)
+      .sort((a, b) => b.youtubeAvg - a.youtubeAvg)[0] || null;
+
+    const ttBest = [...hourlyDistribution]
+      .filter(h => h.tiktokAvg > 0)
+      .sort((a, b) => b.tiktokAvg - a.tiktokAvg)[0] || null;
+
+    // 6. Recommendation text
+    let recommendation = 'Belum ada data penonton yang cukup pada periode ini.';
+    if (topPeakHours.length > 0) {
+      const top1 = topPeakHours[0];
+      const ytSlot = ytBest ? `YouTube di jam ${ytBest.timeLabel} (avg ${ytBest.youtubeAvg} viewers)` : 'YouTube';
+      const ttSlot = ttBest ? `TikTok di jam ${ttBest.timeLabel} (avg ${ttBest.tiktokAvg} viewers)` : 'TikTok';
+
+      recommendation = `🔥 Jam paling GACOR secara keseluruhan adalah pukul ${top1.timeLabel} dengan rata-rata ${top1.avgViewers} penonton (puncak ${top1.maxViewers}). Disarankan mengalokasikan jadwal live utama pada slot ini. Untuk performa maksimal per platform, prioritaskan ${ytSlot} dan ${ttSlot}.`;
     }
 
-    sql += ` ORDER BY h.recorded_at ASC`;
-
-    const result = await query(sql, params);
-    res.json(result.rows);
+    res.json({
+      startDate: startStr,
+      endDate: endStr,
+      hourlyDistribution,
+      topPeakHours,
+      platformPeaks: {
+        youtube: ytBest ? { hour: ytBest.hour, timeLabel: ytBest.timeLabel, avgViewers: ytBest.youtubeAvg } : null,
+        tiktok: ttBest ? { hour: ttBest.hour, timeLabel: ttBest.timeLabel, avgViewers: ttBest.tiktokAvg } : null
+      },
+      recommendation,
+      logs: logsRes.rows
+    });
   } catch (error) {
     console.error('Error fetching live viewer history:', error);
     res.status(500).json({ message: 'Internal server error' });
