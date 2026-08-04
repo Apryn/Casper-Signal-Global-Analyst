@@ -122,12 +122,13 @@ export const updateReport = async (req, res) => {
            instagram_upload = $5,
            facebook_upload = $6,
            live_duration = $7,
-           chat_count = $8,
-           registration_count = $9,
-           ftd_count = $10,
-           status_izin = $11,
-           catatan_izin = $12
-       WHERE id = $13 
+           reported_live_duration = $8,
+           chat_count = $9,
+           registration_count = $10,
+           ftd_count = $11,
+           status_izin = $12,
+           catatan_izin = $13
+       WHERE id = $14 
        RETURNING *`,
       [
         finalTanggal,
@@ -136,6 +137,7 @@ export const updateReport = async (req, res) => {
         youtube_upload || 0,
         instagram_upload || 0,
         facebook_upload || 0,
+        live_duration || 0.0,
         live_duration || 0.0,
         chat_count || 0,
         registration_count || 0,
@@ -201,8 +203,8 @@ export const createReport = async (req, res) => {
       `INSERT INTO daily_reports (
          streamer_id, tanggal, kategori,
          tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
-         live_duration, chat_count, registration_count, ftd_count, status_izin, catatan_izin, raw_message
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         live_duration, reported_live_duration, chat_count, registration_count, ftd_count, status_izin, catatan_izin, raw_message
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         streamer_id,
@@ -212,6 +214,7 @@ export const createReport = async (req, res) => {
         youtube_upload,
         instagram_upload,
         facebook_upload,
+        live_duration,
         live_duration,
         chat_count,
         registration_count,

@@ -596,15 +596,16 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
     `INSERT INTO daily_reports (
        tanggal, streamer_id, kategori,
        tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
-       live_duration, chat_count, registration_count, ftd_count, raw_message
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+       live_duration, reported_live_duration, chat_count, registration_count, ftd_count, raw_message
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
      ON CONFLICT (tanggal, streamer_id) DO UPDATE SET
        kategori          = EXCLUDED.kategori,
        tiktok_upload     = EXCLUDED.tiktok_upload,
        youtube_upload    = EXCLUDED.youtube_upload,
        instagram_upload  = EXCLUDED.instagram_upload,
        facebook_upload   = EXCLUDED.facebook_upload,
-       live_duration     = EXCLUDED.live_duration,
+       live_duration     = COALESCE(NULLIF(daily_reports.live_duration, 0.0), EXCLUDED.live_duration),
+       reported_live_duration = EXCLUDED.reported_live_duration,
        chat_count        = EXCLUDED.chat_count,
        registration_count= EXCLUDED.registration_count,
        ftd_count         = EXCLUDED.ftd_count,
@@ -612,7 +613,7 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
      RETURNING *`,
     [tanggal, streamerId, kategori,
      ttiktok, youtube, instagram, facebook,
-     liveDuration || 0, chatCount || 0, registrationCount || 0, ftdCount || 0,
+     liveDuration || 0.0, liveDuration || 0.0, chatCount || 0, registrationCount || 0, ftdCount || 0,
      rawMessage]
   );
   return res.rows[0];

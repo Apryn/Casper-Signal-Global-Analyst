@@ -939,6 +939,8 @@ const Reports = () => {
                       {dayReports.map((report) => {
                         const isStreaming = report.kategori === 'Streaming';
                         const liveHours = parseFloat(report.live_duration || 0);
+                        const reportedHours = parseFloat(report.reported_live_duration || 0);
+                        const hasDiff = reportedHours > 0 && Math.abs(reportedHours - liveHours) > 0.2;
                         const isSopMet = liveHours >= MIN_LIVE_HOURS;
                         const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
 
@@ -991,12 +993,12 @@ const Reports = () => {
                                 ) : isSopMet ? (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center truncate">
                                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
-                                    ✅ Live SOP {liveHours.toFixed(1)}h / 4h
+                                    ✅ Live SOP {liveHours.toFixed(1)}h / 4h {hasDiff && `(Lap: ${reportedHours.toFixed(1)}h) ⚠️`}
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-400 text-[11px] font-bold border border-amber-500/20 w-full justify-center truncate">
                                     <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0"></span>
-                                    ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h)
+                                    ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h) {hasDiff && `(Lap: ${reportedHours.toFixed(1)}h)`}
                                   </span>
                                 )}
 
@@ -1014,8 +1016,8 @@ const Reports = () => {
                                 <div className="min-w-0">
                                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Live</p>
                                   {liveHours > 0 ? (
-                                    <p className={`text-xs font-bold font-mono truncate ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                      {liveHours}h
+                                    <p className={`text-xs font-bold font-mono truncate ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`} title={hasDiff ? `Selisih laporan! Bot mencatat ${liveHours} jam, sedangkan streamer melapor ${reportedHours} jam.` : undefined}>
+                                      {liveHours}h {hasDiff && <span className="text-[9px] text-rose-400 font-normal">({reportedHours}h) ⚠️</span>}
                                     </p>
                                   ) : (
                                     <p className="text-xs text-slate-600 font-mono">—</p>
