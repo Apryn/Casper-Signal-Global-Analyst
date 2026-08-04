@@ -42,30 +42,55 @@ const toInt = (str) => {
 const stripEmoji = (str) =>
   str.replace(/(?![0-9#*])[\p{Extended_Pictographic}\p{Emoji_Component}\p{Emoji_Modifier}]/gu, '').trim();
 
-/** Build ISO date from day/month/year parts with auto-correction for template year typos */
-const buildDate = (day, monthStr, year) => {
+/** Build ISO date from day/month/year parts with auto-correction for template year and month typos */
+const buildDate = (day, monthStr, year, fallbackDateStr = null) => {
   const key = monthStr.toLowerCase().replace(/[^a-z]/g, '');
   const month = MONTH_MAP[key];
   if (!month) return null;
   
-  const currentYear = new Date().getFullYear();
-  let yr = currentYear;
+  const referenceDate = fallbackDateStr ? new Date(fallbackDateStr + 'T12:00:00') : new Date();
+  const refYear = referenceDate.getFullYear();
+  const refMonth = referenceDate.getMonth() + 1; // 1-12
+  
+  let yr = refYear;
   if (year) {
     yr = parseInt(year, 10);
   }
   
   // Construct the parsed date object
-  const parsedDate = new Date(`${yr}-${month}-${String(day).padStart(2, '0')}`);
+  let parsedDate = new Date(`${yr}-${month}-${String(day).padStart(2, '0')}T12:00:00`);
   const today = new Date();
   
   // Calculate date difference in days
-  const diffTime = Math.abs(today - parsedDate);
+  const diffTime = Math.abs(referenceDate - parsedDate);
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   
-  // If the parsed date is more than 30 days in the past or future,
-  // it is highly likely a template year typo. Auto-correct to current year.
-  if (isNaN(parsedDate.getTime()) || diffDays > 30) {
-    return `${currentYear}-${month}-${String(day).padStart(2, '0')}`;
+  // If the parsed date is more than 3 days in the past or future,
+  // it is highly likely a template month/year typo. Auto-correct using the reference date.
+  if (isNaN(parsedDate.getTime()) || diffDays > 3) {
+    let targetMonth = refMonth;
+    let targetYear = refYear;
+    
+    const parsedDayInt = parseInt(day, 10);
+    const refDayInt = referenceDate.getDate();
+    
+    // Boundary check for month crossings (e.g. report on 30th/31st but ref is 1st/2nd of next month)
+    if (parsedDayInt > 25 && refDayInt < 5) {
+      targetMonth = refMonth - 1;
+      if (targetMonth === 0) {
+        targetMonth = 12;
+        targetYear = refYear - 1;
+      }
+    } else if (parsedDayInt < 5 && refDayInt > 25) {
+      targetMonth = refMonth + 1;
+      if (targetMonth === 13) {
+        targetMonth = 1;
+        targetYear = refYear + 1;
+      }
+    }
+    
+    const correctedMonthStr = String(targetMonth).padStart(2, '0');
+    return `${targetYear}-${correctedMonthStr}-${String(day).padStart(2, '0')}`;
   }
   
   return `${yr}-${month}-${String(day).padStart(2, '0')}`;
@@ -113,7 +138,7 @@ const parseDate = (text, fallbackDate) => {
     const raw = tanggalMatch[1].trim();
     // Skip if value is just "STREAMING" or "NON STREAMING"
     if (!/^(?:non\s+)?streaming$/i.test(raw)) {
-      const d = parseDateString(raw);
+      const d = parseDateString(raw, fallbackDate);
       if (d) return d;
     }
   }
@@ -121,7 +146,7 @@ const parseDate = (text, fallbackDate) => {
   // B: 📅Wednesday 3 Sep 2025  or  📝Thursday 4 Sep 2025
   const emojiDate = text.match(/[📅📝]\s*(?:\w+\s+)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/u);
   if (emojiDate) {
-    const d = buildDate(emojiDate[1], emojiDate[2], emojiDate[3]);
+    const d = buildDate(emojiDate[1], emojiDate[2], emojiDate[3], fallbackDate);
     if (d) return d;
   }
 
@@ -130,7 +155,7 @@ const parseDate = (text, fallbackDate) => {
   for (const line of lines.slice(0, 3)) {
     const m = line.match(/(?:senin|selasa|rabu|kamis|jumat|sabtu|minggu)\s+(\d{1,2})\s+([a-zA-Z]+)(?:\s+(\d{4}))?/i);
     if (m) {
-      const d = buildDate(m[1], m[2], m[3]);
+      const d = buildDate(m[1], m[2], m[3], fallbackDate);
       if (d) return d;
     }
   }
@@ -139,7 +164,7 @@ const parseDate = (text, fallbackDate) => {
 };
 
 /** Parse a raw date string that may be multi-date or with day name prefix */
-const parseDateString = (raw) => {
+const parseDateString = (raw, fallbackDate) => {
   if (!raw) return null;
   const cleanRaw = raw.replace(/^\//, '').trim();
 
@@ -148,7 +173,7 @@ const parseDateString = (raw) => {
     const parts = cleanRaw.split(/[-]|sampai|s\/d/i);
     if (parts.length > 1) {
       const secondPart = parts[1].trim();
-      const d = parseDateString(secondPart);
+      const d = parseDateString(secondPart, fallbackDate);
       if (d) return d;
     }
   }
@@ -157,7 +182,7 @@ const parseDateString = (raw) => {
   const slashRange = cleanRaw.match(/^(\d{1,2})\s*[\/]\s*(\d{1,2})\s+([A-Za-z]+.*)$/);
   if (slashRange) {
     const secondPart = `${slashRange[2]} ${slashRange[3]}`.trim();
-    const d = parseDateString(secondPart);
+    const d = parseDateString(secondPart, fallbackDate);
     if (d) return d;
   }
 
@@ -173,15 +198,15 @@ const parseDateString = (raw) => {
 
   // Multi-date with comma: "18,19,20, sep 2025"
   let m = cleanRaw.match(/(\d{1,2})[,\/\s][\d,\/\s]*([A-Za-z]+)\s*(\d{4})/);
-  if (m) return buildDate(m[1], m[2], m[3]);
+  if (m) return buildDate(m[1], m[2], m[3], fallbackDate);
 
   // Normal: "3 sep 2025" or "RABU / 3 sep 2025"
   m = cleanRaw.match(/(?:\w+\s*\/\s*)?(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
-  if (m) return buildDate(m[1], m[2], m[3]);
+  if (m) return buildDate(m[1], m[2], m[3], fallbackDate);
 
   // Without year: "3 sep"
   m = cleanRaw.match(/(\d{1,2})\s+([A-Za-z]+)/);
-  if (m) return buildDate(m[1], m[2], null);
+  if (m) return buildDate(m[1], m[2], null, fallbackDate);
 
   return null;
 };
