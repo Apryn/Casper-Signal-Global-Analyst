@@ -1,50 +1,71 @@
 /**
  * check_live_now.js
  * Cek semua jadwal berstatus Live di DB vs status YouTube aktual.
- * Jika tidak benar-benar live di YouTube → set Cancelled.
+ * Menggunakan multi-signal scraper yang sama dengan cron service (robust).
  * Run: node src/check_live_now.js
  */
 
 import 'dotenv/config';
 import pkg from 'pg';
-import axios from 'axios';
 
 const { Pool } = pkg;
 const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 const db = (sql, params) => pool.query(sql, params);
 
-const checkChannelLive = async (channelId) => {
+// ── Multi-signal scraper (sama persis dengan youtube.service.js) ──────────
+const checkChannelOrVideoLive = async (identifier) => {
+  // identifier bisa channel_id (UC...) atau videoId (11 karakter)
+  const isVideoId = identifier.length === 11 && !identifier.startsWith('UC');
+  const url = isVideoId
+    ? `https://www.youtube.com/watch?v=${identifier}`
+    : `https://www.youtube.com/channel/${identifier}/live`;
+
   try {
-    // Scrape YouTube channel live page
-    const url = `https://www.youtube.com/channel/${channelId}/live`;
-    const res = await axios.get(url, {
-      timeout: 10000,
-      maxRedirects: 5,
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(10000),
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
       }
     });
-    const html = res.data;
-    if (!html || typeof html !== 'string') return false;
+    if (!response.ok) return null; // ambiguous
 
-    // Check final URL after redirects for watch?v= pattern
-    const wasRedirectedToVideo = res.request?.res?.responseUrl?.includes('/watch?v=') ||
-                                  res.request?._redirectable?._currentUrl?.includes('/watch?v=');
+    const html = await response.text();
 
-    const isLive = (html.includes('"isLive":true') || html.includes('"isLive": true')) &&
-                   !html.includes('"isLive":false');
+    // STEP 1: Ada marker live?
+    const hasIsLiveMarker = html.includes('"isLive":true') ||
+                            html.includes('"isLiveNow":true') ||
+                            html.includes('"style":"LIVE"');
+    if (!hasIsLiveMarker) return false;
 
-    return isLive || wasRedirectedToVideo;
+    // STEP 2: Reject waiting room
+    const isWaitingRoom = html.includes('"isUpcoming":true') ||
+                          html.includes('"isUpcoming": true') ||
+                          html.includes('upcomingEventData');
+    if (isWaitingRoom) return false;
+
+    // STEP 3: Multi-signal confirmation (min 2)
+    const signals = [
+      html.includes('isLiveContent'),
+      html.includes('streamingData'),
+      html.includes('videoDetails'),
+      html.includes('hlsManifestUrl'),
+      html.includes('activeDashManifestUrl'),
+      html.includes('"style":"LIVE"'),
+      html.includes('liveChunkReadahead'),
+    ];
+    const confirmedCount = signals.filter(Boolean).length;
+    return confirmedCount >= 2;
+
   } catch (err) {
     console.log(`  [Check] Error: ${err.message}`);
-    return null; // null = tidak bisa dicek
+    return null; // null = tidak bisa dicek, jangan cancel
   }
 };
 
 const main = async () => {
   console.log('=== CEK JADWAL LIVE DI DB ===\n');
-  
+
   const res = await db(`
     SELECT sc.id, sc.streamer_id, sc.platform, sc.status, sc.start_time, sc.actual_start_time, sc.live_link,
            s.nama,
@@ -55,69 +76,65 @@ const main = async () => {
     WHERE sc.status = 'Live'
     ORDER BY sc.actual_start_time DESC
   `);
-  
+
   console.log(`Ditemukan ${res.rows.length} jadwal berstatus Live\n`);
-  
+
   for (const row of res.rows) {
     const startedAt = row.actual_start_time ? new Date(row.actual_start_time) : new Date(row.start_time);
     const ageMinutes = Math.round((Date.now() - startedAt.getTime()) / 60000);
-    
+
     console.log(`\n[#${row.id}] ${row.nama} — ${row.platform}`);
     console.log(`  Mulai: ${startedAt.toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB (${ageMinutes} menit lalu)`);
     console.log(`  Link: ${row.live_link || '(none)'}`);
-    
+
     if (row.platform === 'YouTube') {
-      // Cek via live_link dulu
       let isActuallyLive = null;
-      
+
+      // 1. Cek via videoId dari live_link (lebih spesifik)
       if (row.live_link && row.live_link.includes('/watch?v=')) {
-        try {
-          const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]+)/)?.[1];
-          if (videoId) {
-            const checkRes = await axios.get(`https://www.youtube.com/watch?v=${videoId}`, {
-              timeout: 10000,
-              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36' }
-            });
-            const html = checkRes.data;
-            isActuallyLive = html.includes('"isLive":true') || html.includes('"isLive": true');
-            // Also check if it's not ended
-            if (html.includes('"isLive":false') && !html.includes('"isLive":true')) {
-              isActuallyLive = false;
-            }
-          }
-        } catch (e) {
-          console.log(`  [Check live_link] Error: ${e.message}`);
+        const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]{11})/)?.[1];
+        if (videoId) {
+          isActuallyLive = await checkChannelOrVideoLive(videoId);
         }
       }
-      
+
+      // 2. Fallback ke channel live page
       if (isActuallyLive === null && row.channel_id) {
-        isActuallyLive = await checkChannelLive(row.channel_id);
+        isActuallyLive = await checkChannelOrVideoLive(row.channel_id);
       }
-      
+
       if (isActuallyLive === false) {
-        console.log(`  STATUS: ❌ TIDAK LIVE — akan di-Cancel`);
+        console.log(`  STATUS: ❌ TIDAK LIVE — di-Completed (bukan Cancelled)`);
         await db(
-          `UPDATE schedule SET status = 'Cancelled', actual_end_time = NOW(), live_duration = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - actual_start_time))/3600) WHERE id = $1`,
+          `UPDATE schedule
+           SET status = 'Completed',
+               actual_end_time = NOW(),
+               live_duration = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - COALESCE(actual_start_time, start_time)))/3600)
+           WHERE id = $1`,
           [row.id]
         );
-        console.log(`  → Schedule #${row.id} di-Cancelled`);
+        console.log(`  → Schedule #${row.id} di-Completed`);
       } else if (isActuallyLive === true) {
         console.log(`  STATUS: ✅ BENAR-BENAR LIVE — dibiarkan`);
       } else {
-        console.log(`  STATUS: ⚠️ Tidak dapat dicek — dibiarkan`);
+        console.log(`  STATUS: ⚠️ Tidak dapat dicek (scraper error) — dibiarkan aman`);
       }
     } else if (row.platform === 'TikTok') {
       console.log(`  STATUS: TikTok — perlu dicek manual (auto-scraping dinonaktifkan)`);
       if (ageMinutes > 480) {
-        console.log(`  → Sudah > 8 jam, di-Cancelled`);
+        console.log(`  → Sudah > 8 jam, di-Completed`);
         await db(
-          `UPDATE schedule SET status = 'Cancelled', actual_end_time = NOW(), live_duration = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - actual_start_time))/3600) WHERE id = $1`,
+          `UPDATE schedule
+           SET status = 'Completed',
+               actual_end_time = NOW(),
+               live_duration = GREATEST(0, EXTRACT(EPOCH FROM (NOW() - COALESCE(actual_start_time, start_time)))/3600)
+           WHERE id = $1`,
           [row.id]
         );
       }
     }
   }
-  
+
   console.log('\n=== SELESAI ===');
   await pool.end();
   process.exit(0);
