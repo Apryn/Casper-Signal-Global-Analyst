@@ -29,6 +29,7 @@ npm install --omit=dev
 node src/db/migrate_live_tracking.js 2>/dev/null || true
 node src/db/migrate_schedule_live_duration.js 2>/dev/null || true
 node src/db/migrate_live_detection_buffer.js 2>/dev/null || true
+node src/db/fix_anomalous_viewer_history.js 2>/dev/null || true
 echo "✅ Dependencies & database migrations siap"
 
 # ── Rebuild frontend ──────────────────────────────────────────
