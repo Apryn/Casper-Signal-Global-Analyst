@@ -27,7 +27,7 @@ const Performance = () => {
   const [selectedStreamerId, setSelectedStreamerId] = useState('');
   const [performance, setPerformance] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [range, setRange] = useState('30days');
+  const [range, setRange] = useState('thisMonth');
 
   // New states for Penalty Report
   const [activeTab, setActiveTab] = useState('funnel'); // 'funnel' | 'penalty' | 'viewer'
@@ -403,9 +403,12 @@ const Performance = () => {
                 onChange={(e) => setRange(e.target.value)}
                 className="bg-transparent text-xs text-gray-300 font-extrabold focus:outline-none border-none cursor-pointer"
               >
-                <option value="7days" className="bg-slate-950">Last 7 Days</option>
-                <option value="30days" className="bg-slate-950">Last 30 Days</option>
-                <option value="thisMonth" className="bg-slate-950">This Month</option>
+                <option value="thisMonth" className="bg-slate-950">Bulan Ini (This Month)</option>
+                <option value="lastMonth" className="bg-slate-950">Bulan Lalu (Last Month)</option>
+                <option value="2026-06" className="bg-slate-950">Juni 2026</option>
+                <option value="2026-05" className="bg-slate-950">Mei 2026</option>
+                <option value="30days" className="bg-slate-950">30 Hari Terakhir</option>
+                <option value="7days" className="bg-slate-950">7 Hari Terakhir</option>
               </select>
             </div>
           </div>

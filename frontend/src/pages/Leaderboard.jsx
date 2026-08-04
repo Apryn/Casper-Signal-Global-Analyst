@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 
 const Leaderboard = () => {
-  const [range, setRange] = useState('30days');
+  const [range, setRange] = useState('thisMonth');
   const [sortBy, setSortBy] = useState('score'); // Default sorted by overall score points!
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -92,9 +92,10 @@ const Leaderboard = () => {
             onChange={(e) => setRange(e.target.value)}
             className="bg-transparent text-sm text-gray-300 focus:outline-none border-none cursor-pointer"
           >
-            <option value="7days" className="bg-slate-950">Last 7 Days</option>
-            <option value="30days" className="bg-slate-950">Last 30 Days</option>
-            <option value="thisMonth" className="bg-slate-950">This Month</option>
+            <option value="thisMonth" className="bg-slate-950">Bulan Ini (This Month)</option>
+            <option value="lastMonth" className="bg-slate-950">Bulan Lalu (Last Month)</option>
+            <option value="30days" className="bg-slate-950">30 Hari Terakhir</option>
+            <option value="7days" className="bg-slate-950">7 Hari Terakhir</option>
           </select>
         </div>
       </div>

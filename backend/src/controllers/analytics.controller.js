@@ -5,7 +5,33 @@ import { query } from '../config/db.js';
  */
 export const getStreamerPerformance = async (req, res) => {
   const { streamerId } = req.params;
-  const { range = '30days' } = req.query;
+  const { range = 'thisMonth' } = req.query;
+
+  const today = new Date();
+  let startStr, endStr;
+
+  if (range && /^\d{4}-\d{2}$/.test(range)) {
+    const [year, month] = range.split('-').map(Number);
+    startStr = new Date(year, month - 1, 1).toISOString().split('T')[0];
+    endStr = new Date(year, month, 0).toISOString().split('T')[0];
+  } else if (range === 'lastMonth') {
+    startStr = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+    endStr = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+  } else if (range === '7days') {
+    const start = new Date();
+    start.setDate(today.getDate() - 7);
+    startStr = start.toISOString().split('T')[0];
+    endStr = today.toISOString().split('T')[0];
+  } else if (range === '30days') {
+    const start = new Date();
+    start.setDate(today.getDate() - 30);
+    startStr = start.toISOString().split('T')[0];
+    endStr = today.toISOString().split('T')[0];
+  } else {
+    // thisMonth (default)
+    startStr = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    endStr = today.toISOString().split('T')[0];
+  }
 
   try {
     // 1. Fetch streamer details
@@ -15,7 +41,7 @@ export const getStreamerPerformance = async (req, res) => {
     }
     const streamer = streamerRes.rows[0];
 
-    // 2. Fetch aggregate performance statistics for this streamer
+    // 2. Fetch aggregate performance statistics for this streamer in selected date range
     const statsRes = await query(
       `SELECT 
         COALESCE(SUM(live_duration), 0) as total_live_hours,
@@ -24,8 +50,8 @@ export const getStreamerPerformance = async (req, res) => {
         COALESCE(SUM(registration_count), 0) as total_registrations,
         COALESCE(SUM(ftd_count), 0) as total_ftds
        FROM daily_reports
-       WHERE streamer_id = $1`,
-      [streamerId]
+       WHERE streamer_id = $1 AND tanggal >= $2 AND tanggal <= $3`,
+      [streamerId, startStr, endStr]
     );
     const stats = statsRes.rows[0];
 
@@ -103,17 +129,33 @@ export const getStreamerPerformance = async (req, res) => {
  * Leaderboard with dynamic weighted scores calculation
  */
 export const getLeaderboardWithScores = async (req, res) => {
-  const { range = '30days' } = req.query;
+  const { range = 'thisMonth' } = req.query;
 
-  // Set date ranges
   const today = new Date();
-  const start = new Date();
-  if (range === '7days') start.setDate(today.getDate() - 7);
-  else if (range === 'thisMonth') start.setDate(1);
-  else start.setDate(today.getDate() - 30); // default 30days
+  let startStr, endStr;
 
-  const startStr = start.toISOString().split('T')[0];
-  const endStr = today.toISOString().split('T')[0];
+  if (range && /^\d{4}-\d{2}$/.test(range)) {
+    const [year, month] = range.split('-').map(Number);
+    startStr = new Date(year, month - 1, 1).toISOString().split('T')[0];
+    endStr = new Date(year, month, 0).toISOString().split('T')[0];
+  } else if (range === 'lastMonth') {
+    startStr = new Date(today.getFullYear(), today.getMonth() - 1, 1).toISOString().split('T')[0];
+    endStr = new Date(today.getFullYear(), today.getMonth(), 0).toISOString().split('T')[0];
+  } else if (range === '7days') {
+    const start = new Date();
+    start.setDate(today.getDate() - 7);
+    startStr = start.toISOString().split('T')[0];
+    endStr = today.toISOString().split('T')[0];
+  } else if (range === '30days') {
+    const start = new Date();
+    start.setDate(today.getDate() - 30);
+    startStr = start.toISOString().split('T')[0];
+    endStr = today.toISOString().split('T')[0];
+  } else {
+    // thisMonth (default)
+    startStr = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0];
+    endStr = today.toISOString().split('T')[0];
+  }
 
   try {
     // 1. Fetch performance stats for all streamers

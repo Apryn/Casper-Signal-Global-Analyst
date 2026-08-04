@@ -97,9 +97,9 @@ const renderMarkdown = (text) => {
   const flushList = (key) => {
     if (currentList.length === 0) return;
     if (listType === 'bullet') {
-      elements.push(<ul key={key} className="space-y-1.5 mb-4 list-disc pl-5 text-slate-300">{...currentList}</ul>);
+      elements.push(<ul key={key} className="space-y-1.5 mb-4 list-disc pl-5 text-slate-300">{currentList}</ul>);
     } else if (listType === 'number') {
-      elements.push(<ol key={key} className="space-y-2 mb-4 list-decimal pl-5 text-slate-300">{...currentList}</ol>);
+      elements.push(<ol key={key} className="space-y-2 mb-4 list-decimal pl-5 text-slate-300">{currentList}</ol>);
     }
     currentList = [];
     listType = null;
@@ -178,7 +178,7 @@ const renderMarkdown = (text) => {
 };
 
 const Dashboard = () => {
-  const [range, setRange] = useState('30days');
+  const [range, setRange] = useState('thisMonth');
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState(null);
   const [chartData, setChartData] = useState(null);
@@ -438,11 +438,11 @@ const Dashboard = () => {
               onChange={(e) => setRange(e.target.value)}
               className="bg-transparent text-sm text-gray-250 focus:outline-none border-none cursor-pointer font-bold"
             >
-              <option value="today" className="bg-slate-950">Today</option>
-              <option value="yesterday" className="bg-slate-950">Yesterday</option>
-              <option value="7days" className="bg-slate-950">Last 7 Days</option>
-              <option value="30days" className="bg-slate-950">Last 30 Days</option>
-              <option value="thisMonth" className="bg-slate-950">This Month</option>
+              <option value="thisMonth" className="bg-slate-950">Bulan Ini (This Month)</option>
+              <option value="lastMonth" className="bg-slate-950">Bulan Lalu (Last Month)</option>
+              <option value="30days" className="bg-slate-950">30 Hari Terakhir</option>
+              <option value="7days" className="bg-slate-950">7 Hari Terakhir</option>
+              <option value="today" className="bg-slate-950">Hari Ini</option>
             </select>
           </div>
 

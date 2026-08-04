@@ -1,4 +1,4 @@
-                          import { query } from '../config/db.js';
+import { query } from '../config/db.js';
 
 /**
  * Helper to get date filters
@@ -6,10 +6,20 @@
 const getDateRangeFilter = (filterType) => {
   const today = new Date();
   const start = new Date();
-  
+
+  if (filterType && /^\d{4}-\d{2}$/.test(filterType)) {
+    const [year, month] = filterType.split('-').map(Number);
+    const firstDay = new Date(year, month - 1, 1);
+    const lastDay = new Date(year, month, 0);
+    return {
+      start: firstDay.toISOString().split('T')[0],
+      end: lastDay.toISOString().split('T')[0]
+    };
+  }
+
   switch (filterType) {
     case 'today':
-      start.setHours(0,0,0,0);
+      start.setHours(0, 0, 0, 0);
       return { start: start.toISOString().split('T')[0], end: today.toISOString().split('T')[0] };
     case 'yesterday':
       const yesterday = new Date();
@@ -21,18 +31,21 @@ const getDateRangeFilter = (filterType) => {
     case '30days':
       start.setDate(today.getDate() - 30);
       return { start: start.toISOString().split('T')[0], end: today.toISOString().split('T')[0] };
+    case 'lastMonth': {
+      const firstDayLast = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const lastDayLast = new Date(today.getFullYear(), today.getMonth(), 0);
+      return { start: firstDayLast.toISOString().split('T')[0], end: lastDayLast.toISOString().split('T')[0] };
+    }
     case 'thisMonth':
+    default: {
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
       return { start: firstDay.toISOString().split('T')[0], end: today.toISOString().split('T')[0] };
-    default:
-      // Default to last 30 days
-      start.setDate(today.getDate() - 30);
-      return { start: start.toISOString().split('T')[0], end: today.toISOString().split('T')[0] };
+    }
   }
 };
 
 export const getDashboardSummary = async (req, res) => {
-  const { range = '30days' } = req.query;
+  const { range = 'thisMonth' } = req.query;
   const { start, end } = getDateRangeFilter(range);
 
   try {
@@ -95,7 +108,8 @@ export const getDashboardSummary = async (req, res) => {
             SELECT sc.platform FROM schedule sc
             WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
               AND sc.status = 'Live'
-            ORDER BY sc.actual_start_time DESC LIMIT 1
+              AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+            LIMIT 1
           ),
           s.platform
         ) as platform,
@@ -107,14 +121,14 @@ export const getDashboardSummary = async (req, res) => {
           SELECT 1 FROM schedule sc
           WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
-            AND (sc.actual_start_time >= NOW() - INTERVAL '12 hours' OR sc.start_time >= NOW() - INTERVAL '12 hours')
+            AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
         ) THEN TRUE ELSE FALSE END as is_currently_live,
         (
-          SELECT sc.actual_start_time FROM schedule sc
+          SELECT sc.start_time FROM schedule sc
           WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
             AND sc.status = 'Live'
-            AND (sc.actual_start_time >= NOW() - INTERVAL '12 hours' OR sc.start_time >= NOW() - INTERVAL '12 hours')
-          ORDER BY sc.actual_start_time DESC LIMIT 1
+            AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+          ORDER BY sc.start_time DESC LIMIT 1
         ) as actual_start_time,
         COALESCE(
           (
@@ -122,8 +136,8 @@ export const getDashboardSummary = async (req, res) => {
             FROM schedule sc
             WHERE COALESCE(sc.substitute_streamer_id, sc.streamer_id) = s.id
               AND sc.status = 'Live'
-              AND (sc.actual_start_time >= NOW() - INTERVAL '12 hours' OR sc.start_time >= NOW() - INTERVAL '12 hours')
-            ORDER BY sc.actual_start_time DESC LIMIT 1
+              AND DATE(sc.start_time AT TIME ZONE 'Asia/Jakarta') = $1
+            ORDER BY sc.start_time DESC LIMIT 1
           ),
           (
             SELECT sa.link FROM streamer_accounts sa
@@ -262,7 +276,7 @@ export const getChartData = async (req, res) => {
 };
 
 export const getComparisonData = async (req, res) => {
-  const { range = '30days' } = req.query;
+  const { range = 'thisMonth' } = req.query;
   const { start, end } = getDateRangeFilter(range);
 
   try {
@@ -304,7 +318,7 @@ export const getComparisonData = async (req, res) => {
 };
 
 export const getLeaderboard = async (req, res) => {
-  const { range = '30days', limit = 10 } = req.query;
+  const { range = 'thisMonth', limit = 10 } = req.query;
   const { start, end } = getDateRangeFilter(range);
 
   try {
@@ -344,7 +358,7 @@ export const getLeaderboard = async (req, res) => {
 };
 
 export const getLiveViewerTrends = async (req, res) => {
-  const { range = '30days' } = req.query;
+  const { range = 'thisMonth' } = req.query;
   const { start, end } = getDateRangeFilter(range);
 
   try {
@@ -393,3 +407,4 @@ export const getLiveViewerTrends = async (req, res) => {
     res.status(500).json({ message: 'Internal server error' });
   }
 };
+
