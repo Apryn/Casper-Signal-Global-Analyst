@@ -813,18 +813,35 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 const scheduledStart = new Date(bestSchedule.start_time);
                 const diffMs = actualStart.getTime() - scheduledStart.getTime();
                 const latenessMinutes = Math.max(0, Math.floor(diffMs / 60000));
- 
+
                 const liveLink = `https://www.youtube.com/watch?v=${liveInfo.videoId}`;
-                await query(
-                  `UPDATE schedule
-                   SET actual_start_time = $1,
-                       lateness_minutes = $2,
-                       status = 'Live',
-                       substitute_streamer_id = $3,
-                       live_link = $4
-                   WHERE id = $5`,
-                  [actualStart.toISOString(), latenessMinutes, substituteStreamerId, liveLink, bestSchedule.id]
+
+                // ── Guard: Cross-channel videoId dedup (Scheduled→Live) ──────────────
+                // Satu video tidak mungkin live di dua channel berbeda sekaligus.
+                const crossCheck = await query(
+                  `SELECT sc.id, s.nama FROM schedule sc
+                   JOIN streamers s ON sc.streamer_id = s.id
+                   WHERE sc.live_link = $1
+                     AND sc.status = 'Live'
+                     AND sc.streamer_id != $2
+                   LIMIT 1`,
+                  [liveLink, defaultAcc.streamer_id]
                 );
+                if (crossCheck.rows.length > 0) {
+                  const other = crossCheck.rows[0];
+                  console.log(`[YouTube Service] ⛔ Cross-channel dedup (Scheduled→Live): video ${liveInfo.videoId} sudah Live milik ${other.nama}. Skip update jadwal #${bestSchedule.id}.`);
+                } else {
+                  await query(
+                    `UPDATE schedule
+                     SET actual_start_time = $1,
+                         lateness_minutes = $2,
+                         status = 'Live',
+                         substitute_streamer_id = $3,
+                         live_link = $4
+                     WHERE id = $5`,
+                    [actualStart.toISOString(), latenessMinutes, substituteStreamerId, liveLink, bestSchedule.id]
+                  );
+                }
               }
  
               // Panggil handleChannelLive dengan defaultAcc (akan membaca update status/substitute terbaru)
@@ -862,6 +879,27 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 );
                 if (recentCompletion.rows.length > 0) {
                   console.log(`[YouTube Service] ${displayName} baru saja selesai stream (< 5 mnt). Menolak auto-create schedule ganda.`);
+                  continue;
+                }
+
+                // ── Guard 3: Cross-channel videoId dedup ─────────────────────────────────
+                // Satu video YouTube TIDAK MUNGKIN live di dua channel berbeda sekaligus.
+                // Jika videoId ini sudah dipakai oleh streamer LAIN sebagai Live,
+                // berarti ini adalah video rekomendasi palsu yang lolos channel check.
+                // Tolak segera — jangan create schedule baru.
+                const crossChannelLive = await query(
+                  `SELECT sc.id, s.nama FROM schedule sc
+                   JOIN streamers s ON sc.streamer_id = s.id
+                   WHERE sc.live_link = $1
+                     AND sc.status = 'Live'
+                     AND sc.streamer_id != $2
+                   LIMIT 1`,
+                  [liveLink, targetStreamerId]
+                );
+                if (crossChannelLive.rows.length > 0) {
+                  const other = crossChannelLive.rows[0];
+                  console.log(`[YouTube Service] ⛔ Cross-channel dedup: video ${liveInfo.videoId} sudah Live milik ${other.nama} (schedule #${other.id}). Mustahil live di 2 channel — tolak sebagai video rekomendasi palsu.`);
+                  await dbBuffer.delete(account.channel_id); // hapus buffer agar tidak persist
                   continue;
                 }
 
