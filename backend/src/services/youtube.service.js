@@ -206,15 +206,54 @@ export const checkYouTubeLiveViaScrape = async (identifier) => {
       // ── STEP 4: Verifikasi channel ownership ───────────────────────────────
       // YouTube kadang menyisipkan video REKOMENDASI dari channel LAIN di halaman
       // /channel/UC.../live (misalnya live esports/gaming asing yang sedang trending).
-      // Harus dipastikan videoId yang terdeteksi benar-benar milik channel target.
+      // Layer 1: cek channelId dari HTML scraping
+      // Layer 2 (fallback): jika HTML tidak mengandung channelId, verifikasi via YouTube API
       if (cleanId.startsWith('UC')) {
         const channelIdInHtml =
           html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/) ||
           html.match(/"externalChannelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);  
         const detectedChannelId = channelIdInHtml ? channelIdInHtml[1] : null;
-        if (detectedChannelId && detectedChannelId !== cleanId) {
-          console.log(`[YouTube Scraper] ⚠️ Channel mismatch! Expected: ${cleanId}, Got: ${detectedChannelId}. Video bukan milik channel target — kemungkinan video rekomendasi. Skip.`);
-          continue;
+
+        if (detectedChannelId) {
+          // HTML channel check tersedia — langsung verifikasi
+          if (detectedChannelId !== cleanId) {
+            console.log(`[YouTube Scraper] ⚠️ Channel mismatch (HTML)! Expected: ${cleanId}, Got: ${detectedChannelId}. Skip.`);
+            continue;
+          }
+        } else {
+          // HTML tidak mengandung channelId (YouTube mungkin ubah format) →
+          // Fallback ke YouTube API v3 untuk verifikasi ownership secara resmi
+          const apiKey = getApiKey();
+          if (apiKey) {
+            // Extract videoId dulu untuk bisa query API
+            const vidMatch = html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
+                             html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);  
+            const candidateVideoId = vidMatch ? vidMatch[1] : null;
+            if (candidateVideoId) {
+              try {
+                const apiUrl = new URL(`${YOUTUBE_API_BASE}/videos`);
+                apiUrl.searchParams.set('part', 'snippet');
+                apiUrl.searchParams.set('id', candidateVideoId);
+                apiUrl.searchParams.set('key', apiKey);
+                const apiRes = await fetch(apiUrl.toString(), { signal: AbortSignal.timeout(5000) });
+                if (apiRes.ok) {
+                  const apiData = await apiRes.json();
+                  const videoChannelId = apiData.items?.[0]?.snippet?.channelId;
+                  if (videoChannelId && videoChannelId !== cleanId) {
+                    console.log(`[YouTube Scraper] ⚠️ Channel mismatch (API)! Expected: ${cleanId}, Got: ${videoChannelId}. Video rekomendasi dari channel lain. Skip.`);
+                    continue;
+                  } else if (videoChannelId) {
+                    console.log(`[YouTube Scraper] ✅ Channel ownership dikonfirmasi via API: ${videoChannelId} === ${cleanId}`);
+                  }
+                }
+              } catch (apiErr) {
+                // API error → tidak bisa konfirmasi, biarkan lolos (hindari false negative)
+                console.warn(`[YouTube Scraper] API ownership check gagal: ${apiErr.message}. Lanjut tanpa konfirmasi.`);
+              }
+            }
+          } else {
+            console.log(`[YouTube Scraper] channelId tidak ada di HTML & tidak ada API key — ownership tidak dapat dikonfirmasi. Lanjut.`);
+          }
         }
       }
 
