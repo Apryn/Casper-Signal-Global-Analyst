@@ -60,7 +60,23 @@ const checkChannelOrVideoLive = async (identifier) => {
       /"isLiveContent"\s*:\s*true/.test(html),
     ];
     const confirmedCount = signals.filter(Boolean).length;
-    return confirmedCount >= 2;
+    if (confirmedCount < 2) return false;
+
+    // STEP 4: Verifikasi channel ownership
+    // Pastikan video yang terdeteksi memang milik channel target,
+    // bukan video rekomendasi dari channel lain yang kebetulan live.
+    if (!isVideoId) {
+      const channelIdInHtml =
+        html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/) ||
+        html.match(/"externalChannelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);
+      const detectedChannelId = channelIdInHtml ? channelIdInHtml[1] : null;
+      if (detectedChannelId && detectedChannelId !== identifier) {
+        console.log(`  [Check] ⚠️ Channel mismatch! Expected: ${identifier}, Got: ${detectedChannelId}. Video rekomendasi, bukan live channel ini.`);
+        return false;
+      }
+    }
+
+    return true;
 
   } catch (err) {
     console.log(`  [Check] Error: ${err.message}`);

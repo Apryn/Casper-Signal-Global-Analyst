@@ -203,6 +203,21 @@ export const checkYouTubeLiveViaScrape = async (identifier) => {
         continue;
       }
 
+      // ── STEP 4: Verifikasi channel ownership ───────────────────────────────
+      // YouTube kadang menyisipkan video REKOMENDASI dari channel LAIN di halaman
+      // /channel/UC.../live (misalnya live esports/gaming asing yang sedang trending).
+      // Harus dipastikan videoId yang terdeteksi benar-benar milik channel target.
+      if (cleanId.startsWith('UC')) {
+        const channelIdInHtml =
+          html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/) ||
+          html.match(/"externalChannelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);  
+        const detectedChannelId = channelIdInHtml ? channelIdInHtml[1] : null;
+        if (detectedChannelId && detectedChannelId !== cleanId) {
+          console.log(`[YouTube Scraper] ⚠️ Channel mismatch! Expected: ${cleanId}, Got: ${detectedChannelId}. Video bukan milik channel target — kemungkinan video rekomendasi. Skip.`);
+          continue;
+        }
+      }
+
       // ── Semua validasi lolos → stream benar-benar live ─────────────────────
       // Extract videoId: prioritaskan canonical URL og:url karena paling akurat
       const videoIdMatch = html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
