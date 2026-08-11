@@ -225,8 +225,8 @@ const Reports = () => {
   };
 
   const handleExportPdf = () => {
-    if (reports.length === 0) {
-      alert("No data available to export.");
+    if (reports.length === 0 && streamers.length === 0) {
+      alert("Tidak ada data laporan atau streamer untuk di-export.");
       return;
     }
 
@@ -283,7 +283,11 @@ const Reports = () => {
 
     // Build Streamer Audit Summary
     const summaryMap = {};
-    const activeStreamers = streamers.length > 0 ? streamers : Array.from(new Set(reports.map(r => r.streamer_name))).map((name, idx) => ({ id: idx, nama: name }));
+    let activeStreamers = streamers.length > 0 ? streamers : Array.from(new Set(reports.map(r => r.streamer_name))).map((name, idx) => ({ id: idx, nama: name }));
+
+    if (searchName) {
+      activeStreamers = activeStreamers.filter(s => s.nama.toLowerCase().includes(searchName.toLowerCase()));
+    }
 
     activeStreamers.forEach(s => {
       summaryMap[s.nama] = {
@@ -305,6 +309,8 @@ const Reports = () => {
 
     reports.forEach(r => {
       const name = r.streamer_name || 'Unknown';
+      if (searchName && !name.toLowerCase().includes(searchName.toLowerCase())) return;
+
       if (!summaryMap[name]) {
         summaryMap[name] = {
           name,
@@ -343,7 +349,7 @@ const Reports = () => {
       }
     });
 
-    // Check absent dates
+    // Check absent dates (days when streamer did not submit a recap)
     if (dateList.length > 0) {
       dateList.forEach(({ dateStr, isSunday }) => {
         if (isSunday) return; // Skip Sundays
@@ -363,6 +369,11 @@ const Reports = () => {
 
     let summaryRows = '';
     Object.values(summaryMap).forEach((s, idx) => {
+      const isAbsent = s.noReportDays > 0;
+      const statusCell = isAbsent 
+        ? `<span style="display: inline-block; background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">⚠️ Tidak Rekap (${s.noReportDays} Hari)</span>`
+        : `<span style="display: inline-block; background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">Rekap Lengkap</span>`;
+
       summaryRows += `
         <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
           <td style="padding: 6px; text-align: center;">${idx + 1}</td>
@@ -371,11 +382,68 @@ const Reports = () => {
           <td style="padding: 6px; text-align: center;">${s.liveDays} hr</td>
           <td style="padding: 6px; text-align: center; ${s.under4hDays > 0 ? 'color: #e11d48; font-weight: bold;' : 'color: #64748b;'}">${s.under4hDays} hr</td>
           <td style="padding: 6px; text-align: center; ${s.offDays > 0 ? 'color: #d97706; font-weight: bold;' : 'color: #64748b;'}">${s.offDays} hr</td>
-          <td style="padding: 6px; text-align: center; ${s.noReportDays > 10 ? 'color: #be123c; font-weight: bold;' : 'color: #64748b;'}">${s.noReportDays} hr</td>
+          <td style="padding: 6px; text-align: center; ${s.noReportDays > 0 ? 'color: #be123c; font-weight: bold;' : 'color: #64748b;'}">${s.noReportDays} hr</td>
+          <td style="padding: 6px; text-align: center;">${statusCell}</td>
           <td style="padding: 6px; text-align: right; font-weight: bold; color: #059669;">${s.totalFtds} FTD</td>
         </tr>
       `;
     });
+
+    // Section: Streamers who did not recap
+    let noReportSectionHtml = '';
+    const streamersWithNoReport = Object.values(summaryMap).filter(s => s.noReportDays > 0);
+
+    if (streamersWithNoReport.length > 0) {
+      let rows = '';
+      streamersWithNoReport.forEach((s, idx) => {
+        const absenPills = s.noReportDates.map(d => `<span style="display: inline-block; background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px 3px 2px 0;">${d}</span>`).join('');
+        rows += `
+          <tr style="border-bottom: 1px solid #e2e8f0; font-size: 11px;">
+            <td style="padding: 6px; text-align: center; font-weight: 600;">${idx + 1}</td>
+            <td style="padding: 6px; font-weight: bold; color: #0f172a;">${s.name}</td>
+            <td style="padding: 6px; text-align: center; color: #be123c; font-weight: bold;">${s.noReportDays} Hari</td>
+            <td style="padding: 6px;">${absenPills}</td>
+            <td style="padding: 6px; text-align: center;">
+              <span style="display: inline-block; background: #be123c; color: #ffffff; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;">BELUM REKAP</span>
+            </td>
+          </tr>
+        `;
+      });
+
+      noReportSectionHtml = `
+        <div class="section-title" style="color: #be123c; margin-top: 24px;">
+          2. Rincian Streamer Tidak Ngerekap (Absen Laporan Harian)
+        </div>
+        <div style="background: #fff1f2; border: 1.5px solid #fecdd3; border-radius: 8px; padding: 12px; margin-bottom: 16px;">
+          <div style="font-size: 11px; color: #9f1239; margin-bottom: 10px; line-height: 1.5;">
+            <strong>📌 AUDIT REKAP HARIAN:</strong> Streamer yang terdaftar di bawah ini tercatat <u>tidak mengirimkan rekap harian</u> dari Telegram pada hari kerja aktif.
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: center; width: 30px; background-color: #ffe4e6; color: #881337;">No</th>
+                <th style="background-color: #ffe4e6; color: #881337;">Nama Streamer</th>
+                <th style="text-align: center; width: 110px; background-color: #ffe4e6; color: #881337;">Total Absen Rekap</th>
+                <th style="background-color: #ffe4e6; color: #881337;">Tanggal Tidak Ngerekap</th>
+                <th style="text-align: center; width: 100px; background-color: #ffe4e6; color: #881337;">Status Laporan</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      noReportSectionHtml = `
+        <div class="section-title" style="color: #059669; margin-top: 24px;">
+          2. Rincian Streamer Tidak Ngerekap (Absen Laporan Harian)
+        </div>
+        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px; padding: 10px 14px; font-size: 11px; color: #166534;">
+          ✅ <strong>Semua Streamer Lengkap Ngerekap:</strong> Seluruh streamer menyetorkan rekap harian secara lengkap pada periode ini.
+        </div>
+      `;
+    }
 
     let under4hSectionHtml = '';
     Object.values(summaryMap).forEach(s => {
@@ -394,13 +462,13 @@ const Reports = () => {
     Object.values(summaryMap).forEach(s => {
       if (s.offDates.length > 0 || s.noReportDates.length > 0) {
         const offPills = s.offDates.map(d => `<span style="display: inline-block; background: #fef3c7; color: #d97706; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px 3px 2px 0;">${d}</span>`).join('');
-        const absenPills = s.noReportDates.map(d => `<span style="display: inline-block; background: #f1f5f9; color: #475569; padding: 2px 6px; border-radius: 4px; font-size: 10px; margin: 2px 3px 2px 0;">${d}</span>`).join('');
+        const absenPills = s.noReportDates.map(d => `<span style="display: inline-block; background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px 3px 2px 0;">${d}</span>`).join('');
         
         offAbsenSectionHtml += `
           <div style="border-bottom: 1px solid #f1f5f9; padding: 6px 0;">
             <div style="font-weight: bold; font-size: 11.5px; color: #0f172a; margin-bottom: 3px;">${s.name}</div>
-            ${s.offDates.length > 0 ? `<div style="font-size: 11px; margin-bottom: 2px;"><span style="color: #d97706; font-weight: 600; width: 90px; display: inline-block;">Hari Off (${s.offDates.length}):</span> ${offPills}</div>` : ''}
-            ${s.noReportDates.length > 0 ? `<div style="font-size: 11px;"><span style="color: #be123c; font-weight: 600; width: 90px; display: inline-block;">Absen (${s.noReportDates.length}):</span> ${absenPills}</div>` : ''}
+            ${s.offDates.length > 0 ? `<div style="font-size: 11px; margin-bottom: 2px;"><span style="color: #d97706; font-weight: 600; width: 140px; display: inline-block;">Hari Off (${s.offDates.length}):</span> ${offPills}</div>` : ''}
+            ${s.noReportDates.length > 0 ? `<div style="font-size: 11px;"><span style="color: #be123c; font-weight: 600; width: 140px; display: inline-block;">Tidak Ngerekap (${s.noReportDates.length}):</span> ${absenPills}</div>` : ''}
           </div>
         `;
       }
@@ -428,17 +496,17 @@ const Reports = () => {
         <body>
           <div class="header">
             <div>
-              <h1>Casper Signal BI Report — Audit Presensi &amp; Live Streamer</h1>
-              <span style="font-size: 11px; color: #64748b;">Monitoring Performa, Evaluasi Durasi SOP (4h), dan Konversi FTD</span>
+              <h1>Casper Signal BI Report — Audit Presensi &amp; Rekap Streamer</h1>
+              <span style="font-size: 11px; color: #64748b;">Monitoring Performa, Evaluasi Durasi SOP (4h), dan Audit Kepatuhan Rekap Harian</span>
             </div>
             <div class="meta">
               <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
               <strong>Periode Filter:</strong> ${formatShortDate(rangeStart) || 'Semua'} s/d ${formatShortDate(rangeEnd) || 'Semua'}<br/>
-              <strong>Total Records:</strong> ${reports.length}
+              <strong>Total Streamer:</strong> ${Object.keys(summaryMap).length}
             </div>
           </div>
 
-          <div class="section-title">1. Ringkasan Presensi &amp; FTD Streamer</div>
+          <div class="section-title">1. Ringkasan Presensi &amp; Audit Rekap Streamer</div>
           <table>
             <thead>
               <tr>
@@ -448,7 +516,8 @@ const Reports = () => {
                 <th style="text-align: center;">Hari Live</th>
                 <th style="text-align: center;">Live &lt; 4h</th>
                 <th style="text-align: center;">Hari Off</th>
-                <th style="text-align: center;">Absen</th>
+                <th style="text-align: center;">Tidak Rekap</th>
+                <th style="text-align: center;">Status Presensi</th>
                 <th style="text-align: right;">Total FTD</th>
               </tr>
             </thead>
@@ -457,15 +526,17 @@ const Reports = () => {
             </tbody>
           </table>
 
+          ${noReportSectionHtml}
+
           ${under4hSectionHtml ? `
-            <div class="section-title" style="color: #be123c; margin-top: 16px;">2. Rincian Tanggal Live Durasi Kurang (&lt; 4 Jam SOP)</div>
+            <div class="section-title" style="color: #be123c; margin-top: 16px;">3. Rincian Tanggal Live Durasi Kurang (&lt; 4 Jam SOP)</div>
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
               ${under4hSectionHtml}
             </div>
           ` : ''}
 
           ${offAbsenSectionHtml ? `
-            <div class="section-title" style="color: #d97706; margin-top: 24px; page-break-before: always; break-before: page;">3. Rincian Tanggal Off &amp; Absen</div>
+            <div class="section-title" style="color: #d97706; margin-top: 24px; page-break-before: always; break-before: page;">4. Rincian Tanggal Off &amp; Tidak Ngerekap</div>
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
               ${offAbsenSectionHtml}
             </div>
