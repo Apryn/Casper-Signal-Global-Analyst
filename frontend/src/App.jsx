@@ -16,6 +16,7 @@ import Contents from './pages/Contents';
 import Schedules from './pages/Schedules';
 import ImportPage from './pages/Import';
 import Evaluations from './pages/Evaluations';
+import Finance from './pages/Finance';
 
 // ============================================================
 // ERROR BOUNDARY — prevents full-app crash on component errors
@@ -124,6 +125,8 @@ function App() {
               {/* Weekly Evaluations (both roles) */}
               <Route path="evaluations" element={<Evaluations />} />
 
+              {/* Finance & Payroll Management (Protected) */}
+              <Route path="finance" element={<Finance />} />
 
               {/* Streamers Management (both roles) */}
               <Route

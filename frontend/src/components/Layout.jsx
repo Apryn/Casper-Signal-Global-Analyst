@@ -18,7 +18,9 @@ import {
   Calendar,
   Upload,
   FileText,
-  Bell
+  Bell,
+  Wallet,
+  Lock
 } from 'lucide-react';
 
 const Layout = () => {
@@ -79,6 +81,7 @@ const Layout = () => {
     { name: 'Schedules', path: '/schedules', icon: Calendar },
     { name: 'Import Laporan', path: '/import', icon: Upload },
     { name: 'Rapor Mingguan', path: '/evaluations', icon: FileText },
+    { name: 'Keuangan & Gaji', path: '/finance', icon: Wallet, isConfidential: true },
     { name: 'Streamers', path: '/streamers', icon: Users },
   ];
 
@@ -88,6 +91,7 @@ const Layout = () => {
       case '/reports': return 'Daily Recaps Ledger';
       case '/leaderboard': return 'Streamer Leaderboard';
       case '/evaluations': return 'Weekly Evaluations';
+      case '/finance': return 'Finance & Payroll Management';
       case '/streamers': return 'Streamer Management';
 
       default: return 'Casper Analytics';
@@ -145,6 +149,11 @@ const Layout = () => {
                 )}
                 <item.icon className={`h-5 w-5 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-indigo-400' : 'text-gray-400 group-hover:text-white'}`} />
                 <span>{item.name}</span>
+                {item.isConfidential && (
+                  <span className="ml-auto text-[10px] text-amber-400 font-bold flex items-center gap-0.5">
+                    <Lock className="h-3 w-3" />
+                  </span>
+                )}
                 {item.adminOnly && (
                   <span className="ml-auto text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-500 uppercase tracking-wide">
                     Admin
@@ -228,6 +237,11 @@ const Layout = () => {
                     >
                       <item.icon className="h-5 w-5 text-gray-400" />
                       <span>{item.name}</span>
+                      {item.isConfidential && (
+                        <span className="ml-auto text-[10px] text-amber-400 font-bold flex items-center gap-0.5">
+                          <Lock className="h-3 w-3" />
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
