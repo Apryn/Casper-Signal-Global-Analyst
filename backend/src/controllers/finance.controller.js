@@ -300,15 +300,21 @@ export const updateItem = async (req, res) => {
     const { id } = req.params;
     const { 
       base_amount, bonus_amount, deduction_amount, 
-      status, notes, bank_name, bank_account_number, bank_account_holder 
+      status, notes, bank_name, bank_account_number, bank_account_holder, role 
     } = req.body;
 
-    const base = parseFloat(base_amount || 0);
-    const bonus = parseFloat(bonus_amount || 0);
-    const deduction = parseFloat(deduction_amount || 0);
+    const parseNum = (val) => {
+      if (val === null || val === undefined || val === '') return 0;
+      const clean = String(val).replace(/[^0-9.-]/g, '');
+      const parsed = parseFloat(clean);
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const base = parseNum(base_amount);
+    const bonus = parseNum(bonus_amount);
+    const deduction = parseNum(deduction_amount);
     const finalAmount = Math.max(0, base + bonus - deduction);
-    const isPaid = status === 'Paid';
-    const paidAt = isPaid ? new Date().toISOString() : null;
+    const validStatus = status === 'Paid' ? 'Paid' : 'Pending';
 
     const updateRes = await pool.query(`
       UPDATE payroll_items
@@ -321,14 +327,22 @@ export const updateItem = async (req, res) => {
           notes = $6,
           bank_name = COALESCE($7, bank_name),
           bank_account_number = COALESCE($8, bank_account_number),
-          bank_account_holder = COALESCE($9, bank_account_holder)
-      WHERE id = $10
+          bank_account_holder = COALESCE($9, bank_account_holder),
+          role = COALESCE($10, role)
+      WHERE id = $11
       RETURNING *
     `, [
-      base, bonus, deduction, finalAmount,
-      status || 'Pending', notes || '',
-      bank_name, bank_account_number, bank_account_holder,
-      id
+      base,
+      bonus,
+      deduction,
+      finalAmount,
+      validStatus,
+      notes !== undefined && notes !== null ? String(notes) : '',
+      bank_name ?? null,
+      bank_account_number ?? null,
+      bank_account_holder ?? null,
+      role ?? null,
+      parseInt(id, 10) || id
     ]);
 
     if (updateRes.rows.length === 0) {
@@ -348,7 +362,7 @@ export const updateItem = async (req, res) => {
     res.json(updatedItem);
   } catch (err) {
     console.error('[Finance updateItem] Error:', err);
-    res.status(500).json({ message: 'Gagal memperbarui item gajian' });
+    res.status(500).json({ message: err.message || 'Gagal memperbarui item gajian' });
   }
 };
 
@@ -359,26 +373,26 @@ export const bulkUpdateStatus = async (req, res) => {
       return res.status(400).json({ message: 'period_id dan status wajib diisi' });
     }
 
-    const paidAt = status === 'Paid' ? new Date().toISOString() : null;
+    const validStatus = status === 'Paid' ? 'Paid' : 'Pending';
 
     await pool.query(`
       UPDATE payroll_items
       SET status = $1,
           paid_at = CASE WHEN $1 = 'Paid' THEN CURRENT_TIMESTAMP ELSE NULL END
       WHERE period_id = $2
-    `, [status, period_id]);
+    `, [validStatus, period_id]);
 
     await pool.query(`
       UPDATE payroll_periods p
       SET paid_amount = (SELECT COALESCE(SUM(final_amount), 0) FROM payroll_items WHERE period_id = p.id AND status = 'Paid'),
           status = CASE WHEN $1 = 'Paid' THEN 'Completed' ELSE 'Active' END
       WHERE id = $2
-    `, [status, period_id]);
+    `, [validStatus, period_id]);
 
-    res.json({ success: true, message: `Seluruh status berhasil diubah ke ${status}` });
+    res.json({ success: true, message: `Seluruh status berhasil diubah ke ${validStatus}` });
   } catch (err) {
     console.error('[Finance bulkUpdateStatus] Error:', err);
-    res.status(500).json({ message: 'Gagal mengubah status massal' });
+    res.status(500).json({ message: err.message || 'Gagal mengubah status massal' });
   }
 };
 

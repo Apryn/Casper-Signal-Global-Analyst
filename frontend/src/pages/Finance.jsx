@@ -147,6 +147,21 @@ const Finance = () => {
     }, 1800);
   };
 
+  const getRoleBadgeClass = (role) => {
+    switch (role?.toLowerCase()) {
+      case 'editor':
+        return 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40';
+      case 'streamer':
+        return 'bg-indigo-500/20 text-indigo-300 border-indigo-500/40';
+      case 'analyst':
+        return 'bg-purple-500/20 text-purple-300 border-purple-500/40';
+      case 'admin':
+        return 'bg-amber-500/20 text-amber-300 border-amber-500/40';
+      default:
+        return 'bg-slate-800 text-slate-300 border-slate-700';
+    }
+  };
+
   // ==========================================
   // PIN VERIFICATION HANDLERS
   // ==========================================
@@ -431,7 +446,13 @@ const Finance = () => {
     const newStatus = item.status === 'Paid' ? 'Pending' : 'Paid';
     try {
       await api.put(`/finance/items/${item.id}`, {
-        ...item,
+        base_amount: item.base_amount,
+        bonus_amount: item.bonus_amount,
+        deduction_amount: item.deduction_amount,
+        notes: item.notes || '',
+        bank_name: item.bank_name || 'BCA',
+        bank_account_number: item.bank_account_number || '',
+        bank_account_holder: item.bank_account_holder || item.recipient_name,
         status: newStatus,
       });
       fetchPeriodDetail(selectedPeriodId);
@@ -447,12 +468,19 @@ const Finance = () => {
     if (!editingItem) return;
     try {
       await api.put(`/finance/items/${editingItem.id}`, {
-        ...editingItem,
-        ...itemEditForm,
+        base_amount: itemEditForm.base_amount,
+        bonus_amount: itemEditForm.bonus_amount,
+        deduction_amount: itemEditForm.deduction_amount,
+        notes: itemEditForm.notes || '',
+        bank_name: itemEditForm.bank_name || 'BCA',
+        bank_account_number: itemEditForm.bank_account_number || '',
+        bank_account_holder: itemEditForm.bank_account_holder || editingItem.recipient_name,
+        status: editingItem.status || 'Pending',
       });
       setEditingItem(null);
       fetchPeriodDetail(selectedPeriodId);
       fetchPeriods();
+      fetchCashSummary();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal memperbarui item gajian');
     }
@@ -843,7 +871,7 @@ const Finance = () => {
                             {/* Name & Role */}
                             <td className="py-3.5 px-4">
                               <div className="font-bold text-white text-sm">{item.recipient_name}</div>
-                              <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide bg-slate-800 text-slate-300 border border-slate-700">
+                              <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${getRoleBadgeClass(item.role)}`}>
                                 {item.role}
                               </span>
                               {item.notes && (
@@ -1199,7 +1227,7 @@ const Finance = () => {
                         {p.notes && <div className="text-[10px] text-slate-400 font-normal">{p.notes}</div>}
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide bg-slate-800 text-indigo-300 border border-slate-700">
+                        <span className={`px-2.5 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wide border ${getRoleBadgeClass(p.role)}`}>
                           {p.role}
                         </span>
                       </td>
@@ -1544,6 +1572,7 @@ const Finance = () => {
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-bold text-white focus:outline-none shadow-inset-screen"
                   >
                     <option value="Streamer">Streamer</option>
+                    <option value="Editor">Editor</option>
                     <option value="Analyst">Analyst</option>
                     <option value="Admin">Admin</option>
                     <option value="Staff">Staff</option>
@@ -1716,6 +1745,45 @@ const Finance = () => {
                     )
                   )}
                 </span>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
+                    Bank
+                  </label>
+                  <input
+                    type="text"
+                    value={itemEditForm.bank_name || ''}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, bank_name: e.target.value })}
+                    placeholder="BCA / Mandiri"
+                    className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs text-white focus:outline-none shadow-inset-screen"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
+                    No. Rekening
+                  </label>
+                  <input
+                    type="text"
+                    value={itemEditForm.bank_account_number || ''}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, bank_account_number: e.target.value })}
+                    placeholder="1234567890"
+                    className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono text-white focus:outline-none shadow-inset-screen"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
+                    Atas Nama
+                  </label>
+                  <input
+                    type="text"
+                    value={itemEditForm.bank_account_holder || ''}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, bank_account_holder: e.target.value })}
+                    placeholder="Nama Pemilik"
+                    className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs text-white focus:outline-none shadow-inset-screen"
+                  />
+                </div>
               </div>
 
               <div>
