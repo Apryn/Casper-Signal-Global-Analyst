@@ -322,14 +322,14 @@ export const updateItem = async (req, res) => {
           bonus_amount = $2,
           deduction_amount = $3,
           final_amount = $4,
-          status = $5,
-          paid_at = CASE WHEN $5 = 'Paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE NULL END,
+          status = $5::varchar,
+          paid_at = CASE WHEN $5::varchar = 'Paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE NULL END,
           notes = $6,
           bank_name = COALESCE($7, bank_name),
           bank_account_number = COALESCE($8, bank_account_number),
           bank_account_holder = COALESCE($9, bank_account_holder),
           role = COALESCE($10, role)
-      WHERE id = $11
+      WHERE id = $11::int
       RETURNING *
     `, [
       base,
@@ -351,12 +351,18 @@ export const updateItem = async (req, res) => {
 
     const updatedItem = updateRes.rows[0];
 
-    // Refresh period totals
+    // Refresh period totals & auto-update period status
     await pool.query(`
       UPDATE payroll_periods p
       SET total_amount = (SELECT COALESCE(SUM(final_amount), 0) FROM payroll_items WHERE period_id = p.id),
-          paid_amount = (SELECT COALESCE(SUM(final_amount), 0) FROM payroll_items WHERE period_id = p.id AND status = 'Paid')
-      WHERE id = $1
+          paid_amount = (SELECT COALESCE(SUM(final_amount), 0) FROM payroll_items WHERE period_id = p.id AND status = 'Paid'),
+          status = CASE 
+            WHEN (SELECT COUNT(*) FROM payroll_items WHERE period_id = p.id AND status != 'Paid') = 0 
+                 AND (SELECT COUNT(*) FROM payroll_items WHERE period_id = p.id) > 0 
+            THEN 'Completed' 
+            ELSE 'Active' 
+          END
+      WHERE id = $1::int
     `, [updatedItem.period_id]);
 
     res.json(updatedItem);
@@ -377,17 +383,17 @@ export const bulkUpdateStatus = async (req, res) => {
 
     await pool.query(`
       UPDATE payroll_items
-      SET status = $1,
-          paid_at = CASE WHEN $1 = 'Paid' THEN CURRENT_TIMESTAMP ELSE NULL END
-      WHERE period_id = $2
-    `, [validStatus, period_id]);
+      SET status = $1::varchar,
+          paid_at = CASE WHEN $1::varchar = 'Paid' THEN CURRENT_TIMESTAMP ELSE NULL END
+      WHERE period_id = $2::int
+    `, [validStatus, parseInt(period_id, 10) || period_id]);
 
     await pool.query(`
       UPDATE payroll_periods p
       SET paid_amount = (SELECT COALESCE(SUM(final_amount), 0) FROM payroll_items WHERE period_id = p.id AND status = 'Paid'),
-          status = CASE WHEN $1 = 'Paid' THEN 'Completed' ELSE 'Active' END
-      WHERE id = $2
-    `, [validStatus, period_id]);
+          status = CASE WHEN $1::varchar = 'Paid' THEN 'Completed' ELSE 'Active' END
+      WHERE id = $2::int
+    `, [validStatus, parseInt(period_id, 10) || period_id]);
 
     res.json({ success: true, message: `Seluruh status berhasil diubah ke ${validStatus}` });
   } catch (err) {
