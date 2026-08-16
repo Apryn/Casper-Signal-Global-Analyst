@@ -147,6 +147,19 @@ const Finance = () => {
     }, 1800);
   };
 
+  const formatInputNominal = (val) => {
+    if (val === null || val === undefined || val === '') return '';
+    const digits = String(val).replace(/[^0-9]/g, '');
+    if (!digits) return '';
+    return new Intl.NumberFormat('id-ID').format(parseInt(digits, 10));
+  };
+
+  const parseCleanNumber = (val) => {
+    if (val === null || val === undefined || val === '') return 0;
+    const digits = String(val).replace(/[^0-9]/g, '');
+    return digits ? parseInt(digits, 10) : 0;
+  };
+
   const getRoleBadgeClass = (role) => {
     switch (role?.toLowerCase()) {
       case 'editor':
@@ -325,10 +338,17 @@ const Finance = () => {
 
   const handleSaveCashTransaction = async (e) => {
     e.preventDefault();
-    if (!cashForm.nominal || parseFloat(cashForm.nominal) <= 0) return;
+    const cleanNominal = parseCleanNumber(cashForm.nominal);
+    if (!cleanNominal || cleanNominal <= 0) {
+      alert('Silakan masukkan nominal transaksi yang valid');
+      return;
+    }
 
     try {
-      await api.post('/finance/cash/transactions', cashForm);
+      await api.post('/finance/cash/transactions', {
+        ...cashForm,
+        nominal: cleanNominal,
+      });
       setShowCashModal(false);
       fetchTransactions();
       fetchCashSummary();
@@ -359,8 +379,8 @@ const Finance = () => {
       bank_name: 'BCA',
       bank_account_number: '',
       bank_account_holder: '',
-      salary_15: 1000000,
-      salary_1: 2000000,
+      salary_15: '1.000.000',
+      salary_1: '2.000.000',
       is_active: true,
       notes: '',
     });
@@ -375,8 +395,8 @@ const Finance = () => {
       bank_name: p.bank_name || 'BCA',
       bank_account_number: p.bank_account_number || '',
       bank_account_holder: p.bank_account_holder || p.name,
-      salary_15: p.salary_15,
-      salary_1: p.salary_1,
+      salary_15: formatInputNominal(p.salary_15),
+      salary_1: formatInputNominal(p.salary_1),
       is_active: p.is_active,
       notes: p.notes || '',
     });
@@ -386,7 +406,11 @@ const Finance = () => {
   const handleSaveProfile = async (e) => {
     e.preventDefault();
     try {
-      await api.post('/finance/profiles', profileForm);
+      await api.post('/finance/profiles', {
+        ...profileForm,
+        salary_15: parseCleanNumber(profileForm.salary_15),
+        salary_1: parseCleanNumber(profileForm.salary_1),
+      });
       setShowProfileModal(false);
       fetchProfiles();
     } catch (err) {
@@ -468,9 +492,9 @@ const Finance = () => {
     if (!editingItem) return;
     try {
       await api.put(`/finance/items/${editingItem.id}`, {
-        base_amount: itemEditForm.base_amount,
-        bonus_amount: itemEditForm.bonus_amount,
-        deduction_amount: itemEditForm.deduction_amount,
+        base_amount: parseCleanNumber(itemEditForm.base_amount),
+        bonus_amount: parseCleanNumber(itemEditForm.bonus_amount),
+        deduction_amount: parseCleanNumber(itemEditForm.deduction_amount),
         notes: itemEditForm.notes || '',
         bank_name: itemEditForm.bank_name || 'BCA',
         bank_account_number: itemEditForm.bank_account_number || '',
@@ -972,9 +996,9 @@ const Finance = () => {
                                   onClick={() => {
                                     setEditingItem(item);
                                     setItemEditForm({
-                                      base_amount: item.base_amount,
-                                      bonus_amount: item.bonus_amount,
-                                      deduction_amount: item.deduction_amount,
+                                      base_amount: formatInputNominal(item.base_amount),
+                                      bonus_amount: formatInputNominal(item.bonus_amount),
+                                      deduction_amount: formatInputNominal(item.deduction_amount),
                                       notes: item.notes || '',
                                       bank_name: item.bank_name || 'BCA',
                                       bank_account_number: item.bank_account_number || '',
@@ -1481,13 +1505,12 @@ const Finance = () => {
                   Nominal (Rp)
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   required
-                  min={1000}
-                  step={1000}
                   value={cashForm.nominal}
-                  onChange={(e) => setCashForm({ ...cashForm, nominal: e.target.value })}
-                  placeholder="Contoh: 500000"
+                  onChange={(e) => setCashForm({ ...cashForm, nominal: formatInputNominal(e.target.value) })}
+                  placeholder="Contoh: 1.300.000"
                   className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-base font-mono font-bold text-white focus:outline-none focus:border-indigo-500 shadow-inset-screen"
                 />
               </div>
@@ -1636,10 +1659,11 @@ const Finance = () => {
                     Rate Gaji Tgl 15 (Rp)
                   </label>
                   <input
-                    type="number"
-                    step={50000}
+                    type="text"
+                    inputMode="numeric"
                     value={profileForm.salary_15}
-                    onChange={(e) => setProfileForm({ ...profileForm, salary_15: e.target.value })}
+                    onChange={(e) => setProfileForm({ ...profileForm, salary_15: formatInputNominal(e.target.value) })}
+                    placeholder="1.000.000"
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-white focus:outline-none shadow-inset-screen"
                   />
                 </div>
@@ -1649,10 +1673,11 @@ const Finance = () => {
                     Rate Gaji Tgl 1 (Rp)
                   </label>
                   <input
-                    type="number"
-                    step={50000}
+                    type="text"
+                    inputMode="numeric"
                     value={profileForm.salary_1}
-                    onChange={(e) => setProfileForm({ ...profileForm, salary_1: e.target.value })}
+                    onChange={(e) => setProfileForm({ ...profileForm, salary_1: formatInputNominal(e.target.value) })}
+                    placeholder="2.000.000"
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-amber-400 focus:outline-none shadow-inset-screen"
                   />
                 </div>
@@ -1700,9 +1725,11 @@ const Finance = () => {
                   Gaji Pokok (Rp)
                 </label>
                 <input
-                  type="number"
+                  type="text"
+                  inputMode="numeric"
                   value={itemEditForm.base_amount}
-                  onChange={(e) => setItemEditForm({ ...itemEditForm, base_amount: e.target.value })}
+                  onChange={(e) => setItemEditForm({ ...itemEditForm, base_amount: formatInputNominal(e.target.value) })}
+                  placeholder="1.000.000"
                   className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-white focus:outline-none shadow-inset-screen"
                 />
               </div>
@@ -1713,9 +1740,11 @@ const Finance = () => {
                     + Bonus / Tambahan (Rp)
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={itemEditForm.bonus_amount}
-                    onChange={(e) => setItemEditForm({ ...itemEditForm, bonus_amount: e.target.value })}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, bonus_amount: formatInputNominal(e.target.value) })}
+                    placeholder="0"
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-emerald-400 focus:outline-none shadow-inset-screen"
                   />
                 </div>
@@ -1725,9 +1754,11 @@ const Finance = () => {
                     - Potongan / Kasbon (Rp)
                   </label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
                     value={itemEditForm.deduction_amount}
-                    onChange={(e) => setItemEditForm({ ...itemEditForm, deduction_amount: e.target.value })}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, deduction_amount: formatInputNominal(e.target.value) })}
+                    placeholder="0"
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-rose-400 focus:outline-none shadow-inset-screen"
                   />
                 </div>
@@ -1739,9 +1770,9 @@ const Finance = () => {
                   {formatRupiah(
                     Math.max(
                       0,
-                      parseFloat(itemEditForm.base_amount || 0) +
-                        parseFloat(itemEditForm.bonus_amount || 0) -
-                        parseFloat(itemEditForm.deduction_amount || 0)
+                      parseCleanNumber(itemEditForm.base_amount) +
+                        parseCleanNumber(itemEditForm.bonus_amount) -
+                        parseCleanNumber(itemEditForm.deduction_amount)
                     )
                   )}
                 </span>

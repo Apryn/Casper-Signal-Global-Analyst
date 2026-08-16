@@ -501,11 +501,12 @@ export const createTransaction = async (req, res) => {
     const { tanggal, tipe, kategori, nominal, keterangan } = req.body;
     const userName = req.user?.nama || 'Admin';
 
-    if (!tanggal || !tipe || !nominal) {
+    if (!tanggal || !tipe || nominal === undefined || nominal === null || nominal === '') {
       return res.status(400).json({ message: 'Tanggal, tipe, dan nominal wajib diisi' });
     }
 
-    const numNominal = parseFloat(nominal);
+    const cleanNominal = String(nominal).replace(/[^0-9]/g, '');
+    const numNominal = parseFloat(cleanNominal);
     if (isNaN(numNominal) || numNominal <= 0) {
       return res.status(400).json({ message: 'Nominal harus angka positif' });
     }
