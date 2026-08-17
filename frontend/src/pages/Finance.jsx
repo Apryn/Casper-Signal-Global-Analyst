@@ -566,7 +566,7 @@ const Finance = () => {
           </div>
 
           <h2 className="text-2xl font-extrabold text-white tracking-wide uppercase mb-1.5">
-            Brankas Keuangan & Gaji
+            Brankas Keuangan
           </h2>
           <p className="text-xs text-slate-400 font-medium mb-6 leading-relaxed">
             Halaman ini memuat data rahasia nominal gaji dan kas perusahaan. Silakan masukkan PIN Keamanan Anda untuk membuka akses.
@@ -635,7 +635,7 @@ const Finance = () => {
             </span>
             <div>
               <h1 className="text-xl font-extrabold text-white uppercase tracking-wide">
-                Manajemen Keuangan & Penggajian
+                Manajemen Keuangan
               </h1>
               <p className="text-xs text-indigo-400 font-bold">
                 Buku Uang Kas, Pengeluaran Operasional & Siklus Payroll
@@ -726,38 +726,35 @@ const Finance = () => {
       <div className="flex items-center gap-2 border-b-2 border-black pb-2 overflow-x-auto">
         <button
           onClick={() => setActiveTab('payroll')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${
-            activeTab === 'payroll'
-              ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
-              : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
-          }`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${activeTab === 'payroll'
+            ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
+            : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
+            }`}
         >
           <DollarSign className="h-4 w-4" />
-          <span>💵 Penggajian (Payroll)</span>
+          <span>Penggajian (Payroll)</span>
         </button>
 
         <button
           onClick={() => setActiveTab('cash')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${
-            activeTab === 'cash'
-              ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
-              : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
-          }`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${activeTab === 'cash'
+            ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
+            : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
+            }`}
         >
           <Landmark className="h-4 w-4" />
-          <span>📉 Pengeluaran & Uang Kas</span>
+          <span>Pengeluaran & Uang Kas</span>
         </button>
 
         <button
           onClick={() => setActiveTab('profiles')}
-          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${
-            activeTab === 'profiles'
-              ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
-              : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
-          }`}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${activeTab === 'profiles'
+            ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
+            : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
+            }`}
         >
           <Users className="h-4 w-4" />
-          <span>👥 Master Profil & Rate Gaji</span>
+          <span>Master Profil & Rate Gaji</span>
         </button>
       </div>
 
@@ -888,9 +885,8 @@ const Finance = () => {
                         return (
                           <tr
                             key={item.id}
-                            className={`transition-all hover:bg-slate-900/60 ${
-                              isPaid ? 'bg-emerald-950/10' : ''
-                            }`}
+                            className={`transition-all hover:bg-slate-900/60 ${isPaid ? 'bg-emerald-950/10' : ''
+                              }`}
                           >
                             {/* Name & Role */}
                             <td className="py-3.5 px-4">
@@ -979,11 +975,10 @@ const Finance = () => {
                             <td className="py-3.5 px-4 text-center">
                               <button
                                 onClick={() => handleToggleItemStatus(item)}
-                                className={`px-3 py-1.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider border-2 transition-all shadow-tactile-sm ${
-                                  isPaid
-                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500 hover:text-black'
-                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-400 hover:text-black'
-                                }`}
+                                className={`px-3 py-1.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider border-2 transition-all shadow-tactile-sm ${isPaid
+                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500 hover:text-black'
+                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-400 hover:text-black'
+                                  }`}
                               >
                                 {isPaid ? '✓ LUNAS (PAID)' : '⏳ PENDING'}
                               </button>
@@ -1064,11 +1059,10 @@ const Finance = () => {
                   <button
                     key={t}
                     onClick={() => setCashFilterType(t)}
-                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${
-                      cashFilterType === t
-                        ? 'bg-tactile-yellow text-black shadow-tactile-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
+                    className={`px-3 py-1 rounded-lg text-xs font-extrabold transition-all ${cashFilterType === t
+                      ? 'bg-tactile-yellow text-black shadow-tactile-sm'
+                      : 'text-slate-400 hover:text-white'
+                      }`}
                   >
                     {t === 'All' ? 'Semua' : t === 'Masuk' ? '🟢 Kas Masuk' : '🔴 Pengeluaran'}
                   </button>
@@ -1152,11 +1146,10 @@ const Finance = () => {
                           </td>
                           <td className="py-3.5 px-4">
                             <span
-                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${
-                                isIncome
-                                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
-                              }`}
+                              className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${isIncome
+                                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                                }`}
                             >
                               {isIncome ? <ArrowDownLeft className="h-3 w-3" /> : <ArrowUpRight className="h-3 w-3" />}
                               {tx.tipe}
@@ -1168,9 +1161,8 @@ const Finance = () => {
                           <td className="py-3.5 px-4 text-slate-300">
                             {tx.keterangan || '-'}
                           </td>
-                          <td className={`py-3.5 px-4 text-right font-mono font-bold text-sm ${
-                            isIncome ? 'text-emerald-400' : 'text-rose-400'
-                          }`}>
+                          <td className={`py-3.5 px-4 text-right font-mono font-bold text-sm ${isIncome ? 'text-emerald-400' : 'text-rose-400'
+                            }`}>
                             {isIncome ? '+' : '-'}{formatRupiah(tx.nominal)}
                           </td>
                           <td className="py-3.5 px-4 text-slate-400 text-[11px]">
@@ -1271,11 +1263,10 @@ const Finance = () => {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <span
-                          className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${
-                            p.is_active
-                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
-                          }`}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase ${p.is_active
+                            ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-rose-500/10 text-rose-400 border border-rose-500/30'
+                            }`}
                         >
                           {p.is_active ? 'Aktif' : 'Non-Aktif'}
                         </span>
@@ -1341,11 +1332,10 @@ const Finance = () => {
                         title: `Gaji Tgl 15 - ${new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`,
                       })
                     }
-                    className={`p-3 rounded-xl border-2 text-left font-bold text-xs transition-all ${
-                      newPeriodForm.period_type === '15th'
-                        ? 'bg-indigo-950/60 border-indigo-500 text-white shadow-tactile-sm'
-                        : 'bg-dark-panel border-black text-slate-400 hover:text-white'
-                    }`}
+                    className={`p-3 rounded-xl border-2 text-left font-bold text-xs transition-all ${newPeriodForm.period_type === '15th'
+                      ? 'bg-indigo-950/60 border-indigo-500 text-white shadow-tactile-sm'
+                      : 'bg-dark-panel border-black text-slate-400 hover:text-white'
+                      }`}
                   >
                     <div className="text-sm text-indigo-400 font-extrabold">Gajian Tgl 15</div>
                     <div className="text-[10px] text-slate-400 mt-1">Menggunakan Rate Tgl 15 (Standar 1 Juta)</div>
@@ -1360,11 +1350,10 @@ const Finance = () => {
                         title: `Gaji Tgl 1 - ${new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`,
                       })
                     }
-                    className={`p-3 rounded-xl border-2 text-left font-bold text-xs transition-all ${
-                      newPeriodForm.period_type === '1st'
-                        ? 'bg-amber-950/60 border-amber-500 text-white shadow-tactile-sm'
-                        : 'bg-dark-panel border-black text-slate-400 hover:text-white'
-                    }`}
+                    className={`p-3 rounded-xl border-2 text-left font-bold text-xs transition-all ${newPeriodForm.period_type === '1st'
+                      ? 'bg-amber-950/60 border-amber-500 text-white shadow-tactile-sm'
+                      : 'bg-dark-panel border-black text-slate-400 hover:text-white'
+                      }`}
                   >
                     <div className="text-sm text-amber-400 font-extrabold">Gajian Tgl 1</div>
                     <div className="text-[10px] text-slate-400 mt-1">Menggunakan Rate Tgl 1 (Custom 2jt, 3jt, 4jt)</div>
@@ -1538,11 +1527,10 @@ const Finance = () => {
                 </button>
                 <button
                   type="submit"
-                  className={`px-5 py-2 rounded-xl text-xs font-extrabold text-black border-2 border-black shadow-tactile-sm transition-all ${
-                    cashModalType === 'Masuk'
-                      ? 'bg-emerald-400 hover:bg-emerald-300'
-                      : 'bg-rose-400 hover:bg-rose-300'
-                  }`}
+                  className={`px-5 py-2 rounded-xl text-xs font-extrabold text-black border-2 border-black shadow-tactile-sm transition-all ${cashModalType === 'Masuk'
+                    ? 'bg-emerald-400 hover:bg-emerald-300'
+                    : 'bg-rose-400 hover:bg-rose-300'
+                    }`}
                 >
                   Simpan Transaksi
                 </button>
@@ -1771,8 +1759,8 @@ const Finance = () => {
                     Math.max(
                       0,
                       parseCleanNumber(itemEditForm.base_amount) +
-                        parseCleanNumber(itemEditForm.bonus_amount) -
-                        parseCleanNumber(itemEditForm.deduction_amount)
+                      parseCleanNumber(itemEditForm.bonus_amount) -
+                      parseCleanNumber(itemEditForm.deduction_amount)
                     )
                   )}
                 </span>
