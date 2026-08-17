@@ -486,13 +486,42 @@ export const cleanupStaleSchedules = async () => {
         }
 
         if (!isLive) {
-          // Stream benar-benar tidak live → cancel
-          await query(
-            `UPDATE schedule SET status = 'Cancelled', actual_end_time = NOW() WHERE id = $1`,
+          // Stream sudah offline / selesai live → tandai Completed dan simpan durasi live ke daily_reports
+          const scheduleRes = await query(
+            `SELECT streamer_id, substitute_streamer_id, actual_start_time, start_time, live_duration 
+             FROM schedule WHERE id = $1`,
             [row.id]
           );
+          const sch = scheduleRes.rows[0];
+          if (sch) {
+            const start = new Date(sch.actual_start_time || sch.start_time || Date.now());
+            const durationHours = parseFloat(Math.max(0, (Date.now() - start.getTime()) / 3600000).toFixed(2));
+            const previousDuration = parseFloat(sch.live_duration || 0);
+            const netDuration = Math.max(0, parseFloat((durationHours - previousDuration).toFixed(2)));
+
+            await query(
+              `UPDATE schedule 
+               SET status = 'Completed', 
+                   actual_end_time = NOW(),
+                   live_duration = $1
+               WHERE id = $2`,
+              [durationHours, row.id]
+            );
+
+            if (netDuration > 0) {
+              const targetStreamerId = sch.substitute_streamer_id || sch.streamer_id;
+              const dateStr = new Date(sch.actual_start_time || start).toLocaleDateString('en-CA', { timeZone: 'Asia/Jakarta' });
+              await query(
+                `INSERT INTO daily_reports (streamer_id, tanggal, kategori, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
+                 VALUES ($1, $2, 'Streaming', $3, 0, 0, 0, 0, 0, 0, 0)
+                 ON CONFLICT (streamer_id, tanggal) 
+                 DO UPDATE SET live_duration = COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration`,
+                [targetStreamerId, dateStr, netDuration]
+              );
+            }
+          }
           waitingRoomCancelled++;
-          console.log(`[Cron Cleanup] Schedule #${row.id} cancelled — YouTube checker konfirmasi tidak live (waiting room atau offline).`);
+          console.log(`[Cron Cleanup] Schedule #${row.id} selesai & ditandai Completed — YouTube checker konfirmasi stream offline.`);
         }
         // Jika isLive = true → berarti masih live, biarkan saja
       } catch (err) {

@@ -20,14 +20,14 @@ import { query } from '../config/db.js';
 // ── Konstanta ──────────────────────────────────────────────────────────────
 const YOUTUBE_API_BASE = 'https://www.googleapis.com/youtube/v3';
 
-// Toleransi waktu untuk mencocokkan jadwal:
-const SCHEDULE_MATCH_WINDOW_MINUTES = 45;
+// Toleransi waktu untuk mencocokkan jadwal: diperlebar ke 180 menit (3 jam) untuk mengakomodasi streamer telat/awal
+const SCHEDULE_MATCH_WINDOW_MINUTES = 180;
 
 // Toleransi keterlambatan sebelum alert dikirim (menit)
 const LATENESS_ALERT_THRESHOLD_MINUTES = 10;
 
-// Buffer konfirmasi 2-strike: 16 menit (lebih dari 1 cron cycle 15 menit)
-const PENDING_CONFIRM_MS = 16 * 60 * 1000;
+// Buffer konfirmasi 2-strike: 10 menit (agar siklus cron ke-2 di 15 menit langsung terkonfirmasi)
+const PENDING_CONFIRM_MS = 10 * 60 * 1000;
 
 // ── DB-backed 2-Strike Confirmation Buffer ───────────────────────────────────
 // Menggunakan tabel live_detection_buffer (TIDAK in-memory)
@@ -451,7 +451,7 @@ const findMatchingSchedule = async (streamerId, videoId = null) => {
     }
   }
 
-  // 2. Jika tidak ada yang sedang Live, cari yang 'Scheduled' dalam window toleransi
+  // 2. Jika tidak ada yang sedang Live, cari yang 'Scheduled' dalam window toleransi atau pada hari yang sama
   const windowStart = new Date(now.getTime() - SCHEDULE_MATCH_WINDOW_MINUTES * 60 * 1000);
   const windowEnd = new Date(now.getTime() + SCHEDULE_MATCH_WINDOW_MINUTES * 60 * 1000);
 
@@ -459,7 +459,10 @@ const findMatchingSchedule = async (streamerId, videoId = null) => {
     `SELECT * FROM schedule
      WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
        AND status = 'Scheduled'
-       AND start_time BETWEEN $2 AND $3
+       AND (
+         start_time BETWEEN $2 AND $3
+         OR DATE(start_time AT TIME ZONE 'Asia/Jakarta') = DATE(NOW() AT TIME ZONE 'Asia/Jakarta')
+       )
      ORDER BY ABS(EXTRACT(EPOCH FROM (start_time - $4))) ASC
      LIMIT 1`,
     [streamerId, windowStart.toISOString(), windowEnd.toISOString(), now.toISOString()]

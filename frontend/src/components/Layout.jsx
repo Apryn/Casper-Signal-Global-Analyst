@@ -2,13 +2,13 @@ import React from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
-import { 
-  LayoutDashboard, 
-  FileSpreadsheet, 
-  Trophy, 
-  Users, 
-  LogOut, 
-  Shield, 
+import {
+  LayoutDashboard,
+  FileSpreadsheet,
+  Trophy,
+  Users,
+  LogOut,
+  Shield,
   Sparkles,
   Menu,
   X,
@@ -35,8 +35,9 @@ const Layout = () => {
   const fetchNotifications = async () => {
     try {
       const res = await api.get('/notifications');
-      setNotifications(res.data);
-      setUnreadCount(res.data.filter(n => !n.is_read).length);
+      const items = Array.isArray(res.data) ? res.data : [];
+      setNotifications(items);
+      setUnreadCount(items.filter((n) => !n.is_read).length);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -81,22 +82,48 @@ const Layout = () => {
     { name: 'Schedules', path: '/schedules', icon: Calendar },
     { name: 'Import Laporan', path: '/import', icon: Upload },
     { name: 'Rapor Mingguan', path: '/evaluations', icon: FileText },
-    { name: 'Keuangan & Gaji', path: '/finance', icon: Wallet, isConfidential: true },
+    { name: 'Keuangan', path: '/finance', icon: Wallet, isConfidential: true },
     { name: 'Streamers', path: '/streamers', icon: Users },
   ];
 
   const getPageTitle = () => {
     switch (location.pathname) {
       case '/': return 'Analytics Dashboard';
+      case '/performance': return 'Performance Analytics';
       case '/reports': return 'Daily Recaps Ledger';
       case '/leaderboard': return 'Streamer Leaderboard';
+      case '/targets': return 'Target Tracking & Quota';
+      case '/contents': return 'Content Library & Repurposing';
+      case '/schedules': return 'Live Stream Schedules';
+      case '/import': return 'Import Daily Reports';
       case '/evaluations': return 'Weekly Evaluations';
       case '/finance': return 'Finance & Payroll Management';
       case '/streamers': return 'Streamer Management';
-
       default: return 'Casper Analytics';
     }
   };
+
+  const getRoleBadgeStyle = (role) => {
+    switch (role?.toLowerCase()) {
+      case 'admin':
+        return {
+          badge: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
+          dot: 'bg-amber-400',
+        };
+      case 'editor':
+        return {
+          badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30',
+          dot: 'bg-emerald-400',
+        };
+      default:
+        return {
+          badge: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30',
+          dot: 'bg-indigo-400',
+        };
+    }
+  };
+
+  const roleStyle = getRoleBadgeStyle(user?.role);
 
   // Get current date formatted nicely
   const currentDate = new Date().toLocaleDateString('id-ID', {
@@ -108,7 +135,7 @@ const Layout = () => {
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden bg-dark-bg text-gray-200">
-      
+
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex md:w-64 md:flex-col bg-dark-card border-r-3 border-black relative z-30">
         {/* Brand Logo */}
@@ -130,7 +157,7 @@ const Layout = () => {
         <nav className="flex-1 space-y-2 px-4 py-6 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname === item.path;
-            
+
             // Check access control
             if (item.adminOnly && !isAdmin) return null;
 
@@ -139,8 +166,8 @@ const Layout = () => {
                 key={item.name}
                 to={item.path}
                 className={`flex items-center gap-3.5 px-4 py-3 rounded-lg font-bold text-sm transition-all duration-150 border-2 group relative ${
-                  isActive 
-                    ? 'bg-dark-panel text-indigo-400 border-black shadow-inset-screen' 
+                  isActive
+                    ? 'bg-dark-panel text-indigo-400 border-black shadow-inset-screen'
                     : 'text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-white hover:border-black hover:shadow-tactile-sm hover:-translate-y-0.5'
                 }`}
               >
@@ -150,7 +177,7 @@ const Layout = () => {
                 <item.icon className={`h-5 w-5 transition-transform duration-200 group-hover:scale-110 ${isActive ? 'text-indigo-400' : 'text-gray-400 group-hover:text-white'}`} />
                 <span>{item.name}</span>
                 {item.isConfidential && (
-                  <span className="ml-auto text-[10px] text-amber-400 font-bold flex items-center gap-0.5">
+                  <span className="ml-auto text-[10px] text-amber-400 font-bold flex items-center gap-0.5" title="Confidential (PIN Protected)">
                     <Lock className="h-3 w-3" />
                   </span>
                 )}
@@ -171,10 +198,10 @@ const Layout = () => {
               {user?.nama?.charAt(0).toUpperCase() || 'U'}
             </div>
             <div className="overflow-hidden">
-              <span className="block text-sm font-bold text-white truncate">{user?.nama}</span>
+              <span className="block text-sm font-bold text-white truncate">{user?.nama || 'User'}</span>
               <span className="flex items-center gap-1 text-[9px] font-extrabold text-indigo-400 uppercase tracking-wider">
                 <Shield className="h-3 w-3" />
-                {user?.role}
+                {user?.role || 'Guest'}
               </span>
             </div>
           </div>
@@ -191,27 +218,96 @@ const Layout = () => {
       {/* Mobile Header and Sidebar Menu */}
       <div className="md:hidden flex flex-col w-full z-20">
         {/* Mobile top bar */}
-        <header className="flex h-16 items-center justify-between px-6 bg-dark-card border-b-3 border-black shadow-tactile-sm relative z-20">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 border-2 border-black shadow-tactile-sm">
-              <Sparkles className="h-4.5 w-4.5 text-white" />
+        <header className="flex h-16 items-center justify-between px-4 bg-dark-card border-b-3 border-black shadow-tactile-sm relative z-20">
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 border-2 border-black shadow-tactile-sm">
+              <Sparkles className="h-4 w-4 text-white" />
             </div>
-            <span className="text-base font-extrabold text-white tracking-wide uppercase">CASPER SIGNAL</span>
+            <span className="text-sm font-extrabold text-white tracking-wide uppercase">CASPER SIGNAL</span>
           </div>
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-1.5 rounded-lg text-gray-200 hover:text-black hover:bg-tactile-yellow border-2 border-black shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed transition-all"
-          >
-            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </button>
+
+          <div className="flex items-center gap-2">
+            {/* Mobile Notification Bell */}
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifDropdown(!showNotifDropdown)}
+                className="relative p-2 text-slate-200 hover:text-black bg-slate-800 hover:bg-tactile-yellow border-2 border-black rounded-lg shadow-tactile-sm active:translate-y-0.5 transition-all flex items-center justify-center"
+              >
+                <Bell size={15} />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-4.5 px-1 flex items-center justify-center rounded-full bg-rose-600 text-[9px] font-extrabold text-white leading-none border-2 border-black">
+                    {unreadCount > 99 ? '99+' : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {showNotifDropdown && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowNotifDropdown(false)} />
+                  <div className="fixed top-16 right-3 w-[calc(100vw-24px)] max-w-sm bg-dark-panel border-2 border-black rounded-xl shadow-tactile-lg p-4 z-50 animate-fade-in text-left">
+                    <div className="flex justify-between items-center border-b-2 border-slate-800 pb-2.5 mb-2.5">
+                      <strong className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🔔</span> Alarm & Peringatan
+                      </strong>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={handleMarkAllRead}
+                          className="text-[10px] text-indigo-400 hover:text-indigo-300 font-bold"
+                        >
+                          Tandai semua dibaca
+                        </button>
+                      )}
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-2">
+                      {notifications.length === 0 ? (
+                        <p className="text-xs text-slate-500 text-center py-4">Tidak ada alarm/notifikasi.</p>
+                      ) : (
+                        notifications.map((n) => (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              handleMarkRead(n.id);
+                              setShowNotifDropdown(false);
+                            }}
+                            className={`p-2.5 rounded-lg border-2 transition-all cursor-pointer text-xs ${
+                              n.is_read
+                                ? 'bg-slate-900/45 border-slate-850 text-slate-400'
+                                : 'bg-indigo-950/40 border-black text-slate-200 hover:-translate-y-0.5 hover:shadow-tactile-sm'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-1">
+                              <span className="line-clamp-2 leading-relaxed font-medium">{n.message}</span>
+                              {!n.is_read && (
+                                <span className="h-2 w-2 rounded-full bg-rose-500 border border-black shrink-0 mt-1" />
+                              )}
+                            </div>
+                            <span className="block text-[9px] text-slate-500 mt-1.5 font-bold">
+                              {new Date(n.created_at).toLocaleString('id-ID', { hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short' })}
+                            </span>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-1.5 rounded-lg text-gray-200 hover:text-black hover:bg-tactile-yellow border-2 border-black shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed transition-all"
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          </div>
         </header>
 
         {/* Mobile Menu Backdrop & Drawer */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-40 flex">
             {/* Backdrop */}
-            <div 
-              className="fixed inset-0 bg-black/75 backdrop-blur-xs" 
+            <div
+              className="fixed inset-0 bg-black/75 backdrop-blur-xs"
               onClick={() => setMobileMenuOpen(false)}
             />
             {/* Drawer Content */}
@@ -230,8 +326,8 @@ const Layout = () => {
                       to={item.path}
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-3.5 px-4 py-3 rounded-lg font-bold text-sm transition-all border-2 ${
-                        isActive 
-                          ? 'bg-dark-panel text-indigo-300 border-black shadow-inset-screen' 
+                        isActive
+                          ? 'bg-dark-panel text-indigo-300 border-black shadow-inset-screen'
                           : 'text-slate-400 border-transparent hover:bg-slate-900/50 hover:text-white hover:border-black hover:shadow-tactile-sm'
                       }`}
                     >
@@ -242,6 +338,11 @@ const Layout = () => {
                           <Lock className="h-3 w-3" />
                         </span>
                       )}
+                      {item.adminOnly && (
+                        <span className="ml-auto text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-500 uppercase tracking-wide">
+                          Admin
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -249,11 +350,11 @@ const Layout = () => {
               <div className="pt-4 border-t-2 border-black">
                 <div className="flex items-center gap-3 mb-4 px-2">
                   <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-950 border-2 border-black text-indigo-400 font-bold text-sm">
-                    {user?.nama?.charAt(0).toUpperCase()}
+                    {user?.nama?.charAt(0).toUpperCase() || 'U'}
                   </div>
-                  <div>
-                    <span className="block text-sm font-bold text-white truncate">{user?.nama}</span>
-                    <span className="block text-[9px] text-gray-400 uppercase tracking-widest">{user?.role}</span>
+                  <div className="overflow-hidden">
+                    <span className="block text-sm font-bold text-white truncate">{user?.nama || 'User'}</span>
+                    <span className="block text-[9px] text-indigo-400 font-extrabold uppercase tracking-wider">{user?.role || 'Guest'}</span>
                   </div>
                 </div>
                 <button
@@ -346,16 +447,16 @@ const Layout = () => {
             </div>
 
             {/* Role pill badge */}
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border shadow-sm ${
-              isAdmin ? 'bg-amber-500/10 text-amber-400 border-amber-500/30' : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
-            }`}>
-              <div className={`h-2 w-2 rounded-full ${isAdmin ? 'bg-amber-400 animate-pulse' : 'bg-indigo-400 animate-pulse'}`} />
-              <span className="uppercase">{user?.role}</span>
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-extrabold border shadow-sm ${roleStyle.badge}`}>
+              <div className={`h-2 w-2 rounded-full ${roleStyle.dot} animate-pulse`} />
+              <span className="uppercase">{user?.role || 'Guest'}</span>
             </div>
-            
+
             {/* Simple profile card */}
             <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl border border-slate-800 bg-slate-900/80 shadow-sm">
-              <span className="text-xs font-semibold text-slate-300">Welcome, <strong className="text-white font-bold">{user?.nama?.split(' ')[0]}</strong></span>
+              <span className="text-xs font-semibold text-slate-300">
+                Welcome, <strong className="text-white font-bold">{user?.nama ? user.nama.split(' ')[0] : 'User'}</strong>
+              </span>
             </div>
           </div>
         </header>
@@ -371,4 +472,3 @@ const Layout = () => {
 };
 
 export default Layout;
-
