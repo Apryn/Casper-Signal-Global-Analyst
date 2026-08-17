@@ -5,82 +5,82 @@
  * Run: node src/check_live_now.js
  */
 
-import 'dotenv/config';
-import pkg from 'pg';
-
-const { Pool } = pkg;
-const pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-const db = (sql, params) => pool.query(sql, params);
+import { query } from './config/db.js';
+const db = (sql, params) => query(sql, params);
 
 // ── Multi-signal scraper (sama persis dengan youtube.service.js) ──────────
 const checkChannelOrVideoLive = async (identifier) => {
-  // identifier bisa channel_id (UC...) atau videoId (11 karakter)
-  const isVideoId = identifier.length === 11 && !identifier.startsWith('UC');
+  if (!identifier) return false;
+  const cleanId = identifier.trim();
+  const isVideoId = cleanId.length === 11 && !cleanId.startsWith('UC');
   const url = isVideoId
-    ? `https://www.youtube.com/watch?v=${identifier}`
-    : `https://www.youtube.com/channel/${identifier}/live`;
+    ? `https://www.youtube.com/watch?v=${cleanId}`
+    : `https://www.youtube.com/channel/${cleanId}/live`;
 
   try {
     const response = await fetch(url, {
-      signal: AbortSignal.timeout(10000),
+      signal: AbortSignal.timeout(9000),
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
       }
     });
-    if (!response.ok) return null; // ambiguous
+    if (!response.ok) return null;
 
     const html = await response.text();
 
-    // STEP 1: Ada marker live?
-    const hasIsLiveMarker = /"isLive"\s*:\s*true/.test(html) ||
-                            /"isLiveNow"\s*:\s*true/.test(html) ||
-                            /"style"\s*:\s*"LIVE"/.test(html) ||
-                            /"status"\s*:\s*"LIVE"/.test(html) ||
-                            html.includes('"style":"LIVE"') ||
-                            html.includes('"status":"LIVE"');
-    if (!hasIsLiveMarker) return false;
+    // STEP 1: Cek watch page
+    const canonicalMatch = html.match(/<link rel="canonical" href="([^"]+)">/);
+    const ogUrlMatch = html.match(/<meta property="og:url" content="([^"]+)">/);
+    const targetUrl = canonicalMatch?.[1] || ogUrlMatch?.[1] || '';
 
-    // STEP 2: Reject waiting room
-    const isWaitingRoom = /"isUpcoming"\s*:\s*true/.test(html) ||
-                          html.includes('upcomingEventData');
-    if (isWaitingRoom) return false;
+    const isWatchPage = targetUrl.includes('/watch?v=') || isVideoId;
+    if (!isWatchPage) {
+      return false; // Halaman channel biasa -> OFFLINE
+    }
 
-    // STEP 3: Multi-signal confirmation (min 2)
-    const signals = [
-      html.includes('isLiveContent'),
-      html.includes('streamingData'),
-      html.includes('videoDetails'),
-      html.includes('hlsManifestUrl'),
-      html.includes('activeDashManifestUrl'),
-      html.includes('"style":"LIVE"'),
-      html.includes('liveChunkReadahead'),
-      html.includes('broadcastEventId'),
-      /"isLive"\s*:\s*true/.test(html),
-      /"isLiveContent"\s*:\s*true/.test(html),
-    ];
-    const confirmedCount = signals.filter(Boolean).length;
-    if (confirmedCount < 2) return false;
+    // STEP 2: Extract ytInitialPlayerResponse
+    const playerMatch = html.match(/var ytInitialPlayerResponse\s*=\s*(\{.+?\});(?:var|<\/script>)/s) ||
+                        html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\});/s);
+    
+    if (playerMatch) {
+      try {
+        const playerObj = JSON.parse(playerMatch[1]);
+        const vd = playerObj.videoDetails;
+        if (vd) {
+          const isUpcoming = playerObj.playabilityStatus?.liveStreamability?.liveStreamabilityRenderer?.displayStatus === 'LIVE_STREAMABILITY_DISPLAY_STATUS_UPCOMING' ||
+                             vd.isUpcoming === true;
+          if (isUpcoming) return false;
 
-    // STEP 4: Verifikasi channel ownership
-    // Pastikan video yang terdeteksi memang milik channel target,
-    // bukan video rekomendasi dari channel lain yang kebetulan live.
-    if (!isVideoId) {
-      const channelIdInHtml =
-        html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/) ||
-        html.match(/"externalChannelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);
-      const detectedChannelId = channelIdInHtml ? channelIdInHtml[1] : null;
-      if (detectedChannelId && detectedChannelId !== identifier) {
-        console.log(`  [Check] ⚠️ Channel mismatch! Expected: ${identifier}, Got: ${detectedChannelId}. Video rekomendasi, bukan live channel ini.`);
+          const isLive = vd.isLive === true || vd.isLiveContent === true;
+          if (!isLive) return false;
+
+          if (!isVideoId && cleanId.startsWith('UC') && vd.channelId && vd.channelId !== cleanId) {
+            console.log(`  [Check] ⚠️ Channel mismatch! Expected: ${cleanId}, Got: ${vd.channelId}. Video rekomendasi dari channel lain.`);
+            return false;
+          }
+
+          return true;
+        }
+      } catch (e) {}
+    }
+
+    // STEP 3: Fallback
+    const hasIsLiveMarker = /"isLive"\s*:\s*true/.test(html) || /"isLiveNow"\s*:\s*true/.test(html) || html.includes('"style":"LIVE"');
+    const isWaitingRoom = /"isUpcoming"\s*:\s*true/.test(html) || html.includes('upcomingEventData');
+    if (!hasIsLiveMarker || isWaitingRoom) return false;
+
+    if (!isVideoId && cleanId.startsWith('UC')) {
+      const channelIdInHtml = html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);
+      if (channelIdInHtml && channelIdInHtml[1] !== cleanId) {
         return false;
       }
     }
 
     return true;
-
   } catch (err) {
     console.log(`  [Check] Error: ${err.message}`);
-    return null; // null = tidak bisa dicek, jangan cancel
+    return null;
   }
 };
 
@@ -157,7 +157,6 @@ const main = async () => {
   }
 
   console.log('\n=== SELESAI ===');
-  await pool.end();
   process.exit(0);
 };
 

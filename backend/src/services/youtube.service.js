@@ -123,9 +123,10 @@ export const checkYouTubeLiveViaScrape = async (identifier) => {
   const cleanId = identifier.trim();
 
   // Support videoId (11 chars), @handle, UC... channel ID, or legacy channel name
+  const isDirectVideoId = cleanId.length === 11 && !cleanId.startsWith('UC') && !cleanId.startsWith('@');
   const urlsToTry = [];
-  if (cleanId.length === 11 && !cleanId.startsWith('UC') && !cleanId.startsWith('@')) {
-    // Exact videoId URL
+
+  if (isDirectVideoId) {
     urlsToTry.push(`https://www.youtube.com/watch?v=${cleanId}`);
   } else if (cleanId.startsWith('@')) {
     urlsToTry.push(`https://www.youtube.com/${cleanId}/live`);
@@ -139,7 +140,7 @@ export const checkYouTubeLiveViaScrape = async (identifier) => {
   for (const url of urlsToTry) {
     try {
       const response = await fetch(url, {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(9000),
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept-Language': 'en-US,en;q=0.9',
@@ -150,130 +151,84 @@ export const checkYouTubeLiveViaScrape = async (identifier) => {
 
       const html = await response.text();
 
-      // ── STEP 1: Cek apakah ada indikator live ──────────────────────────────
-      const hasIsLiveMarker = /"isLive"\s*:\s*true/.test(html) ||
-                              /"isLiveNow"\s*:\s*true/.test(html) ||
-                              /"style"\s*:\s*"LIVE"/.test(html) ||
-                              /"status"\s*:\s*"LIVE"/.test(html) ||
-                              html.includes('"style":"LIVE"') ||
-                              html.includes('"status":"LIVE"');
+      // ── STEP 1: Verify Watch/Video Page ──────────────────────────────────────
+      // Jika channel SEDANG LIVE, YouTube /live akan merender watch page.
+      // Jika channel OFFLINE, YouTube /live tetap di channel page (bukan watch page).
+      const canonicalMatch = html.match(/<link rel="canonical" href="([^"]+)">/);
+      const ogUrlMatch = html.match(/<meta property="og:url" content="([^"]+)">/);
+      const targetUrl = canonicalMatch?.[1] || ogUrlMatch?.[1] || '';
 
-      if (!hasIsLiveMarker) continue;
-
-      // ── STEP 2: Reject Waiting Room / Upcoming streams ─────────────────────
-      // YouTube menaruh isLive:true juga di halaman Waiting Room (stream terjadwal
-      // yang belum mulai). Harus reject kondisi ini agar tidak false positive.
-      const isWaitingRoom = /"isUpcoming"\s*:\s*true/.test(html) ||
-                            html.includes('upcomingEventData');
-
-      if (isWaitingRoom) {
-        console.log(`[YouTube Scraper] ${url} → Waiting Room / Upcoming, BUKAN live aktif. Skip.`);
+      const isWatchPage = targetUrl.includes('/watch?v=') || isDirectVideoId;
+      if (!isWatchPage) {
+        // Channel page -> Channel 100% Offline (bukan sedang live stream)
         continue;
       }
 
-      // ── STEP 3: Konfirmasi stream benar-benar live (multi-signal robust check) ────────
-      // NOTE: activeDashManifestUrl sering TIDAK MUNCUL di HTML meskipun stream benar-benar live
-      // karena YouTube menyimpannya di signed URL internal atau deliver via JS runtime.
-      //
-      // Sinyal yang PALING RELIABLE untuk live aktif (bukan waiting room):
-      //   - isLiveContent: true      → YouTube sendiri mengkonfirmasi ini live content
-      //   - streamingData            → ada data streaming delivery (confirmed live feed)
-      //   - videoDetails             → metadata video tersedia (confirmed video exists)
-      //   - hlsManifestUrl           → HLS stream manifest (jika ada, 100% live)
-      //   - activeDashManifestUrl    → DASH stream manifest (jika ada, 100% live)
-      //   - style:LIVE               → badge LIVE di halaman YouTube
-      //
-      // Minimal 2 dari sinyal konfirmasi harus ada untuk konfirmasi live aktif:
-      const confirmationSignals = [
-        html.includes('isLiveContent'),
-        html.includes('streamingData'),
-        html.includes('videoDetails'),
-        html.includes('hlsManifestUrl'),
-        html.includes('activeDashManifestUrl'),
-        html.includes('"style":"LIVE"'),
-        html.includes('liveChunkReadahead'),
-        html.includes('broadcastEventId'),
-        /"isLive"\s*:\s*true/.test(html),
-        /"isLiveContent"\s*:\s*true/.test(html),
-      ];
-      const confirmedCount = confirmationSignals.filter(Boolean).length;
-
-      if (confirmedCount < 2) {
-        console.log(`[YouTube Scraper] ${url} → isLive:true tapi sinyal konfirmasi kurang (${confirmedCount}/2 minimum). Skip.`);
-        continue;
+      // ── STEP 2: Extract ytInitialPlayerResponse (Data Resmi Player YouTube) ──
+      const playerMatch = html.match(/var ytInitialPlayerResponse\s*=\s*(\{.+?\});(?:var|<\/script>)/s) ||
+                          html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\});/s);
+      
+      let playerResponse = null;
+      if (playerMatch) {
+        try {
+          playerResponse = JSON.parse(playerMatch[1]);
+        } catch (e) {}
       }
 
-      // ── STEP 4: Verifikasi channel ownership ───────────────────────────────
-      // YouTube kadang menyisipkan video REKOMENDASI dari channel LAIN di halaman
-      // /channel/UC.../live (misalnya live esports/gaming asing yang sedang trending).
-      // Layer 1: cek channelId dari HTML scraping
-      // Layer 2 (fallback): jika HTML tidak mengandung channelId, verifikasi via YouTube API
+      if (playerResponse && playerResponse.videoDetails) {
+        const vd = playerResponse.videoDetails;
+        const videoId = vd.videoId;
+        const channelId = vd.channelId;
+        const title = (vd.title || '').replace(/ - YouTube$/, '').trim();
+        const isLive = vd.isLive === true || vd.isLiveContent === true;
+        const isUpcoming = playerResponse.playabilityStatus?.liveStreamability?.liveStreamabilityRenderer?.displayStatus === 'LIVE_STREAMABILITY_DISPLAY_STATUS_UPCOMING' ||
+                           vd.isUpcoming === true;
+
+        if (isUpcoming) {
+          console.log(`[YouTube Scraper] ${url} → Waiting Room / Upcoming (${title}). Skip.`);
+          continue;
+        }
+
+        if (!isLive) {
+          console.log(`[YouTube Scraper] ${url} → Video ${videoId} bukan live aktif. Skip.`);
+          continue;
+        }
+
+        // Channel ownership verification: jika check channel UC..., pastikan video milik channel ini!
+        if (cleanId.startsWith('UC') && channelId && channelId !== cleanId) {
+          console.log(`[YouTube Scraper] ⛔ Channel mismatch! Expected: ${cleanId}, Got: ${channelId} (${vd.author || title}). Tolak video rekomendasi asing.`);
+          continue;
+        }
+
+        console.log(`[YouTube Scraper] ${url} → ✅ LIVE DIKONFIRMASI: videoId: ${videoId} | title: "${title}" | channel: ${channelId}`);
+        return { isLive: true, videoId, title };
+      }
+
+      // ── STEP 3: Fallback Regex Validation (Jika playerResponse tidak ter-parse) ──
+      const videoIdMatch = targetUrl.match(/watch\?v=([a-zA-Z0-9_-]{11})/) ||
+                           html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/);
+      const videoId = videoIdMatch ? videoIdMatch[1] : null;
+      if (!videoId) continue;
+
+      const isLiveMarker = /"isLive"\s*:\s*true/.test(html) || /"isLiveNow"\s*:\s*true/.test(html) || html.includes('"style":"LIVE"');
+      const isWaitingRoom = /"isUpcoming"\s*:\s*true/.test(html) || html.includes('upcomingEventData');
+
+      if (!isLiveMarker || isWaitingRoom) continue;
+
+      // Cek channelId di HTML
       if (cleanId.startsWith('UC')) {
-        const channelIdInHtml =
-          html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/) ||
-          html.match(/"externalChannelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);  
-        const detectedChannelId = channelIdInHtml ? channelIdInHtml[1] : null;
-
-        if (detectedChannelId) {
-          // HTML channel check tersedia — langsung verifikasi
-          if (detectedChannelId !== cleanId) {
-            console.log(`[YouTube Scraper] ⚠️ Channel mismatch (HTML)! Expected: ${cleanId}, Got: ${detectedChannelId}. Skip.`);
-            continue;
-          }
-        } else {
-          // HTML tidak mengandung channelId (YouTube mungkin ubah format) →
-          // Fallback ke YouTube API v3 untuk verifikasi ownership secara resmi
-          const apiKey = getApiKey();
-          if (apiKey) {
-            // Extract videoId dulu untuk bisa query API
-            const vidMatch = html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
-                             html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/);  
-            const candidateVideoId = vidMatch ? vidMatch[1] : null;
-            if (candidateVideoId) {
-              try {
-                const apiUrl = new URL(`${YOUTUBE_API_BASE}/videos`);
-                apiUrl.searchParams.set('part', 'snippet');
-                apiUrl.searchParams.set('id', candidateVideoId);
-                apiUrl.searchParams.set('key', apiKey);
-                const apiRes = await fetch(apiUrl.toString(), { signal: AbortSignal.timeout(5000) });
-                if (apiRes.ok) {
-                  const apiData = await apiRes.json();
-                  const videoChannelId = apiData.items?.[0]?.snippet?.channelId;
-                  if (videoChannelId && videoChannelId !== cleanId) {
-                    console.log(`[YouTube Scraper] ⚠️ Channel mismatch (API)! Expected: ${cleanId}, Got: ${videoChannelId}. Video rekomendasi dari channel lain. Skip.`);
-                    continue;
-                  } else if (videoChannelId) {
-                    console.log(`[YouTube Scraper] ✅ Channel ownership dikonfirmasi via API: ${videoChannelId} === ${cleanId}`);
-                  }
-                }
-              } catch (apiErr) {
-                // API error → tidak bisa konfirmasi, biarkan lolos (hindari false negative)
-                console.warn(`[YouTube Scraper] API ownership check gagal: ${apiErr.message}. Lanjut tanpa konfirmasi.`);
-              }
-            }
-          } else {
-            console.log(`[YouTube Scraper] channelId tidak ada di HTML & tidak ada API key — ownership tidak dapat dikonfirmasi. Lanjut.`);
-          }
+        const channelMatch = html.match(/"channelId"\s*:\s*"(UC[a-zA-Z0-9_-]{20,})"/);
+        if (channelMatch && channelMatch[1] !== cleanId) {
+          console.log(`[YouTube Scraper] ⛔ Channel mismatch (HTML fallback)! Expected: ${cleanId}, Got: ${channelMatch[1]}. Skip.`);
+          continue;
         }
       }
 
-      // ── Semua validasi lolos → stream benar-benar live ─────────────────────
-      // Extract videoId: prioritaskan canonical URL og:url karena paling akurat
-      const videoIdMatch = html.match(/og:url" content="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
-                           html.match(/canonical" href="https:\/\/www\.youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})"/) ||
-                           html.match(/"videoId":"([a-zA-Z0-9_-]{11})"/) ||
-                           html.match(/href="\/watch\?v=([a-zA-Z0-9_-]{11})"/); 
-      const videoId = videoIdMatch ? videoIdMatch[1] : null;
-
       const titleMatch = html.match(/<meta property="og:title" content="([^"]+)"/) ||
-                         html.match(/<title>(.*?)<\/title>/) ||
-                         html.match(/"title":\{"runs":\[\{"text":"([^"]+)"\}/);
-      let title = titleMatch ? (titleMatch[1] || titleMatch[2]) : null;
-      if (title) {
-        title = title.replace(/ - YouTube$/, '').trim();
-      }
+                         html.match(/<title>(.*?)<\/title>/);
+      let title = titleMatch ? (titleMatch[1] || titleMatch[2]).replace(/ - YouTube$/, '').trim() : null;
 
-      console.log(`[YouTube Scraper] ${url} → ✅ LIVE DIKONFIRMASI (${confirmedCount} sinyal). videoId: ${videoId} | title: ${title}`);
+      console.log(`[YouTube Scraper] ${url} → ✅ LIVE DIKONFIRMASI (fallback): videoId: ${videoId} | title: ${title}`);
       return { isLive: true, videoId, title };
     } catch (err) {
       console.warn(`[YouTube Scraper] Failed to scrape ${url}: ${err.message}`);
