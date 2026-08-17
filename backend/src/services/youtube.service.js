@@ -26,8 +26,8 @@ const SCHEDULE_MATCH_WINDOW_MINUTES = 180;
 // Toleransi keterlambatan sebelum alert dikirim (menit)
 const LATENESS_ALERT_THRESHOLD_MINUTES = 10;
 
-// Buffer konfirmasi 2-strike: 10 menit (agar siklus cron ke-2 di 15 menit langsung terkonfirmasi)
-const PENDING_CONFIRM_MS = 10 * 60 * 1000;
+// Buffer konfirmasi 2-strike: 2 menit (agar siklus cron berikutnya langsung terkonfirmasi cepat)
+const PENDING_CONFIRM_MS = 2 * 60 * 1000;
 
 // ── DB-backed 2-Strike Confirmation Buffer ───────────────────────────────────
 // Menggunakan tabel live_detection_buffer (TIDAK in-memory)
@@ -902,13 +902,13 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
 
                 // ── Guard 3: 2-Strike Confirmation (DB-Backed, Persistent) ───────────────────
                 // Buffer tersimpan di database → bertahan meski PM2 restart / server reboot
-                // BYPASS: jika stream sudah berjalan > 10 menit (confirmed stable live dari API)
+                // BYPASS: jika stream sudah berjalan > 2 menit (confirmed stable live dari API/scraper)
                 const now = new Date();
 
-                // Bypass 2-strike jika API mengkonfirmasi stream sudah > 10 menit berjalan
+                // Bypass 2-strike jika stream sudah > 2 menit berjalan
                 const actualStartTime = liveInfo.actualStartTime || null;
                 const streamRunningMs = actualStartTime ? (now.getTime() - new Date(actualStartTime).getTime()) : 0;
-                const isAlreadyRunningLong = streamRunningMs > 10 * 60 * 1000; // > 10 menit
+                const isAlreadyRunningLong = streamRunningMs > 2 * 60 * 1000; // > 2 menit
 
                 if (isAlreadyRunningLong) {
                   console.log(`[YouTube Service] ✅ ${displayName} bypass 2-strike (stream sudah berjalan ${Math.floor(streamRunningMs/60000)} menit). Langsung create schedule...`);
@@ -920,13 +920,13 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                   if (!pending || pending.video_id !== liveInfo.videoId) {
                     // Deteksi pertama kali → simpan ke DB buffer, tunggu siklus berikutnya
                     await dbBuffer.set(account.channel_id, liveInfo.videoId, displayName);
-                    console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Tunggu konfirmasi siklus ke-2 (~15 menit)...`);
+                    console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Tunggu konfirmasi siklus ke-2 (~2 menit)...`);
                     continue;
                   }
 
                   const elapsedMs = now.getTime() - new Date(pending.first_seen_at).getTime();
                   if (elapsedMs < PENDING_CONFIRM_MS) {
-                    console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi DB (${Math.floor(elapsedMs/60000)} mnt < 16 mnt). Menunggu...`);
+                    console.log(`[YouTube Service] 🟡 ${displayName} masih dalam buffer konfirmasi DB (${Math.floor(elapsedMs/60000)} mnt < 2 mnt). Menunggu...`);
                     continue;
                   }
                 }
