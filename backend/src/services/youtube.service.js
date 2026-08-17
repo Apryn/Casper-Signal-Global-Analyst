@@ -660,50 +660,59 @@ const STREAMER_KEYWORD_ALIASES = [
   { keywords: ['chen', 'chenn', 'bg chenn', 'anandarioo'], canonicalName: 'bg chenn' },
 ];
 
+// Helper: whole-word match (tidak boleh substring acak)
+const matchesWholeWord = (text, word) => {
+  // Escape regex special chars di word
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Whole word: dikelilingi non-alphanumeric atau awal/akhir string
+  const re = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, 'i');
+  return re.test(text);
+};
+
 // Helper to match streamer by live title
 const findStreamerByLiveTitle = (title, streamers) => {
   if (!title) return null;
   const normalizedTitle = title.toLowerCase();
   
-  // 1. Check keyword alias map first for direct hits
+  // 1. Prioritas tertinggi: cek alias keyword dengan whole-word matching
   for (const aliasGroup of STREAMER_KEYWORD_ALIASES) {
     for (const kw of aliasGroup.keywords) {
-      if (normalizedTitle.includes(kw)) {
-        const matched = streamers.find(s => s.nama.toLowerCase().includes(aliasGroup.canonicalName) || aliasGroup.canonicalName.includes(s.nama.toLowerCase()));
+      // Hanya match jika keyword minimal 4 karakter (hindari kata umum pendek)
+      if (kw.length >= 4 && matchesWholeWord(normalizedTitle, kw)) {
+        const matched = streamers.find(s =>
+          s.nama.toLowerCase().includes(aliasGroup.canonicalName) ||
+          aliasGroup.canonicalName.includes(s.nama.toLowerCase())
+        );
         if (matched) {
+          console.log(`[TitleMatch] Keyword "${kw}" cocok → streamer: ${matched.nama}`);
           return matched;
         }
       }
     }
   }
 
-  // 2. Sort by length desc to match longer names first
+  // 2. Match nama lengkap streamer (whole-word)
   const sortedStreamers = [...streamers].sort((a, b) => b.nama.length - a.nama.length);
-  
   for (const streamer of sortedStreamers) {
     const normalizedName = streamer.nama.toLowerCase();
-    
-    // Check full name
-    if (normalizedTitle.includes(normalizedName)) {
+    if (matchesWholeWord(normalizedTitle, normalizedName)) {
+      console.log(`[TitleMatch] Nama penuh "${normalizedName}" cocok (whole-word) → ${streamer.nama}`);
       return streamer;
     }
-    
-    // Check parts
-    const parts = normalizedName.split(/\s+/).filter(part => part.length > 2);
+  }
+
+  // 3. Match per-part nama (whole-word, minimal 5 karakter agar tidak false positive)
+  for (const streamer of sortedStreamers) {
+    const parts = streamer.nama.toLowerCase().split(/\s+/).filter(p => p.length >= 5);
     for (const part of parts) {
-      if (normalizedTitle.includes(part)) {
+      if (matchesWholeWord(normalizedTitle, part)) {
+        console.log(`[TitleMatch] Part "${part}" cocok (whole-word) → ${streamer.nama}`);
         return streamer;
-      }
-      
-      // Lenient check: if name ends with double letter (e.g. keylaa -> keyla)
-      if (part.length > 3 && part[part.length - 1] === part[part.length - 2]) {
-        const sliced = part.slice(0, -1);
-        if (normalizedTitle.includes(sliced)) {
-          return streamer;
-        }
       }
     }
   }
+
+  // Tidak ada yang cocok → kembalikan null, jangan tebak-tebak
   return null;
 };
 
