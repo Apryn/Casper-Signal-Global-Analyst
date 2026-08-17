@@ -644,20 +644,34 @@ const handleChannelOffline = async (account, sendNotification = async () => {}) 
   console.log(`[YouTube Service] ✅ ${nama} selesai live ${platformName} — durasi: ${formattedDur}`);
 };
 
-// Streamer keyword aliases for 100% accurate title attribution
+// Streamer keyword aliases for title attribution
+// ⚠️  HANYA masukkan kata yang UNIK dan TIDAK mungkin muncul di judul stream random
+// Jangan masukkan kata umum bahasa Indonesia/Inggris seperti: ratu, rival, got, bila, dara, chen, ajo, candle, bray
 const STREAMER_KEYWORD_ALIASES = [
-  { keywords: ['bray', 'brayy', 'arief', 'candle'], canonicalName: 'brayy' },
-  { keywords: ['rival', 'suhanda'], canonicalName: 'rival suhanda' },
-  { keywords: ['ajo'], canonicalName: 'ajo' },
-  { keywords: ['tizza', 'teizza', 'got'], canonicalName: 'tizza' },
-  { keywords: ['ratu', 'valencia'], canonicalName: 'ratu' },
-  { keywords: ['aline'], canonicalName: 'aline' },
-  { keywords: ['keyla', 'keylaa'], canonicalName: 'keylaa' },
-  { keywords: ['qamil', 'alvaro', 'alvano', 'laflanca'], canonicalName: 'laflanca' },
-  { keywords: ['syabila', 'bila'], canonicalName: 'syabila' },
-  { keywords: ['bagas', 'bgbas'], canonicalName: 'bagas' },
-  { keywords: ['katrine', 'katrineely', 'dara'], canonicalName: 'katrineely' },
-  { keywords: ['chen', 'chenn', 'bg chenn', 'anandarioo'], canonicalName: 'bg chenn' },
+  // Brayy: hanya nickname unik "brayy" (double-y) yang unik
+  { keywords: ['brayy', 'kaisarbrayy'], canonicalName: 'brayy' },
+  // Rival Suhanda: "suhanda" unik, "rivalsuhanda" unik, "bgfibo" unik
+  { keywords: ['suhanda', 'rivalsuhanda', 'bgfibo', 'tukanggrafik'], canonicalName: 'rival suhanda' },
+  // Ajo: "ajocandle" unik (gabungan nama)
+  { keywords: ['ajocandle'], canonicalName: 'ajo' },
+  // Tizza/Teizza: "teizza" unik
+  { keywords: ['teizza', 'tizza'], canonicalName: 'tizza' },
+  // Ratu: "ratu valencia" (dua kata spesifik)
+  { keywords: ['ratu valencia'], canonicalName: 'ratu' },
+  // Aline: "alliine" unik (triple i), "alinecsp", "alline"
+  { keywords: ['alliine', 'alinecsp', 'alline_csp'], canonicalName: 'aline' },
+  // Keylaa: "keylaa" (double-a) unik, "keylaatrade"
+  { keywords: ['keylaa', 'keylaatrade', 'keylasginals'], canonicalName: 'keylaa' },
+  // Laflanca: "laflanca" unik, "qamil", "alvano"
+  { keywords: ['laflanca', 'qamil', 'alvano'], canonicalName: 'laflanca' },
+  // Syabila: "syabila" unik (nama spesifik)
+  { keywords: ['syabila'], canonicalName: 'syabila' },
+  // Bagas: "bagasdemn" unik, "bangbas"
+  { keywords: ['bagasdemn', 'bangbas', 'bgbas'], canonicalName: 'bagas' },
+  // Katrineely: "katrineely" unik, "katrinee", "snrholic", "snrdiary"
+  { keywords: ['katrineely', 'katrinee', 'snrholic', 'snrdiary'], canonicalName: 'katrineely' },
+  // BG Chenn: "bgchenn" unik, "masterteknikal", "anandarioo"
+  { keywords: ['bgchenn', 'masterteknikal', 'anandarioo', 'chenn'], canonicalName: 'bg chenn' },
 ];
 
 // Helper: whole-word match (tidak boleh substring acak)
