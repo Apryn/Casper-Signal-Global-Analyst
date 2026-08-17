@@ -982,15 +982,93 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
       }
       console.log('[YouTube Service] Live status check complete.');
     }
- 
-  // ── CATATAN: TikTok auto-detection via HTML scraping telah DINONAKTIFKAN ──────
-  // TikTok HTML sangat tidak reliable untuk scraping eksternal:
-  //   - Halaman offline embed JSON "liveRoom" meski status=4 (ended)
-  //   - Cloudflare sering block bot scraper
-  //   - Struktur HTML bisa berubah kapan saja tanpa notice
-  // 
-  // TikTok live sekarang dikelola MANUAL via Telegram bot:
-  //   /startlive tiktok   → mulai sesi live TikTok
-  //   /endlive            → selesai live
-  // ─────────────────────────────────────────────────────────────────────────────
+};
+
+// ── CORE: DETEKSI LIVE TIKTOK SECARA OTOMATIS (24/7) ───────────────────────
+
+/**
+ * Cek status live satu akun TikTok via SIGI_STATE parser resmi
+ */
+export const checkTikTokUserLive = async (username) => {
+  if (!username) return { isLive: false, roomId: null, title: null, viewerCount: 0 };
+  const cleanUser = username.replace(/^@/, '').trim();
+  const url = `https://www.tiktok.com/@${cleanUser}/live`;
+
+  try {
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(9000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      }
+    });
+    if (!res.ok) return { isLive: false, roomId: null, title: null, viewerCount: 0 };
+
+    const html = await res.text();
+    const sigiMatch = html.match(/<script id="SIGI_STATE" type="application\/json">([\s\S]+?)<\/script>/);
+    if (!sigiMatch) return { isLive: false, roomId: null, title: null, viewerCount: 0 };
+
+    const sigi = JSON.parse(sigiMatch[1]);
+    const liveRoomStatus = sigi.LiveRoom?.liveRoomStatus;
+    const roomStatus = sigi.LiveRoom?.liveRoomUserInfo?.liveRoom?.status;
+
+    // liveRoomStatus === 2 menandakan streamer sedang aktif Live di TikTok saat ini
+    const isLive = liveRoomStatus === 2 || (liveRoomStatus === 1 && roomStatus === 2);
+    const roomId = sigi.LiveRoom?.liveRoomUserInfo?.user?.roomId || null;
+    const title = sigi.LiveRoom?.liveRoomUserInfo?.liveRoom?.title || null;
+    const viewerCount = sigi.LiveRoom?.liveRoomUserInfo?.liveRoom?.liveRoomStats?.userCount || 0;
+
+    return {
+      isLive,
+      roomId,
+      title,
+      viewerCount,
+      liveLink: `https://www.tiktok.com/@${cleanUser}/live`
+    };
+  } catch (err) {
+    console.warn(`[TikTok Live Check Error] @${cleanUser}: ${err.message}`);
+    return { isLive: false, roomId: null, title: null, viewerCount: 0 };
+  }
+};
+
+/**
+ * Mengecek semua akun TikTok streamer yang terdaftar di streamer_accounts
+ */
+export const checkTikTokLiveStatus = async (sendNotification = async () => {}) => {
+  try {
+    const accountsRes = await query(`
+      SELECT sa.id, sa.streamer_id, sa.username, sa.link, s.nama
+      FROM streamer_accounts sa
+      JOIN streamers s ON sa.streamer_id = s.id
+      WHERE sa.platform = 'TikTok'
+      ORDER BY s.nama ASC
+    `);
+
+    const accounts = accountsRes.rows;
+    if (accounts.length === 0) return;
+
+    console.log(`[TikTok Service] Checking ${accounts.length} TikTok account(s) for live status...`);
+
+    for (const acc of accounts) {
+      try {
+        const liveInfo = await checkTikTokUserLive(acc.username);
+
+        if (liveInfo.isLive) {
+          console.log(`[TikTok Service] 🔴 ${acc.nama} (@${acc.username}) TERDETEKSI LIVE TIKTOK!`);
+          await handleChannelLive(acc, liveInfo, sendNotification);
+        } else {
+          // Offline -> tutup sesi jika sebelumnya sedang live
+          await handleChannelOffline(acc, sendNotification);
+        }
+
+        await new Promise(r => setTimeout(r, 400));
+      } catch (err) {
+        console.error(`[TikTok Service] Error processing account @${acc.username}:`, err.message);
+      }
+    }
+
+    console.log('[TikTok Service] Live status check complete.');
+  } catch (err) {
+    console.error('[TikTok Service] Error in checkTikTokLiveStatus:', err.message);
+  }
 };

@@ -2,7 +2,7 @@ import { query } from '../config/db.js';
 import cron from 'node-cron';
 import { syncSocialMetrics, discoverNewContent } from './social.service.js';
 import { autoGenerateWeeklyEvaluations } from '../controllers/evaluation.controller.js';
-import { checkYouTubeLiveStatus, checkYouTubeLiveViaScrape, checkVideoLiveStatus } from './youtube.service.js';
+import { checkYouTubeLiveStatus, checkTikTokLiveStatus, checkYouTubeLiveViaScrape, checkVideoLiveStatus } from './youtube.service.js';
 
 let bot = null;
 
@@ -596,11 +596,11 @@ export const startCronJobs = (botInstance) => {
     cleanupStaleSchedules().catch(err => console.error('[Cron] Error running cleanupStaleSchedules:', err));
   }, { timezone: 'Asia/Jakarta' });
 
-  // ⏰ [YouTube Live Detection] — tiap 15 menit, 24/7 (24 jam nonstop)
-  // Setelah tiap live check, jalankan cleanupStaleSchedules untuk sweep waiting room false positives
+  // ⏰ [YouTube & TikTok Live Detection] — tiap 15 menit, 24/7 (24 jam nonstop)
   cron.schedule('*/15 * * * *', async () => {
-    console.log('[Cron] Running YouTube live status detection (24/7 15-min pure poll)...');
+    console.log('[Cron] Running YouTube & TikTok live status detection (24/7 15-min pure poll)...');
     await checkYouTubeLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkYouTubeLiveStatus:', err));
+    await checkTikTokLiveStatus(sendTelegramNotification).catch(err => console.error('[Cron] Error running checkTikTokLiveStatus:', err));
     // Langsung sweep schedule yang mungkin false positive (waiting room)
     await cleanupStaleSchedules().catch(err => console.error('[Cron] Error running post-detection cleanupStaleSchedules:', err));
   }, { timezone: 'Asia/Jakarta' });
