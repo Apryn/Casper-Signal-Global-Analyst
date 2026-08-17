@@ -446,27 +446,30 @@ export const cleanupStaleSchedules = async () => {
          AND start_time < NOW() - INTERVAL '36 hours'`
     );
 
-    // 2. Auto-complete stuck 'Live' entries (> 8h actual_start_time, atau > 12h dari start_time)
+    // 2. Auto-complete stuck 'Live' entries (> 12h actual_start_time, atau > 16h dari start_time)
+    // Diperbesar dari 8h ke 12h agar tidak menutup sesi live marathon yang masih berjalan
     const resLive = await query(
       `UPDATE schedule
        SET status = 'Completed',
            actual_end_time = COALESCE(actual_end_time, actual_start_time + INTERVAL '2 hours'),
            live_duration = COALESCE(live_duration, 2.0)
        WHERE status = 'Live'
-         AND (actual_start_time < NOW() - INTERVAL '8 hours' OR start_time < NOW() - INTERVAL '12 hours')`
+         AND (actual_start_time < NOW() - INTERVAL '12 hours' OR start_time < NOW() - INTERVAL '16 hours')`
     );
 
     // 3. Sweep YouTube 'Live' schedules yang ternyata sudah offline (waiting room false positive)
     //    PENTING: Hanya cancel jika scraper benar-benar KONFIRMASI tidak live.
     //    Jangan cancel jika scraper error/timeout (itu ambiguous, biarkan saja).
+    // Sweep jadwal yang sudah berjalan antara 1 jam - 12 jam
+    // Tidak menyentuh jadwal yang baru mulai (< 1 jam) maupun marathon panjang (> 12 jam) yang sudah ditangani step 2
     const liveYouTubeRes = await query(
       `SELECT sc.id, sc.live_link
        FROM schedule sc
        WHERE sc.status = 'Live'
          AND sc.platform = 'YouTube'
          AND sc.live_link LIKE '%/watch?v=%'
-         AND sc.actual_start_time > NOW() - INTERVAL '8 hours'
-         AND sc.actual_start_time < NOW() - INTERVAL '30 minutes'`
+         AND sc.actual_start_time > NOW() - INTERVAL '12 hours'
+         AND sc.actual_start_time < NOW() - INTERVAL '60 minutes'`
     );
 
     let waitingRoomCancelled = 0;
