@@ -2,7 +2,7 @@ import { query } from '../config/db.js';
 import cron from 'node-cron';
 import { syncSocialMetrics, discoverNewContent } from './social.service.js';
 import { autoGenerateWeeklyEvaluations } from '../controllers/evaluation.controller.js';
-import { checkYouTubeLiveStatus, checkTikTokLiveStatus, checkYouTubeLiveViaScrape, checkVideoLiveStatus } from './youtube.service.js';
+import { checkYouTubeLiveStatus, checkTikTokLiveStatus, checkYouTubeLiveViaScrape, checkVideoLiveStatus, checkTikTokUserLive } from './youtube.service.js';
 
 let bot = null;
 
@@ -446,50 +446,49 @@ export const cleanupStaleSchedules = async () => {
          AND start_time < NOW() - INTERVAL '36 hours'`
     );
 
-    // 2. Auto-complete stuck 'Live' entries (> 12h actual_start_time, atau > 16h dari start_time)
-    // Diperbesar dari 8h ke 12h agar tidak menutup sesi live marathon yang masih berjalan
-    const resLive = await query(
-      `UPDATE schedule
-       SET status = 'Completed',
-           actual_end_time = COALESCE(actual_end_time, actual_start_time + INTERVAL '2 hours'),
-           live_duration = COALESCE(live_duration, 2.0)
-       WHERE status = 'Live'
-         AND (actual_start_time < NOW() - INTERVAL '12 hours' OR start_time < NOW() - INTERVAL '16 hours')`
-    );
-
-    // 3. Sweep YouTube 'Live' schedules yang ternyata sudah offline (waiting room false positive)
-    //    PENTING: Hanya cancel jika scraper benar-benar KONFIRMASI tidak live.
-    //    Jangan cancel jika scraper error/timeout (itu ambiguous, biarkan saja).
-    // Sweep jadwal yang sudah berjalan antara 1 jam - 12 jam
-    // Tidak menyentuh jadwal yang baru mulai (< 1 jam) maupun marathon panjang (> 12 jam) yang sudah ditangani step 2
+    // 2. Sweep SEMUA jadwal berstatus 'Live' yang sudah berjalan > 30 menit
+    //    → Cek scraper. Hanya tutup jika scraper KONFIRMASI offline.
+    //    → Tidak ada lagi batas waktu paksa (8h/12h). Murni hasil scraper.
     const liveYouTubeRes = await query(
-      `SELECT sc.id, sc.live_link
+      `SELECT sc.id, sc.live_link, sc.platform
        FROM schedule sc
        WHERE sc.status = 'Live'
-         AND sc.platform = 'YouTube'
-         AND sc.live_link LIKE '%/watch?v=%'
-         AND sc.actual_start_time > NOW() - INTERVAL '12 hours'
-         AND sc.actual_start_time < NOW() - INTERVAL '60 minutes'`
+         AND sc.actual_start_time < NOW() - INTERVAL '30 minutes'`
     );
 
-    let waitingRoomCancelled = 0;
+    let scraperClosed = 0;
     for (const row of liveYouTubeRes.rows) {
       try {
-        const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]+)/)?.[1];
-        if (!videoId) continue;
+        let isLive = true; // Default fail-safe: anggap masih live
 
-        // Robust check (Scrape + API fallback) - HANYA cancel jika BENAR-BENAR tidak live
-        // Jika check error/timeout, biarkan (jangan cancel, ambiguous)
-        let isLive = true;
-        try {
-          isLive = await checkVideoLiveStatus(videoId);
-        } catch (err) {
-          console.log(`[Cron Cleanup] Error checking video status for schedule #${row.id}, skip cancel (ambiguous):`, err.message);
-          continue; // Jangan cancel jika check error
+        if (row.platform === 'YouTube' && row.live_link?.includes('/watch?v=')) {
+          // YouTube: verifikasi via videoId scraper
+          const videoId = row.live_link.match(/watch\?v=([a-zA-Z0-9_-]+)/)?.[1];
+          if (!videoId) continue;
+          try {
+            isLive = await checkVideoLiveStatus(videoId);
+          } catch (err) {
+            console.log(`[Cron Cleanup] YouTube check error #${row.id}, skip (ambiguous):`, err.message);
+            continue;
+          }
+        } else if (row.platform === 'TikTok' && row.live_link) {
+          // TikTok: verifikasi via username dari live_link
+          const username = row.live_link.match(/tiktok\.com\/@([^/?]+)/)?.[1];
+          if (!username) continue;
+          try {
+            const tiktokInfo = await checkTikTokUserLive(username);
+            isLive = tiktokInfo?.isLive ?? true;
+          } catch (err) {
+            console.log(`[Cron Cleanup] TikTok check error #${row.id}, skip (ambiguous):`, err.message);
+            continue;
+          }
+        } else {
+          // Platform tidak dikenali atau live_link kosong → skip, jangan tutup
+          continue;
         }
 
         if (!isLive) {
-          // Stream sudah offline / selesai live → tandai Completed dan simpan durasi live ke daily_reports
+          // Scraper konfirmasi OFFLINE → tandai Completed & simpan durasi ke daily_reports
           const scheduleRes = await query(
             `SELECT streamer_id, substitute_streamer_id, actual_start_time, start_time, live_duration 
              FROM schedule WHERE id = $1`,
@@ -523,18 +522,17 @@ export const cleanupStaleSchedules = async () => {
               );
             }
           }
-          waitingRoomCancelled++;
-          console.log(`[Cron Cleanup] Schedule #${row.id} selesai & ditandai Completed — YouTube checker konfirmasi stream offline.`);
+          scraperClosed++;
+          console.log(`[Cron Cleanup] Schedule #${row.id} (${row.platform}) ditutup — scraper konfirmasi OFFLINE.`);
         }
-        // Jika isLive = true → berarti masih live, biarkan saja
+        // isLive = true → masih live, tidak disentuh
       } catch (err) {
-        // Non-blocking: jangan crash seluruh cleanup karena satu schedule
         console.error(`[Cron Cleanup] Error checking schedule #${row.id}:`, err.message);
       }
     }
 
-    if (resScheduled.rowCount > 0 || resLive.rowCount > 0 || waitingRoomCancelled > 0) {
-      console.log(`[Cron] Cleaned up ${resScheduled.rowCount || 0} stale Scheduled, ${resLive.rowCount || 0} stuck Live, ${waitingRoomCancelled} waiting room false positives.`);
+    if (resScheduled.rowCount > 0 || scraperClosed > 0) {
+      console.log(`[Cron] Cleaned up ${resScheduled.rowCount || 0} stale Scheduled, ${scraperClosed} live sessions confirmed offline by scraper.`);
     }
   } catch (error) {
     console.error('[Cron] Error cleaning up stale schedules:', error.message);
