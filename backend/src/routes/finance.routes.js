@@ -19,7 +19,8 @@ import {
   deleteTransaction,
   getPenaltyAudit,
   saveSalaryAdjustment,
-  toggleDailyExcusedStatus
+  toggleDailyExcusedStatus,
+  updateDailyLiveDuration
 } from '../controllers/finance.controller.js';
 
 const router = express.Router();
@@ -35,6 +36,7 @@ router.post('/change-pin', changePin);
 router.get('/penalty-audit', getPenaltyAudit);
 router.post('/penalty-audit/adjust', saveSalaryAdjustment);
 router.post('/penalty-audit/toggle-excuse', toggleDailyExcusedStatus);
+router.post('/penalty-audit/update-duration', updateDailyLiveDuration);
 
 // 3. Payroll Profiles
 router.get('/profiles', getProfiles);

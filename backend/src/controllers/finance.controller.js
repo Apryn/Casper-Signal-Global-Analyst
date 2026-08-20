@@ -859,3 +859,53 @@ export const toggleDailyExcusedStatus = async (req, res) => {
   }
 };
 
+export const updateDailyLiveDuration = async (req, res) => {
+  try {
+    const { streamerId, tanggal, liveDuration } = req.body;
+
+    if (!streamerId || !tanggal || liveDuration === undefined || liveDuration === null) {
+      return res.status(400).json({ message: 'streamerId, tanggal, dan liveDuration wajib diisi' });
+    }
+
+    const duration = parseFloat(liveDuration) || 0.0;
+
+    // Check if daily_reports exists for this date and streamer
+    const checkRes = await pool.query(`
+      SELECT id FROM daily_reports 
+      WHERE streamer_id = $1 AND tanggal = $2
+    `, [streamerId, tanggal]);
+
+    if (checkRes.rows.length > 0) {
+      await pool.query(`
+        UPDATE daily_reports
+        SET live_duration = $1,
+            reported_live_duration = $1,
+            kategori = 'Streaming'
+        WHERE streamer_id = $2 AND tanggal = $3
+      `, [duration, streamerId, tanggal]);
+    } else {
+      await pool.query(`
+        INSERT INTO daily_reports (
+          streamer_id, tanggal, kategori, live_duration, reported_live_duration,
+          tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
+          chat_count, registration_count, ftd_count, raw_message
+        ) VALUES ($1, $2, 'Streaming', $3, $3, 0, 0, 0, 0, 0, 0, 0, '[Manual Input]')
+        ON CONFLICT (streamer_id, tanggal) DO UPDATE SET
+          live_duration = EXCLUDED.live_duration,
+          reported_live_duration = EXCLUDED.reported_live_duration,
+          kategori = EXCLUDED.kategori
+      `, [streamerId, tanggal, duration]);
+    }
+
+    res.json({
+      success: true,
+      message: `Durasi live tgl ${tanggal} berhasil diubah menjadi ${duration} jam`,
+      live_duration: duration
+    });
+  } catch (err) {
+    console.error('[Finance updateDailyLiveDuration] Error:', err);
+    res.status(500).json({ message: 'Gagal mengubah durasi live' });
+  }
+};
+
+

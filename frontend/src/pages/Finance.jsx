@@ -407,6 +407,30 @@ const Finance = () => {
     }
   };
 
+  const handleUpdateDailyLiveDuration = async (day) => {
+    if (!drilldownStreamer) return;
+    const currentDur = day.liveDuration || 0;
+    const input = prompt(`Masukkan durasi live aktual untuk ${drilldownStreamer.nama} pada tanggal ${day.shortDate} (dalam satuan jam, misal: 4.5):`, String(currentDur || '4.5'));
+    if (input === null) return; // User cancelled
+
+    const numDuration = parseFloat(input.replace(',', '.'));
+    if (isNaN(numDuration) || numDuration < 0) {
+      alert('Durasi live harus berupa angka jam yang valid (contoh: 4.5 atau 4)');
+      return;
+    }
+
+    try {
+      await api.post('/finance/penalty-audit/update-duration', {
+        streamerId: drilldownStreamer.streamerId,
+        tanggal: day.dateStr,
+        liveDuration: numDuration
+      });
+      await fetchPenaltyAudit();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal mengubah durasi live');
+    }
+  };
+
   const handleSaveCustomAdj = async (e) => {
     e.preventDefault();
     if (!editingCustomAdjStreamer) return;
@@ -2784,14 +2808,29 @@ const Finance = () => {
                         {day.isSunday && <span className="ml-1.5 text-[9.5px] text-amber-400 font-normal">(Minggu)</span>}
                       </td>
                       <td className="py-3 px-3">
-                        <div className="font-bold text-white flex items-center gap-1.5">
-                          <span>{day.statusLabel}</span>
+                        <div className="flex items-center justify-between gap-2">
+                          <div>
+                            <div className="font-bold text-white flex items-center gap-1.5">
+                              <span>{day.statusLabel}</span>
+                            </div>
+                            {day.hasReport && day.liveDuration > 0 && (
+                              <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                                Aktual: {day.liveDuration} Jam Live
+                              </span>
+                            )}
+                          </div>
+
+                          {!day.isSunday && (
+                            <button
+                              onClick={() => handleUpdateDailyLiveDuration(day)}
+                              className="px-2 py-1 rounded-lg text-[10.5px] font-extrabold text-indigo-300 bg-indigo-950/60 border border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-xs transition-all flex items-center gap-1 shrink-0"
+                              title="Ubah durasi live tanggal ini (otomatis sinkron ke Daily Report & Audit)"
+                            >
+                              <Edit3 className="h-3 w-3 text-amber-400" />
+                              <span>{day.liveDuration > 0 ? `${day.liveDuration} Jam` : 'Set Durasi'}</span>
+                            </button>
+                          )}
                         </div>
-                        {day.hasReport && day.liveDuration > 0 && (
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            Aktual: {day.liveDuration} Jam Live
-                          </span>
-                        )}
                       </td>
                       <td className="py-3 px-3 text-right font-mono">
                         {day.shortagePenalty > 0 ? (
