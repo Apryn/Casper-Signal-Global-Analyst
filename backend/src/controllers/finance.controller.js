@@ -651,6 +651,9 @@ export const getPenaltyAudit = async (req, res) => {
         const rep = reportMap[key];
         const isSunday = d.dayOfWeek === 0;
 
+        const isCompensated = rep?.status_izin === 'Kompensasi';
+        const isExcused = (rep && (rep.status_izin === 'Izin' || rep.status_izin === 'Kompensasi')) || isSunday;
+
         const dayItem = {
           dateStr: d.dateStr,
           shortDate: d.shortDate,
@@ -664,7 +667,8 @@ export const getPenaltyAudit = async (req, res) => {
           rawMessage: rep?.raw_message || null,
           statusIzin: rep?.status_izin || (isSunday ? 'Izin' : 'Normal'),
           catatanIzin: rep?.catatan_izin || (isSunday ? 'Libur Minggu' : ''),
-          isExcused: (rep && rep.status_izin === 'Izin') || isSunday,
+          isExcused,
+          isCompensated,
           shortageHours: 0,
           shortagePenalty: 0,
           noReportPenalty: 0,
@@ -676,8 +680,16 @@ export const getPenaltyAudit = async (req, res) => {
 
         if (dayItem.isExcused) {
           excusedDaysCount++;
-          dayItem.statusLabel = isSunday ? 'Libur Minggu' : (rep?.catatan_izin ? `Izin: ${rep.catatan_izin}` : 'Izin Sah (ACC)');
-          dayItem.statusColor = 'amber';
+          if (isSunday) {
+            dayItem.statusLabel = 'Libur Minggu';
+            dayItem.statusColor = 'amber';
+          } else if (isCompensated) {
+            dayItem.statusLabel = rep?.catatan_izin ? `🔄 Kompensasi: ${rep.catatan_izin}` : '🔄 Kompensasi Jam';
+            dayItem.statusColor = 'cyan';
+          } else {
+            dayItem.statusLabel = rep?.catatan_izin ? `Izin: ${rep.catatan_izin}` : 'Izin Sah (ACC)';
+            dayItem.statusColor = 'amber';
+          }
         } else if (rep) {
           if (rep.kategori === 'Non Streaming') {
             offDaysCount++;
@@ -772,6 +784,13 @@ export const getPenaltyAudit = async (req, res) => {
         customDeduction,
         notes: adj.notes || '',
         isVerified: !!adj.is_verified,
+        compensationNotes: dailyBreakdown
+          .filter((d) => d.isCompensated)
+          .map((d) => ({
+            date: d.shortDate,
+            dateStr: d.dateStr,
+            note: d.catatanIzin || 'Hutang Kompensasi Jam'
+          })),
         totalPenalties,
         netSalary,
         dailyBreakdown
@@ -829,14 +848,14 @@ export const saveSalaryAdjustment = async (req, res) => {
 
 export const toggleDailyExcusedStatus = async (req, res) => {
   try {
-    const { streamerId, tanggal, isExcused, catatan } = req.body;
+    const { streamerId, tanggal, isExcused, statusIzin, catatan } = req.body;
 
     if (!streamerId || !tanggal) {
       return res.status(400).json({ message: 'streamerId dan tanggal wajib diisi' });
     }
 
-    const targetStatus = isExcused ? 'Izin' : 'Normal';
-    const noteText = catatan || (isExcused ? 'Dispensasi Izin WA' : '');
+    const targetStatus = statusIzin || (isExcused ? 'Izin' : 'Normal');
+    const noteText = catatan || (targetStatus === 'Kompensasi' ? 'Hutang Kompensasi Jam' : targetStatus === 'Izin' ? 'Dispensasi Izin WA' : '');
 
     // Check if report exists
     const checkRes = await pool.query(`
@@ -864,7 +883,12 @@ export const toggleDailyExcusedStatus = async (req, res) => {
       `, [streamerId, tanggal, targetStatus, noteText]);
     }
 
-    res.json({ success: true, message: `Status izin tgl ${tanggal} berhasil diubah ke ${targetStatus}` });
+    res.json({
+      success: true,
+      message: `Status izin tgl ${tanggal} berhasil diubah ke ${targetStatus}`,
+      status_izin: targetStatus,
+      catatan_izin: noteText
+    });
   } catch (err) {
     console.error('[Finance toggleDailyExcusedStatus] Error:', err);
     res.status(500).json({ message: 'Gagal mengubah status izin' });

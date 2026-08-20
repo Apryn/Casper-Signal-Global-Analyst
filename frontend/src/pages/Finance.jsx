@@ -401,11 +401,34 @@ const Finance = () => {
         streamerId: drilldownStreamer.streamerId,
         tanggal: day.dateStr,
         isExcused: targetStatus,
+        statusIzin: targetStatus ? 'Izin' : 'Normal',
         catatan: note || (targetStatus ? 'Dispensasi Izin WA' : '')
       });
       await fetchPenaltyAudit();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal mengubah status izin');
+    }
+  };
+
+  const handleSetDailyCompensation = async (day) => {
+    if (!drilldownStreamer) return;
+    const defaultShort = day.shortageHours > 0 ? `${day.shortageHours} Jam` : '2 Jam';
+    const input = prompt(
+      `Masukkan catatan hutang kompensasi jam untuk ${drilldownStreamer.nama} tgl ${day.shortDate}:\n(Contoh: Kurang ${defaultShort} (Kendala akun, janji ganti tgl 16)):`,
+      `Kurang ${defaultShort} (Kendala akun, janji ganti hari berikutnya)`
+    );
+    if (input === null) return; // User cancelled
+
+    try {
+      await api.post('/finance/penalty-audit/toggle-excuse', {
+        streamerId: drilldownStreamer.streamerId,
+        tanggal: day.dateStr,
+        statusIzin: 'Kompensasi',
+        catatan: input || 'Hutang Kompensasi Jam'
+      });
+      await fetchPenaltyAudit();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyimpan catatan kompensasi');
     }
   };
 
@@ -538,6 +561,14 @@ const Finance = () => {
 
     if (s.customBonus > 0) {
       text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
+    }
+
+    // Hutang Kompensasi Jam Notes (jika ada)
+    if (s.compensationNotes && s.compensationNotes.length > 0) {
+      text += `\n📌 *CATATAN HUTANG KOMPENSASI JAM LIVE:*\n`;
+      s.compensationNotes.forEach((c) => {
+        text += `• ${c.date}: ${c.note} (Denda ditangguhkan/bebas potongan)\n`;
+      });
     }
 
     text += `------------------------------------\n`;
@@ -3033,6 +3064,24 @@ const Finance = () => {
                       <td className="py-3 px-3 text-center">
                         {day.isSunday ? (
                           <span className="text-[10px] text-slate-500 font-bold">Libur Rutin</span>
+                        ) : day.isCompensated ? (
+                          <div className="flex flex-col items-center justify-center gap-1">
+                            <span className="text-[10px] text-cyan-300 font-extrabold bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-500/40 shadow-tactile-xs">
+                              🔄 Hutang Kompensasi (Rp 0)
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[9px] text-cyan-400/80 font-mono italic max-w-[140px] truncate" title={day.catatanIzin}>
+                                {day.catatanIzin}
+                              </span>
+                              <button
+                                onClick={() => handleToggleDailyExcuse(day)}
+                                className="text-[9.5px] text-slate-400 hover:text-rose-400 underline cursor-pointer"
+                                title="Batalkan Kompensasi"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                          </div>
                         ) : day.isExcused ? (
                           <div className="flex items-center justify-center gap-1">
                             <span className="text-[10px] text-amber-400 font-extrabold bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
@@ -3047,13 +3096,22 @@ const Finance = () => {
                             </button>
                           </div>
                         ) : (
-                          <button
-                            onClick={() => handleToggleDailyExcuse(day)}
-                            className="px-2 py-1 rounded text-[10.5px] font-extrabold text-amber-300 bg-amber-950/40 border border-amber-500/40 hover:bg-amber-500 hover:text-black transition-all"
-                            title="Tandai izin sah via WA agar bebas denda"
-                          >
-                            + ACC Izin WA
-                          </button>
+                          <div className="flex items-center justify-center gap-1 flex-wrap">
+                            <button
+                              onClick={() => handleToggleDailyExcuse(day)}
+                              className="px-2 py-1 rounded text-[10.5px] font-extrabold text-amber-300 bg-amber-950/40 border border-amber-500/40 hover:bg-amber-500 hover:text-black transition-all"
+                              title="Tandai izin sah via WA agar bebas denda"
+                            >
+                              + Izin WA
+                            </button>
+                            <button
+                              onClick={() => handleSetDailyCompensation(day)}
+                              className="px-2 py-1 rounded text-[10.5px] font-extrabold text-cyan-300 bg-cyan-950/40 border border-cyan-500/40 hover:bg-cyan-500 hover:text-black transition-all"
+                              title="Tandai kompensasi / janji ganti jam di hari berikutnya (bebas denda & tertulis di slip)"
+                            >
+                              🔄 Kompensasi
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
