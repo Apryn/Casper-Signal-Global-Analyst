@@ -3348,15 +3348,15 @@ const Finance = () => {
                             <span className="text-slate-500 text-xs">Libur Rutin</span>
                           ) : (
                             <div className="flex items-center gap-2 flex-wrap">
-                              {day.statusLabel === 'OK' ? (
+                              {day.liveDuration >= 4.0 ? (
                                 <span className="inline-flex items-center gap-1 text-emerald-400 font-medium text-xs">
                                   <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{day.liveDuration || 4} Jam Live</span>
+                                  <span>{day.liveDuration} Jam Live</span>
                                 </span>
                               ) : day.liveDuration > 0 ? (
                                 <span className="inline-flex items-center gap-1 text-amber-400 font-medium text-xs">
                                   <Clock className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{day.liveDuration} Jam Live (Kurang {4 - day.liveDuration}h)</span>
+                                  <span>{day.liveDuration} Jam Live (Kurang {(4.0 - day.liveDuration).toFixed(1)}h)</span>
                                 </span>
                               ) : (
                                 <span className="text-slate-400 text-xs">Tidak Live / Absen</span>
