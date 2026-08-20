@@ -18,8 +18,9 @@ echo ""
 # ── Pull kode terbaru ─────────────────────────────────────────
 echo "▶ [1/4] Pull kode terbaru dari GitHub..."
 cd "$APP_DIR"
-git pull origin master
-echo "✅ Kode ter-update"
+git fetch origin master
+git reset --hard origin/master
+echo "✅ Kode ter-update ke commit terbaru"
 
 # ── Update dependencies backend & run migrations ──────────────
 echo ""
@@ -30,6 +31,8 @@ node src/db/migrate_live_tracking.js 2>/dev/null || true
 node src/db/migrate_schedule_live_duration.js 2>/dev/null || true
 node src/db/migrate_live_detection_buffer.js 2>/dev/null || true
 node src/db/fix_anomalous_viewer_history.js 2>/dev/null || true
+node src/db/migrate_salary_adjustments.js 2>/dev/null || true
+node src/db/migrate_excuse_requests.js 2>/dev/null || true
 echo "✅ Dependencies & database migrations siap"
 
 # ── Rebuild frontend ──────────────────────────────────────────
