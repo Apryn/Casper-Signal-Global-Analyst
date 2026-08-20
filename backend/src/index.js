@@ -251,8 +251,8 @@ const launchBot = () => {
           `Instagram Reels : -\n` +
           `Facebook FP : -\n\n` +
           `LIVE:\n` +
-          `- Jam 09:00 (1.5 jam)\n` +
-          `- Jam 14:00 (1.5 jam)\n\n` +
+          `4 jam\n` +
+          `2 jam (Kompensasi tgl 15)  <-- Opsional jika ada ganti jam\n\n` +
           `CHAT:\n` +
           `15 chat masuk\n\n` +
           `REGISTRASI:\n` +
@@ -613,6 +613,12 @@ const launchBot = () => {
                        `• Chat Masuk: *${p.chatCount || 0}*\n` +
                        `• Registrasi: *${p.registrationCount || 0} user*\n` +
                        `• FTD: *${p.ftdCount || 0}*`;
+
+            if (p.compensation) {
+              replyMsg += `\n\n🔄 *KOMPENSASI JAM LIVE:*\n` +
+                          `• *+${p.compensation.addedDuration} Jam* dialokasikan ke tgl *${p.compensation.targetDate}*\n` +
+                          `• Total live tgl ${p.compensation.targetDate} kini: *${p.compensation.newTotalDuration} Jam* (Bebas Denda! 🎉)`;
+            }
           }
             
           await ctx.reply(replyMsg, replyOptions);

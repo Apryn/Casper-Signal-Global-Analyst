@@ -360,7 +360,19 @@ const extractUploads = (text) => {
 // ============================================================
 // STEP 5: Extract live duration (hours / sessions)
 // ============================================================
-const extractLive = (text) => {
+const extractLive = (rawText) => {
+  // If a line has both live and compensation like "Live: 4 Jam + 2 Jam (Kompensasi tgl 15)"
+  // or multi-line "4 jam \n 2 jam (Kompensasi tgl 15)", we strip out compensation lines
+  const lines = rawText.split('\n').map(l => {
+    if (/kompen(?:sasi)?|ganti\s*jam/i.test(l)) {
+      const beforePlus = l.split(/\+|kompen/i)[0];
+      return beforePlus.trim();
+    }
+    return l;
+  });
+
+  const text = lines.join('\n');
+
   // A: Detailed sessions with parentheses: e.g. "Jam 09:00 (1.5 jam)" or "Jam 14:00 (2 jam)"
   const parenthesizedJams = [...text.matchAll(/\(\s*(\d+(?:[.,]\d+)?)\s*jam\s*\)/gi)];
   if (parenthesizedJams.length > 0) {
@@ -410,6 +422,75 @@ const extractLive = (text) => {
   if (jamLines.length > 0) return jamLines.length;
 
   return 0;
+};
+
+// ============================================================
+// STEP 5B: Extract compensation live hours & target date
+// ============================================================
+const extractCompensation = (text, currentReportDate) => {
+  const lines = text.split('\n');
+  let compDuration = 0;
+  let targetDay = null;
+  let targetMonth = null;
+  let targetYear = null;
+  let rawNote = '';
+
+  for (const line of lines) {
+    if (/kompen(?:sasi)?|ganti\s*jam/i.test(line)) {
+      // Extract compensation hours
+      let hoursMatch = null;
+      if (line.includes('+')) {
+        const afterPlus = line.split('+')[1];
+        hoursMatch = afterPlus.match(/(\d+(?:[.,]\d+)?)\s*jam/i) || afterPlus.match(/(\d+(?:[.,]\d+)?)/);
+      } else {
+        hoursMatch = line.match(/(?:kompen\w*\s*:?\s*|\b)(\d+(?:[.,]\d+)?)\s*jam/i) || line.match(/:\s*(\d+(?:[.,]\d+)?)/) || line.match(/^(\d+(?:[.,]\d+)?)\s*jam/i);
+      }
+
+      if (hoursMatch) {
+        compDuration = parseFloat(hoursMatch[1].replace(',', '.'));
+      }
+
+      // Extract target date: e.g. "tgl 15", "tanggal 15", "tgl 15 agustus"
+      const dateMatch = line.match(/(?:tgl|tanggal|tgl\.|\btanggal\b)\s*[:\s]*(\d{1,2})(?:\s+([A-Za-z]+|\d{1,2}))?(?:\s+(\d{4}))?/i);
+      if (dateMatch) {
+        targetDay = dateMatch[1];
+        targetMonth = dateMatch[2] || null;
+        targetYear = dateMatch[3] || null;
+      }
+      rawNote = line.trim();
+      break;
+    }
+  }
+
+  if (compDuration > 0 && targetDay) {
+    const baseDate = currentReportDate ? new Date(currentReportDate + 'T12:00:00') : new Date();
+    let y = targetYear ? parseInt(targetYear, 10) : baseDate.getFullYear();
+    let m = baseDate.getMonth() + 1;
+    if (targetMonth) {
+      const cleanM = targetMonth.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (MONTH_MAP[cleanM]) {
+        m = parseInt(MONTH_MAP[cleanM], 10);
+      } else if (!isNaN(parseInt(cleanM, 10))) {
+        m = parseInt(cleanM, 10);
+      }
+    }
+
+    const curDay = baseDate.getDate();
+    const tDayInt = parseInt(targetDay, 10);
+    if (curDay < 5 && tDayInt > 25 && !targetMonth) {
+      m = m - 1;
+      if (m === 0) { m = 12; y = y - 1; }
+    }
+
+    const targetDateStr = `${y}-${String(m).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+    return {
+      duration: compDuration,
+      targetDate: targetDateStr,
+      rawNote
+    };
+  }
+
+  return null;
 };
 
 // ============================================================
@@ -724,6 +805,64 @@ export const parseMessageText = async (rawText) => {
     rawText
   );
 
+  // ── PROCESS COMPENSATION (IF PRESENT) ──
+  let compensation = null;
+  const comp = extractCompensation(todayReportText, tanggal);
+  if (comp && comp.duration > 0 && comp.targetDate) {
+    const compNote = `✅ Diganti ${comp.duration} Jam di rekap tgl ${tanggal.slice(8, 10)}/${tanggal.slice(5, 7)}`;
+    
+    // Look up target date report
+    const targetCheck = await query(
+      `SELECT id, live_duration, reported_live_duration, raw_message, status_izin, catatan_izin 
+       FROM daily_reports 
+       WHERE streamer_id = $1 AND tanggal = $2`,
+      [streamerId, comp.targetDate]
+    );
+
+    if (targetCheck.rows.length > 0) {
+      const existingLive = parseFloat(targetCheck.rows[0].live_duration || 0);
+      const newLive = parseFloat((existingLive + comp.duration).toFixed(2));
+      
+      await query(
+        `UPDATE daily_reports 
+         SET live_duration = $1, 
+             status_izin = 'Kompensasi',
+             catatan_izin = $2 
+         WHERE streamer_id = $3 AND tanggal = $4`,
+        [newLive, compNote, streamerId, comp.targetDate]
+      );
+
+      compensation = {
+        targetDate: comp.targetDate,
+        addedDuration: comp.duration,
+        newTotalDuration: newLive,
+        note: compNote
+      };
+    } else {
+      // If no entry existed on target date, create one
+      await query(
+        `INSERT INTO daily_reports (
+           streamer_id, tanggal, kategori, live_duration, reported_live_duration,
+           tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
+           chat_count, registration_count, ftd_count, raw_message,
+           status_izin, catatan_izin
+         ) VALUES ($1, $2, 'Streaming', $3, $3, 0, 0, 0, 0, 0, 0, 0, '[Kompensasi Otomatis Bot]', 'Kompensasi', $4)
+         ON CONFLICT (tanggal, streamer_id) DO UPDATE SET
+           live_duration = daily_reports.live_duration + EXCLUDED.live_duration,
+           status_izin = 'Kompensasi',
+           catatan_izin = EXCLUDED.catatan_izin`,
+        [streamerId, comp.targetDate, comp.duration, compNote]
+      );
+
+      compensation = {
+        targetDate: comp.targetDate,
+        addedDuration: comp.duration,
+        newTotalDuration: comp.duration,
+        note: compNote
+      };
+    }
+  }
+
   return {
     report,
     streamerName: rawName,
@@ -736,6 +875,7 @@ export const parseMessageText = async (rawText) => {
       chatCount,
       registrationCount,
       ftdCount,
+      compensation
     }
   };
 };
