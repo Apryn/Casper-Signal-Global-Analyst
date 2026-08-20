@@ -616,28 +616,28 @@ const Finance = () => {
 
     const rowsHtml = auditData.auditResults.map((s, idx) => `
       <tr style="border-bottom: 1px solid #e2e8f0;">
-        <td style="text-align: center; padding: 6px 4px; font-size: 10px;">${idx + 1}</td>
-        <td style="padding: 6px 6px; font-size: 10.5px; font-weight: 700; color: #0f172a;">
+        <td style="text-align: center; padding: 3.5px 4px; font-size: 9px;">${idx + 1}</td>
+        <td style="padding: 3.5px 6px; font-size: 9.5px; font-weight: 700; color: #0f172a;">
           ${s.nama}
-          <div style="font-size: 9px; color: #64748b; font-weight: normal;">${s.bankName} - ${s.bankAccountNumber} (${s.bankAccountHolder})</div>
+          <div style="font-size: 8px; color: #64748b; font-weight: normal;">${s.bankName} - ${s.bankAccountNumber} (${s.bankAccountHolder})</div>
         </td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 10px; font-weight: 600;">${formatRupiah(s.baseSalary)}</td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 10px; color: ${s.shortagePenalty > 0 ? '#be123c' : '#64748b'};">
-          ${s.shortagePenalty > 0 ? `-${formatRupiah(s.shortagePenalty)}<br/><span style="font-size: 8.5px;">(${s.totalShortageHours}h)</span>` : '-'}
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; font-weight: 600;">${formatRupiah(s.baseSalary)}</td>
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.shortagePenalty > 0 ? '#be123c' : '#64748b'};">
+          ${s.shortagePenalty > 0 ? `-${formatRupiah(s.shortagePenalty)}<br/><span style="font-size: 7.5px;">(${s.totalShortageHours}h)</span>` : '-'}
         </td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 10px; color: ${s.noReportPenalty > 0 ? '#be123c' : '#64748b'};">
-          ${s.noReportPenalty > 0 ? `-${formatRupiah(s.noReportPenalty)}<br/><span style="font-size: 8.5px;">(${s.noReportDaysCount}x)</span>` : '-'}
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.noReportPenalty > 0 ? '#be123c' : '#64748b'};">
+          ${s.noReportPenalty > 0 ? `-${formatRupiah(s.noReportPenalty)}<br/><span style="font-size: 7.5px;">(${s.noReportDaysCount}x)</span>` : '-'}
         </td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 10px; color: ${s.absentPenalty > 0 ? '#be123c' : '#64748b'};">
-          ${s.absentPenalty > 0 ? `-${formatRupiah(s.absentPenalty)}<br/><span style="font-size: 8.5px;">(${s.absentDaysCount}d)</span>` : '-'}
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.absentPenalty > 0 ? '#be123c' : '#64748b'};">
+          ${s.absentPenalty > 0 ? `-${formatRupiah(s.absentPenalty)}<br/><span style="font-size: 7.5px;">(${s.absentDaysCount}d)</span>` : '-'}
         </td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 10px; color: ${s.signalCutAmount > 0 ? '#be123c' : '#64748b'};">
-          ${s.signalCutAmount > 0 ? `-${formatRupiah(s.signalCutAmount)}<br/><span style="font-size: 8.5px;">(${s.signalCutCount}x)</span>` : '-'}
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.signalCutAmount > 0 ? '#be123c' : '#64748b'};">
+          ${s.signalCutAmount > 0 ? `-${formatRupiah(s.signalCutAmount)}<br/><span style="font-size: 7.5px;">(${s.signalCutCount}x)</span>` : '-'}
         </td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 10px; font-weight: 700; color: ${s.totalPenalties > 0 ? '#be123c' : '#059669'};">
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; font-weight: 700; color: ${s.totalPenalties > 0 ? '#be123c' : '#059669'};">
           ${s.totalPenalties > 0 ? `-${formatRupiah(s.totalPenalties)}` : 'Rp 0'}
         </td>
-        <td style="text-align: right; padding: 6px 6px; font-size: 11px; font-weight: 800; color: #047857; background: #f0fdf4;">
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9.5px; font-weight: 800; color: #047857; background: #f0fdf4;">
           ${formatRupiah(s.netSalary)}
         </td>
       </tr>
@@ -648,20 +648,22 @@ const Finance = () => {
         <head>
           <title>Casper Signal — Rekap Audit Gaji & Denda Streamer</title>
           <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 20px; line-height: 1.35; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #4f46e5; padding-bottom: 10px; margin-bottom: 12px; }
-            h1 { font-size: 17px; color: #0f172a; margin: 0; font-weight: 800; text-transform: uppercase; }
-            .meta { font-size: 9.5px; color: #64748b; text-align: right; }
-            .summary-box { display: flex; gap: 10px; margin-bottom: 14px; }
-            .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 10px; background: #f8fafc; }
-            .card-title { font-size: 9px; text-transform: uppercase; color: #64748b; font-weight: 700; }
-            .card-val { font-size: 13px; font-weight: 800; margin-top: 2px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-            th { background-color: #f1f5f9; padding: 6px; font-weight: 700; border-bottom: 2px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 8.5px; color: #334155; }
-            .rules { background: #fffbeb; border: 1px solid #fde68a; border-radius: 6px; padding: 8px 12px; font-size: 9.5px; color: #92400e; margin-top: 16px; line-height: 1.4; }
+            * { box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 12px 16px; margin: 0; line-height: 1.25; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #4f46e5; padding-bottom: 6px; margin-bottom: 8px; }
+            h1 { font-size: 14px; color: #0f172a; margin: 0; font-weight: 800; text-transform: uppercase; }
+            .meta { font-size: 8.5px; color: #64748b; text-align: right; line-height: 1.3; }
+            .summary-box { display: flex; gap: 6px; margin-bottom: 8px; }
+            .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 8px; background: #f8fafc; }
+            .card-title { font-size: 7.5px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+            .card-val { font-size: 11px; font-weight: 800; margin-top: 1px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 2px; }
+            th { background-color: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
+            .rules { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 5px 8px; font-size: 8px; color: #92400e; margin-top: 8px; line-height: 1.35; page-break-inside: avoid; }
+            .rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; margin-top: 2px; }
             @media print {
-              @page { size: A4 landscape; margin: 8mm; }
-              body { padding: 0; }
+              @page { size: A4 landscape; margin: 5mm 6mm; }
+              body { padding: 0; margin: 0; }
             }
           </style>
         </head>
@@ -669,12 +671,11 @@ const Finance = () => {
           <div class="header">
             <div>
               <h1>Casper Signal BI — Rekap Audit Gaji &amp; Denda Streamer</h1>
-              <span style="font-size: 10.5px; color: #64748b;">Perhitungan Gaji Pokok, SOP Durasi (4h), Denda Rekap/Absen, &amp; Potongan Sinyal</span>
+              <span style="font-size: 9px; color: #64748b;">Perhitungan Gaji Pokok, SOP Durasi (4h), Denda Rekap/Absen, &amp; Potongan Sinyal</span>
             </div>
             <div class="meta">
               <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
-              <strong>Periode Audit:</strong> ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bln)' : 'Full 1 Bulan'})<br/>
-              <strong>Total Streamer:</strong> ${auditData.auditResults.length} Orang
+              <strong>Periode Audit:</strong> ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bln)' : 'Full 1 Bulan'}) | <strong>Total:</strong> ${auditData.auditResults.length} Streamer
             </div>
           </div>
 
@@ -704,7 +705,7 @@ const Finance = () => {
           <table>
             <thead>
               <tr>
-                <th style="text-align: center; width: 25px;">No</th>
+                <th style="text-align: center; width: 22px;">No</th>
                 <th>Nama Streamer &amp; Rekening</th>
                 <th style="text-align: right;">Gaji Pokok</th>
                 <th style="text-align: right;">Kurang Jam (30k)</th>
@@ -719,37 +720,32 @@ const Finance = () => {
               ${rowsHtml}
             </tbody>
             <tfoot>
-              <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #cbd5e1;">
-                <td colspan="2" style="padding: 8px; font-size: 10px; text-transform: uppercase;">TOTAL KESELURUHAN</td>
-                <td style="text-align: right; padding: 8px; font-size: 10px;">${formatRupiah(totalBase)}</td>
-                <td style="text-align: right; padding: 8px; font-size: 10px; color: #be123c;">${formatRupiah(totalShortage)}</td>
-                <td style="text-align: right; padding: 8px; font-size: 10px; color: #be123c;">${formatRupiah(totalNoReport)}</td>
-                <td style="text-align: right; padding: 8px; font-size: 10px; color: #be123c;">${formatRupiah(totalAbsent)}</td>
-                <td style="text-align: right; padding: 8px; font-size: 10px; color: #be123c;">${formatRupiah(totalSignal)}</td>
-                <td style="text-align: right; padding: 8px; font-size: 10px; color: #be123c;">-${formatRupiah(totalPenaltiesAll)}</td>
-                <td style="text-align: right; padding: 8px; font-size: 11.5px; color: #047857; background: #dcfce7;">${formatRupiah(totalNet)}</td>
+              <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #cbd5e1;">
+                <td colspan="2" style="padding: 5px; font-size: 8.5px; text-transform: uppercase;">TOTAL KESELURUHAN</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px;">${formatRupiah(totalBase)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalShortage)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalNoReport)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalAbsent)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalSignal)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">-${formatRupiah(totalPenaltiesAll)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 9.5px; color: #047857; background: #dcfce7;">${formatRupiah(totalNet)}</td>
               </tr>
             </tfoot>
           </table>
 
           <div class="rules">
-            <strong>📌 Ketentuan &amp; Regulasi Penggajian Streamer:</strong><br/>
-            1. <strong>Gaji Pokok:</strong> Rp 3.000.000 / bulan (Termin 1 Tgl 15: Rp 1.000.000, Termin 2 Akhir Bulan: Rp 2.000.000).<br/>
-            2. <strong>SOP Live:</strong> 4 Jam / hari. Denda Durasi Kurang = Rp 30.000 / Jam kekurangan.<br/>
-            3. <strong>Batas Rekap:</strong> Maksimal Jam 08:00 Pagi. Lupa / Telat Rekap = Denda Rp 150.000 / Hari.<br/>
-            4. <strong>Absen / Tidak Live:</strong> Denda Rp 60.000 / Sesi (1 Hari 2 Sesi = Rp 120.000).<br/>
-            5. <strong>Pembagian Sinyal:</strong> Potongan Rp 30.000 / kejadian.<br/>
-            6. <strong>Izin Sah (WhatsApp):</strong> Streamer dengan izin sah yang telah disetujui dibebaskan dari denda (Rp 0).
-          </div>
-
-          <div style="margin-top: 30px; display: flex; justify-content: space-between; text-align: center; font-size: 10px;">
-            <div>
-              Diverifikasi oleh (Admin),<br/><br/><br/><br/>
-              <strong>( .................................................. )</strong>
-            </div>
-            <div>
-              Disetujui oleh (Owner / Finance Lead),<br/><br/><br/><br/>
-              <strong>( .................................................. )</strong>
+            <strong>📌 Ketentuan &amp; Regulasi Penggajian Streamer:</strong>
+            <div class="rules-grid">
+              <div>
+                1. <strong>Gaji Pokok:</strong> Rp 3.000.000 / bulan (Termin 1: Rp 1.000.000, Termin 2: Rp 2.000.000).<br/>
+                2. <strong>SOP Live:</strong> 4 Jam / hari. Denda Durasi Kurang = Rp 30.000 / Jam kekurangan.<br/>
+                3. <strong>Batas Rekap:</strong> Maksimal Jam 08:00 Pagi. Lupa / Telat Rekap = Denda Rp 150.000 / Hari.
+              </div>
+              <div>
+                4. <strong>Absen / Tidak Live:</strong> Denda Rp 60.000 / Sesi (1 Hari 2 Sesi = Rp 120.000).<br/>
+                5. <strong>Pembagian Sinyal:</strong> Potongan Rp 30.000 / kejadian.<br/>
+                6. <strong>Izin Sah:</strong> Streamer dengan izin sah yang telah disetujui dibebaskan dari denda (Rp 0).
+              </div>
             </div>
           </div>
 
