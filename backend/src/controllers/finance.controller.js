@@ -701,32 +701,19 @@ export const getPenaltyAudit = async (req, res) => {
             const duration = parseFloat(rep.live_duration || 0);
             totalLiveDuration += duration;
 
-            // Check if report submitted via bot / valid raw_message
-            if (!rep.raw_message) {
-              noReportDaysCount++;
-              dayItem.noReportPenalty = 150000;
-              noReportPenalty += 150000;
-              dayItem.statusLabel = 'Telat/No Rekap';
-              dayItem.statusColor = 'rose';
-            }
-
             // SOP Durasi (< 4.0 Jam)
-            // Aturan khusus: Jika sudah kena denda no rekap (Rp 150.000), maka bebas denda durasi kurang
             if (duration < 4.0) {
               const shortage = parseFloat((4.0 - duration).toFixed(2));
               dayItem.shortageHours = shortage;
-
-              if (dayItem.noReportPenalty > 0) {
-                // Bebas denda durasi kurang karena sudah kena denda no rekap Rp 150.000
-                dayItem.shortagePenalty = 0;
-              } else {
-                under4hCount++;
-                dayItem.shortagePenalty = Math.round(shortage * 30000);
-                totalShortageHours += shortage;
-                shortagePenalty += dayItem.shortagePenalty;
-                dayItem.statusLabel = `Durasi Kurang (${duration}h / -${shortage}h)`;
-                dayItem.statusColor = 'rose';
-              }
+              under4hCount++;
+              dayItem.shortagePenalty = Math.round(shortage * 30000);
+              totalShortageHours += shortage;
+              shortagePenalty += dayItem.shortagePenalty;
+              dayItem.statusLabel = `Durasi Kurang (${duration}h / -${shortage}h)`;
+              dayItem.statusColor = 'rose';
+            } else {
+              dayItem.statusLabel = 'OK';
+              dayItem.statusColor = 'green';
             }
           }
         } else {
