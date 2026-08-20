@@ -571,6 +571,7 @@ export const getPenaltyAudit = async (req, res) => {
              r.kategori, 
              COALESCE(r.live_duration, 0.0) as live_duration,
              r.raw_message, 
+             r.created_at,
              r.status_izin, 
              r.catatan_izin
       FROM daily_reports r
@@ -659,6 +660,8 @@ export const getPenaltyAudit = async (req, res) => {
           hasReport: !!rep,
           kategori: rep ? rep.kategori : (isSunday ? 'Hari Libur (Minggu)' : 'Tidak Ada Laporan'),
           liveDuration: rep ? parseFloat(rep.live_duration || 0) : 0,
+          submittedAt: rep?.created_at || null,
+          rawMessage: rep?.raw_message || null,
           statusIzin: rep?.status_izin || (isSunday ? 'Izin' : 'Normal'),
           catatanIzin: rep?.catatan_izin || (isSunday ? 'Libur Minggu' : ''),
           isExcused: (rep && rep.status_izin === 'Izin') || isSunday,

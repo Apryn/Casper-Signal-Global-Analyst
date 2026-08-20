@@ -83,6 +83,7 @@ const Finance = () => {
   // Drilldown Modal (Daily details per streamer)
   const [drilldownStreamer, setDrilldownStreamer] = useState(null);
   const [savingAdjStreamerId, setSavingAdjStreamerId] = useState(null);
+  const [viewingRawMessage, setViewingRawMessage] = useState(null);
 
   // Custom Adjustment Modal (Bonus / Kasbon)
   const [editingCustomAdjStreamer, setEditingCustomAdjStreamer] = useState(null);
@@ -481,6 +482,22 @@ const Finance = () => {
       await fetchPenaltyAudit();
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menyimpan penyesuaian');
+    }
+  };
+
+  const formatSubmittedAt = (isoStr) => {
+    if (!isoStr) return null;
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }) + ' WIB';
+    } catch (e) {
+      return null;
     }
   };
 
@@ -2935,9 +2952,41 @@ const Finance = () => {
                               <span>{day.statusLabel}</span>
                             </div>
                             {day.hasReport && day.liveDuration > 0 && (
-                              <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
+                              <span className="text-[10px] text-slate-300 font-mono block mt-0.5">
                                 Aktual: {day.liveDuration} Jam Live
                               </span>
+                            )}
+                            {/* Timestamp Submission */}
+                            {!day.isSunday && (
+                              <div className="mt-1 flex items-center gap-1.5 flex-wrap">
+                                {day.submittedAt ? (
+                                  <span className="text-[9.5px] text-indigo-300 font-mono flex items-center gap-1 bg-indigo-950/60 px-1.5 py-0.5 rounded border border-indigo-500/30">
+                                    <Clock className="h-2.5 w-2.5 text-indigo-400" />
+                                    <span>Kirim: {formatSubmittedAt(day.submittedAt)}</span>
+                                  </span>
+                                ) : (
+                                  <span className="text-[9.5px] text-rose-400 font-mono flex items-center gap-1 bg-rose-950/40 px-1.5 py-0.5 rounded border border-rose-500/30">
+                                    <span>❌ Tidak kirim bot</span>
+                                  </span>
+                                )}
+
+                                {day.rawMessage && day.rawMessage !== '[Manual Input]' && (
+                                  <button
+                                    onClick={() =>
+                                      setViewingRawMessage({
+                                        date: day.shortDate,
+                                        streamer: drilldownStreamer.nama,
+                                        message: day.rawMessage,
+                                        time: formatSubmittedAt(day.submittedAt),
+                                      })
+                                    }
+                                    className="text-[9.5px] text-amber-400 hover:text-amber-300 underline font-mono cursor-pointer"
+                                    title="Lihat pesan rekapan asli bot"
+                                  >
+                                    [Lihat Chat]
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
 
@@ -3144,6 +3193,45 @@ const Finance = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AUDIT 2: LIHAT TEKS REKAPAN ASLI BOT */}
+      {viewingRawMessage && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-lg bg-dark-card border-3 border-black rounded-2xl p-6 shadow-tactile-lg relative">
+            <div className="flex justify-between items-start pb-3 border-b-2 border-black mb-4">
+              <div>
+                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-indigo-400" />
+                  <span>Pesan Rekapan Asli: {viewingRawMessage.streamer}</span>
+                </h3>
+                <div className="text-xs text-slate-400 font-mono mt-0.5">
+                  Tanggal Laporan: {viewingRawMessage.date} • Waktu Kirim: {viewingRawMessage.time || '-'}
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingRawMessage(null)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="bg-dark-panel border-2 border-black rounded-xl p-4 font-mono text-xs text-emerald-300 whitespace-pre-wrap max-h-96 overflow-y-auto shadow-inset-screen">
+              {viewingRawMessage.message}
+            </div>
+
+            <div className="pt-4 flex justify-end gap-2 border-t-2 border-black mt-4">
+              <button
+                type="button"
+                onClick={() => setViewingRawMessage(null)}
+                className="px-5 py-2 rounded-xl text-xs font-extrabold text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400"
+              >
+                Tutup
+              </button>
+            </div>
           </div>
         </div>
       )}
