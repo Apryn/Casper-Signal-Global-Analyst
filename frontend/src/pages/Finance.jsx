@@ -90,6 +90,16 @@ const Finance = () => {
   const [customAdjForm, setCustomAdjForm] = useState({ custom_bonus: '', custom_deduction: '', notes: '' });
 
   // ==========================================
+  // EXCUSE / COMPENSATION REQUESTS & APPROVAL STATES
+  // ==========================================
+  const [excuseRequests, setExcuseRequests] = useState([]);
+  const [excuseStats, setExcuseStats] = useState({ pending: 0, approved: 0, rejected: 0, total: 0 });
+  const [excuseLoading, setExcuseLoading] = useState(false);
+  const [excuseFilterStatus, setExcuseFilterStatus] = useState('Pending'); // 'All' | 'Pending' | 'Approved' | 'Rejected'
+  const [excuseSearch, setExcuseSearch] = useState('');
+  const [processingExcuseId, setProcessingExcuseId] = useState(null);
+
+  // ==========================================
   // DATA STATES (OTHER TABS)
   // ==========================================
   const [loading, setLoading] = useState(false);
@@ -829,9 +839,62 @@ const Finance = () => {
     }
   };
 
+  const fetchExcuseRequests = async () => {
+    try {
+      setExcuseLoading(true);
+      const res = await api.get('/excuses/list');
+      setExcuseRequests(res.data.requests || []);
+      setExcuseStats(res.data.stats || { pending: 0, approved: 0, rejected: 0, total: 0 });
+    } catch (err) {
+      console.error('Failed to fetch excuse requests:', err);
+    } finally {
+      setExcuseLoading(false);
+    }
+  };
+
+  const handleApproveExcuse = async (req) => {
+    if (!window.confirm(`Setujui (ACC) permohonan izin ${req.streamerNama} untuk tanggal ${req.tanggalIzin}?\n\nDenda durasi & rekap pada tanggal ini otomatis menjadi Rp 0 (Bebas Denda).`)) {
+      return;
+    }
+    try {
+      setProcessingExcuseId(req.id);
+      const res = await api.post(`/excuses/approve/${req.id}`, { adminNotes: 'Disetujui Admin via Web Hub' });
+      alert(res.data.message || 'Izin berhasil disetujui');
+      await fetchExcuseRequests();
+      await fetchPenaltyAudit();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menyetujui izin');
+    } finally {
+      setProcessingExcuseId(null);
+    }
+  };
+
+  const handleRejectExcuse = async (req) => {
+    const reason = prompt(`Masukkan alasan penolakan izin ${req.streamerNama} tgl ${req.tanggalIzin} (denda tetap berlaku):`, 'Tidak memenuhi syarat izin');
+    if (reason === null) return;
+    try {
+      setProcessingExcuseId(req.id);
+      const res = await api.post(`/excuses/reject/${req.id}`, { adminNotes: reason || 'Ditolak Admin' });
+      alert(res.data.message || 'Izin ditolak');
+      await fetchExcuseRequests();
+      await fetchPenaltyAudit();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Gagal menolak izin');
+    } finally {
+      setProcessingExcuseId(null);
+    }
+  };
+
+  const handleCopyFormLink = () => {
+    const url = `${window.location.origin}/form-izin`;
+    copyToClipboard(url, 'form-izin-link');
+    alert(`Link Form Pengajuan Izin Streamer berhasil disalin:\n\n${url}\n\nSilakan bagikan link ini ke grup streamer agar mereka bisa mengisi kendala akun/izin secara langsung!`);
+  };
+
   useEffect(() => {
     if (isUnlocked) {
       fetchAllData();
+      fetchExcuseRequests();
     }
   }, [isUnlocked]);
 
@@ -1293,6 +1356,25 @@ const Finance = () => {
           <Users className="h-4 w-4" />
           <span>Master Profil &amp; Rate Gaji</span>
         </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('excuses');
+            fetchExcuseRequests();
+          }}
+          className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-extrabold text-xs transition-all border-2 ${activeTab === 'excuses'
+            ? 'bg-tactile-yellow text-black border-black shadow-tactile-sm -translate-y-0.5'
+            : 'bg-dark-panel text-slate-400 border-black hover:text-white hover:bg-slate-800'
+            }`}
+        >
+          <FileText className="h-4 w-4 text-cyan-400" />
+          <span>📋 Persetujuan Izin Streamer</span>
+          {excuseStats.pending > 0 && (
+            <span className="ml-1 px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-600 text-white animate-pulse">
+              {excuseStats.pending} Menunggu
+            </span>
+          )}
+        </button>
       </div>
 
       {/* ============================================================
@@ -1300,6 +1382,35 @@ const Finance = () => {
           ============================================================ */}
       {activeTab === 'audit' && (
         <div className="space-y-6 animate-fade-in">
+          {/* PENDING EXCUSES ALERT BANNER */}
+          {excuseStats.pending > 0 && (
+            <div className="bg-amber-950/40 border-2 border-amber-500/50 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-tactile-sm animate-fade-in">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                  <AlertCircle className="h-5 w-5 animate-bounce" />
+                </span>
+                <div>
+                  <div className="font-extrabold text-sm text-white flex items-center gap-2">
+                    <span>Ada {excuseStats.pending} Pengajuan Izin Streamer Menunggu Persetujuan (ACC)!</span>
+                  </div>
+                  <p className="text-xs text-amber-200/80">
+                    Streamer mengisi permohonan via Form Izin. Silakan tinjau dan ACC agar denda otomatis disesuaikan (Rp 0).
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setActiveTab('excuses');
+                  fetchExcuseRequests();
+                }}
+                className="px-4 py-2 rounded-xl text-xs font-black text-black bg-tactile-yellow hover:bg-amber-400 border-2 border-black shadow-tactile-xs shrink-0 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Buka Antrean ACC ({excuseStats.pending})</span>
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+
           {/* ── FILTER & CONTROLS BAR ── */}
           <div className="bg-dark-card border-2 border-black rounded-2xl p-5 shadow-tactile-sm space-y-4">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -2338,6 +2449,250 @@ const Finance = () => {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================
+          TAB 4: PUSAT APPROVAL & PERSETUJUAN IZIN STREAMER
+          ============================================================ */}
+      {activeTab === 'excuses' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header & Link Share Bar */}
+          <div className="bg-dark-card border-2 border-black rounded-2xl p-5 shadow-tactile-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5 mb-1">
+                <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-cyan-950/80 text-cyan-400 border border-cyan-500/30">
+                  <FileText className="h-4 w-4" />
+                </span>
+                <h2 className="text-base font-extrabold text-white uppercase tracking-wide">
+                  Pusat Persetujuan Izin &amp; Kompensasi Streamer
+                </h2>
+              </div>
+              <p className="text-xs text-slate-400">
+                Semua permohonan kendala akun, sakit, dan kompensasi jam dari Google Form Streamer masuk ke sini. Klik <strong>ACC (Setujui)</strong> agar denda otomatis Rp 0 di rekapan gaji.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                onClick={handleCopyFormLink}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400 transition-all cursor-pointer"
+                title="Salin link Google Form khusus streamer untuk dibagikan ke grup"
+              >
+                <Copy className="h-3.5 w-3.5" />
+                <span>Salin Link Form Izin</span>
+              </button>
+
+              <a
+                href="/form-izin"
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-slate-300 bg-dark-panel border-2 border-black hover:text-white hover:bg-slate-800 shadow-tactile-sm transition-all"
+                title="Buka form izin di tab baru"
+              >
+                <ArrowUpRight className="h-3.5 w-3.5 text-cyan-400" />
+                <span>Buka Form</span>
+              </a>
+
+              <button
+                onClick={fetchExcuseRequests}
+                disabled={excuseLoading}
+                className="p-2 rounded-xl text-xs font-bold text-slate-300 bg-dark-panel border-2 border-black hover:text-white hover:bg-slate-800 shadow-tactile-sm transition-all disabled:opacity-50"
+                title="Muat ulang permohonan"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-indigo-400 ${excuseLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+              <span className="text-[10px] font-extrabold text-slate-400 uppercase">Total Pengajuan</span>
+              <div className="text-xl font-black text-white mt-1">{excuseStats.total}</div>
+            </div>
+
+            <div className={`border-2 border-black rounded-2xl p-4 shadow-tactile-sm ${excuseStats.pending > 0 ? 'bg-amber-950/30 ring-2 ring-amber-500/40' : 'bg-dark-card'}`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-extrabold text-amber-400 uppercase">Menunggu ACC</span>
+                {excuseStats.pending > 0 && <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />}
+              </div>
+              <div className="text-xl font-black text-amber-300 mt-1">{excuseStats.pending}</div>
+            </div>
+
+            <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+              <span className="text-[10px] font-extrabold text-emerald-400 uppercase">Disetujui (ACC)</span>
+              <div className="text-xl font-black text-emerald-400 mt-1">{excuseStats.approved}</div>
+            </div>
+
+            <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+              <span className="text-[10px] font-extrabold text-rose-400 uppercase">Ditolak</span>
+              <div className="text-xl font-black text-rose-400 mt-1">{excuseStats.rejected}</div>
+            </div>
+          </div>
+
+          {/* Filter Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+              {['Pending', 'All', 'Approved', 'Rejected'].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setExcuseFilterStatus(st)}
+                  className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold transition-all border ${
+                    excuseFilterStatus === st
+                      ? 'bg-tactile-yellow text-black border-black shadow-tactile-xs'
+                      : 'bg-dark-panel text-slate-400 border-slate-800 hover:text-white'
+                  }`}
+                >
+                  {st === 'Pending' ? `Menunggu ACC (${excuseStats.pending})` : st === 'All' ? `Semua (${excuseStats.total})` : st === 'Approved' ? `Disetujui (${excuseStats.approved})` : `Ditolak (${excuseStats.rejected})`}
+                </button>
+              ))}
+            </div>
+
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+              <input
+                type="text"
+                value={excuseSearch}
+                onChange={(e) => setExcuseSearch(e.target.value)}
+                placeholder="Cari nama streamer..."
+                className="w-full bg-dark-panel border-2 border-black rounded-xl pl-9 pr-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+          </div>
+
+          {/* Requests Table */}
+          <div className="bg-dark-card border-2 border-black rounded-2xl shadow-tactile-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-black bg-dark-panel/80 text-slate-400 text-[10px] uppercase tracking-wider font-extrabold">
+                    <th className="py-3 px-4">Streamer</th>
+                    <th className="py-3 px-4">Tgl Kendala</th>
+                    <th className="py-3 px-4">Jenis Izin</th>
+                    <th className="py-3 px-4">Durasi &amp; Kompensasi</th>
+                    <th className="py-3 px-4">Keterangan / Alasan</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-center">Aksi / Tindakan</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {excuseRequests
+                    .filter((r) => {
+                      if (excuseFilterStatus !== 'All' && r.status !== excuseFilterStatus) return false;
+                      if (excuseSearch) {
+                        const q = excuseSearch.toLowerCase();
+                        return r.streamerNama?.toLowerCase().includes(q) || r.keterangan?.toLowerCase().includes(q);
+                      }
+                      return true;
+                    })
+                    .map((req) => (
+                      <tr key={req.id} className="hover:bg-slate-900/60 transition-all">
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-white text-sm">{req.streamerNama}</div>
+                          <span className="text-[10px] text-indigo-400 font-mono">{req.platform}</span>
+                        </td>
+                        <td className="py-3.5 px-4 font-mono font-bold text-slate-200">
+                          {req.tanggalIzin}
+                        </td>
+                        <td className="py-3.5 px-4">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-extrabold border ${
+                            req.kategori === 'Kendala Akun'
+                              ? 'bg-rose-950/60 text-rose-300 border-rose-500/40'
+                              : req.kategori === 'Kompensasi Jam'
+                              ? 'bg-cyan-950/60 text-cyan-300 border-cyan-500/40'
+                              : req.kategori === 'Sakit'
+                              ? 'bg-amber-950/60 text-amber-300 border-amber-500/40'
+                              : 'bg-indigo-950/60 text-indigo-300 border-indigo-500/40'
+                          }`}>
+                            {req.kategori}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4">
+                          {req.durasiKurang > 0 && (
+                            <div className="text-[11px] font-mono text-rose-300">
+                              Kurang: <strong>{req.durasiKurang} Jam</strong>
+                            </div>
+                          )}
+                          {req.tanggalGanti ? (
+                            <div className="text-[10px] font-mono text-cyan-300 mt-0.5">
+                              🔄 Ganti di: <strong>{req.tanggalGanti}</strong>
+                            </div>
+                          ) : (
+                            <span className="text-[10px] text-slate-500">-</span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 max-w-xs">
+                          <p className="text-xs text-slate-300 leading-relaxed font-sans line-clamp-3" title={req.keterangan}>
+                            {req.keterangan}
+                          </p>
+                          {req.adminNotes && (
+                            <div className="mt-1 text-[10px] text-amber-400/90 font-mono italic">
+                              Catatan Admin: {req.adminNotes}
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          {req.status === 'Pending' ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              ⏳ Menunggu ACC
+                            </span>
+                          ) : req.status === 'Approved' ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                              ✅ Disetujui (ACC)
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-rose-500/15 text-rose-400 border border-rose-500/30">
+                              ❌ Ditolak
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-3.5 px-4 text-center">
+                          {req.status === 'Pending' ? (
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                disabled={processingExcuseId === req.id}
+                                onClick={() => handleApproveExcuse(req)}
+                                className="px-3 py-1.5 rounded-xl text-xs font-black text-emerald-950 bg-emerald-400 hover:bg-emerald-300 border border-emerald-600 shadow-tactile-xs transition-all disabled:opacity-50 flex items-center gap-1 cursor-pointer"
+                                title="ACC permohonan izin (Otomatis bebas denda di tanggal tersebut)"
+                              >
+                                <Check className="h-3 w-3 stroke-[3]" />
+                                <span>ACC</span>
+                              </button>
+                              <button
+                                disabled={processingExcuseId === req.id}
+                                onClick={() => handleRejectExcuse(req)}
+                                className="px-2.5 py-1.5 rounded-xl text-xs font-bold text-rose-400 bg-rose-950/60 hover:bg-rose-900 border border-rose-500/40 transition-all disabled:opacity-50 cursor-pointer"
+                                title="Tolak permohonan izin"
+                              >
+                                <X className="h-3 w-3" />
+                                <span>Tolak</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-slate-400 font-mono">
+                              {req.reviewedAt ? new Date(req.reviewedAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) : '-'}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+
+                  {excuseRequests.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center text-slate-500">
+                        <FileText className="h-8 w-8 mx-auto mb-2 opacity-40 text-slate-400" />
+                        <div className="font-bold text-sm text-slate-400">Belum Ada Pengajuan Izin Streamer</div>
+                        <p className="text-xs text-slate-600 mt-1 max-w-sm mx-auto">
+                          Bagikan link form izin di atas kepada streamer agar mereka dapat mengajukan kendala akun &amp; kompensasi jam secara resmi.
+                        </p>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

@@ -17,6 +17,7 @@ import Schedules from './pages/Schedules';
 import ImportPage from './pages/Import';
 import Evaluations from './pages/Evaluations';
 import Finance from './pages/Finance';
+import StreamerExcuseForm from './pages/StreamerExcuseForm';
 
 // ============================================================
 // ERROR BOUNDARY — prevents full-app crash on component errors
@@ -88,6 +89,10 @@ function App() {
           <Routes>
             {/* Public Login Route */}
             <Route path="/login" element={<Login />} />
+
+            {/* Public Streamer Excuse & Compensation Submission Form (Google Form style) */}
+            <Route path="/form-izin" element={<StreamerExcuseForm />} />
+            <Route path="/izin" element={<StreamerExcuseForm />} />
 
             {/* Protected Application Routes */}
             <Route
