@@ -760,6 +760,7 @@ export const getPenaltyAudit = async (req, res) => {
         customBonus,
         customDeduction,
         notes: adj.notes || '',
+        isVerified: !!adj.is_verified,
         totalPenalties,
         netSalary,
         dailyBreakdown
@@ -907,5 +908,37 @@ export const updateDailyLiveDuration = async (req, res) => {
     res.status(500).json({ message: 'Gagal mengubah durasi live' });
   }
 };
+
+export const toggleStreamerVerification = async (req, res) => {
+  try {
+    const { streamerId, periodKey, isVerified } = req.body;
+
+    if (!streamerId || !periodKey) {
+      return res.status(400).json({ message: 'streamerId dan periodKey wajib diisi' });
+    }
+
+    const verified = Boolean(isVerified);
+
+    const upsertRes = await pool.query(`
+      INSERT INTO streamer_salary_adjustments (
+        streamer_id, period_key, is_verified, updated_at
+      ) VALUES ($1, $2, $3, NOW())
+      ON CONFLICT (streamer_id, period_key) DO UPDATE SET
+        is_verified = EXCLUDED.is_verified,
+        updated_at = NOW()
+      RETURNING *
+    `, [streamerId, periodKey, verified]);
+
+    res.json({
+      success: true,
+      message: `Status verifikasi streamer berhasil diubah menjadi ${verified ? 'Sudah Diperiksa' : 'Belum Diperiksa'}`,
+      is_verified: verified
+    });
+  } catch (err) {
+    console.error('[Finance toggleStreamerVerification] Error:', err);
+    res.status(500).json({ message: 'Gagal mengubah status verifikasi streamer' });
+  }
+};
+
 
 
