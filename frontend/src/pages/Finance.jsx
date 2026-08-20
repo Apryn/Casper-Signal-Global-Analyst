@@ -1386,7 +1386,7 @@ const Finance = () => {
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-rose-300 mb-0.5">📝 Batas Rekap 08:00</div>
-                <div className="text-[10px] text-slate-400">Lupa/Telat rekap: -Rp 150.000 / Hari</div>
+                <div className="text-[10px] text-slate-400">Telat: -Rp 150.000 (Bebas denda durasi)</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-rose-300 mb-0.5">🚫 Absen / Bolos</div>
