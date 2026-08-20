@@ -16,7 +16,10 @@ import {
   getCashSummary,
   getTransactions,
   createTransaction,
-  deleteTransaction
+  deleteTransaction,
+  getPenaltyAudit,
+  saveSalaryAdjustment,
+  toggleDailyExcusedStatus
 } from '../controllers/finance.controller.js';
 
 const router = express.Router();
@@ -28,13 +31,18 @@ router.use(authenticateToken);
 router.post('/verify-pin', verifyPin);
 router.post('/change-pin', changePin);
 
-// 2. Payroll Profiles
+// 2. Automated Penalty & Salary Audit
+router.get('/penalty-audit', getPenaltyAudit);
+router.post('/penalty-audit/adjust', saveSalaryAdjustment);
+router.post('/penalty-audit/toggle-excuse', toggleDailyExcusedStatus);
+
+// 3. Payroll Profiles
 router.get('/profiles', getProfiles);
 router.post('/profiles', upsertProfile);
 router.delete('/profiles/:id', deleteProfile);
 router.post('/profiles/sync', syncStreamersToProfiles);
 
-// 3. Payroll Periods & Items
+// 4. Payroll Periods & Items
 router.get('/periods', getPeriods);
 router.get('/periods/:id', getPeriodDetail);
 router.post('/periods', createPeriod);
@@ -42,7 +50,7 @@ router.delete('/periods/:id', deletePeriod);
 router.put('/items/:id', updateItem);
 router.post('/periods/bulk-status', bulkUpdateStatus);
 
-// 4. Cash Transactions & Expenses
+// 5. Cash Transactions & Expenses
 router.get('/cash/summary', getCashSummary);
 router.get('/cash/transactions', getTransactions);
 router.post('/cash/transactions', createTransaction);

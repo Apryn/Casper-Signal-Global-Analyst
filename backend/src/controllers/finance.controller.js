@@ -537,3 +537,325 @@ export const deleteTransaction = async (req, res) => {
     res.status(500).json({ message: 'Gagal menghapus transaksi' });
   }
 };
+
+// ==========================================
+// 5. AUTOMATED PENALTY & SALARY AUDIT
+// ==========================================
+
+export const getPenaltyAudit = async (req, res) => {
+  try {
+    const { startDate, endDate, periodType = '15th', periodKey } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'startDate dan endDate wajib diisi' });
+    }
+
+    const pKey = periodKey || `${startDate.slice(0, 7)}_${periodType}`;
+
+    // 1. Get all streamers and their payroll profiles
+    const streamersRes = await pool.query(`
+      SELECT s.id as streamer_id, s.nama, s.platform,
+             p.id as profile_id, p.bank_name, p.bank_account_number, p.bank_account_holder,
+             COALESCE(p.salary_15, 1000000.00) as salary_15,
+             COALESCE(p.salary_1, 2000000.00) as salary_1
+      FROM streamers s
+      LEFT JOIN payroll_profiles p ON p.streamer_id = s.id
+      ORDER BY s.nama ASC
+    `);
+
+    // 2. Get all reports in date range
+    const reportsRes = await pool.query(`
+      SELECT r.id, 
+             TO_CHAR(r.tanggal, 'YYYY-MM-DD') as tanggal, 
+             r.streamer_id, 
+             r.kategori, 
+             COALESCE(r.live_duration, 0.0) as live_duration,
+             r.raw_message, 
+             r.status_izin, 
+             r.catatan_izin
+      FROM daily_reports r
+      WHERE r.tanggal >= $1 AND r.tanggal <= $2
+      ORDER BY r.tanggal ASC
+    `, [startDate, endDate]);
+
+    // Index reports by "streamer_id_YYYY-MM-DD"
+    const reportMap = {};
+    for (const r of reportsRes.rows) {
+      const key = `${r.streamer_id}_${r.tanggal}`;
+      reportMap[key] = r;
+    }
+
+    // 3. Get saved adjustments (signal cuts, custom bonus/deduction)
+    const adjustmentsRes = await pool.query(`
+      SELECT * FROM streamer_salary_adjustments 
+      WHERE period_key = $1
+    `, [pKey]);
+
+    const adjMap = {};
+    for (const a of adjustmentsRes.rows) {
+      adjMap[a.streamer_id] = a;
+    }
+
+    // Generate list of all dates in range
+    const allDates = [];
+    let curr = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+    while (curr <= end) {
+      const y = curr.getFullYear();
+      const m = String(curr.getMonth() + 1).padStart(2, '0');
+      const d = String(curr.getDate()).padStart(2, '0');
+      allDates.push({
+        dateStr: `${y}-${m}-${d}`,
+        dayOfWeek: curr.getDay(), // 0 = Sunday
+        shortDate: `${parseInt(d, 10)} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][curr.getMonth()]}`
+      });
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    // Calculate audit per streamer
+    const auditResults = [];
+
+    for (const streamer of streamersRes.rows) {
+      const sId = streamer.streamer_id;
+      
+      // Determine Base Salary based on periodType
+      let baseSalary = 1000000;
+      if (periodType === '15th') {
+        baseSalary = parseFloat(streamer.salary_15 || 1000000);
+      } else if (periodType === '1st') {
+        baseSalary = parseFloat(streamer.salary_1 || 2000000);
+      } else if (periodType === 'full') {
+        baseSalary = parseFloat(streamer.salary_15 || 1000000) + parseFloat(streamer.salary_1 || 2000000);
+      }
+
+      let totalLiveDuration = 0;
+      let liveDaysCount = 0;
+      let under4hCount = 0;
+      let totalShortageHours = 0;
+      let shortagePenalty = 0; // Rp 30,000 / jam
+
+      let noReportDaysCount = 0;
+      let noReportPenalty = 0; // Rp 150,000 / hari
+
+      let absentDaysCount = 0;
+      let absentPenalty = 0; // Rp 60,000 / sesi (2 sesi = Rp 120,000 / hari)
+
+      let offDaysCount = 0;
+      let excusedDaysCount = 0;
+
+      const dailyBreakdown = [];
+
+      for (const d of allDates) {
+        const key = `${sId}_${d.dateStr}`;
+        const rep = reportMap[key];
+        const isSunday = d.dayOfWeek === 0;
+
+        const dayItem = {
+          dateStr: d.dateStr,
+          shortDate: d.shortDate,
+          dayOfWeek: d.dayOfWeek,
+          isSunday,
+          reportId: rep ? rep.id : null,
+          hasReport: !!rep,
+          kategori: rep ? rep.kategori : (isSunday ? 'Hari Libur (Minggu)' : 'Tidak Ada Laporan'),
+          liveDuration: rep ? parseFloat(rep.live_duration || 0) : 0,
+          statusIzin: rep?.status_izin || (isSunday ? 'Izin' : 'Normal'),
+          catatanIzin: rep?.catatan_izin || (isSunday ? 'Libur Minggu' : ''),
+          isExcused: (rep && rep.status_izin === 'Izin') || isSunday,
+          shortageHours: 0,
+          shortagePenalty: 0,
+          noReportPenalty: 0,
+          absentPenalty: 0,
+          totalDayPenalty: 0,
+          statusLabel: 'OK',
+          statusColor: 'green'
+        };
+
+        if (dayItem.isExcused) {
+          excusedDaysCount++;
+          dayItem.statusLabel = isSunday ? 'Libur Minggu' : (rep?.catatan_izin ? `Izin: ${rep.catatan_izin}` : 'Izin Sah (ACC)');
+          dayItem.statusColor = 'amber';
+        } else if (rep) {
+          if (rep.kategori === 'Non Streaming') {
+            offDaysCount++;
+            dayItem.statusLabel = 'Hari Off';
+            dayItem.statusColor = 'blue';
+          } else {
+            // Streaming
+            liveDaysCount++;
+            const duration = parseFloat(rep.live_duration || 0);
+            totalLiveDuration += duration;
+
+            if (duration < 4.0) {
+              under4hCount++;
+              const shortage = parseFloat((4.0 - duration).toFixed(2));
+              dayItem.shortageHours = shortage;
+              dayItem.shortagePenalty = Math.round(shortage * 30000);
+              totalShortageHours += shortage;
+              shortagePenalty += dayItem.shortagePenalty;
+              dayItem.statusLabel = `Durasi Kurang (${duration}h / -${shortage}h)`;
+              dayItem.statusColor = 'rose';
+            }
+
+            // Check if report submitted via bot / valid raw_message
+            if (!rep.raw_message) {
+              noReportDaysCount++;
+              dayItem.noReportPenalty = 150000;
+              noReportPenalty += 150000;
+              dayItem.statusLabel += (dayItem.statusLabel === 'OK' ? '' : ' & ') + 'Telat/No Rekap';
+              dayItem.statusColor = 'rose';
+            }
+          }
+        } else {
+          // Missing report on non-Sunday
+          absentDaysCount++;
+          noReportDaysCount++;
+          
+          dayItem.absentPenalty = 120000; // 2 sesi x Rp 60,000
+          dayItem.noReportPenalty = 150000; // Rp 150,000
+          
+          absentPenalty += 120000;
+          noReportPenalty += 150000;
+
+          dayItem.statusLabel = 'Absen (Tidak Live & Tidak Rekap)';
+          dayItem.statusColor = 'red';
+        }
+
+        dayItem.totalDayPenalty = dayItem.shortagePenalty + dayItem.noReportPenalty + dayItem.absentPenalty;
+        dailyBreakdown.push(dayItem);
+      }
+
+      // Adjustments (Signal cut, custom bonus/deduction)
+      const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
+      const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
+      const signalCutAmount = parseFloat(adj.signal_cut_amount || (signalCutCount * 30000));
+      const customBonus = parseFloat(adj.custom_bonus || 0);
+      const customDeduction = parseFloat(adj.custom_deduction || 0);
+
+      const totalPenalties = shortagePenalty + noReportPenalty + absentPenalty + signalCutAmount + customDeduction;
+      const netSalary = Math.max(0, baseSalary + customBonus - totalPenalties);
+
+      auditResults.push({
+        streamerId: sId,
+        nama: streamer.nama,
+        platform: streamer.platform,
+        profileId: streamer.profile_id,
+        bankName: streamer.bank_name || 'BCA',
+        bankAccountNumber: streamer.bank_account_number || '-',
+        bankAccountHolder: streamer.bank_account_holder || streamer.nama,
+        baseSalary,
+        totalLiveDuration: parseFloat(totalLiveDuration.toFixed(2)),
+        liveDaysCount,
+        under4hCount,
+        totalShortageHours: parseFloat(totalShortageHours.toFixed(2)),
+        shortagePenalty,
+        noReportDaysCount,
+        noReportPenalty,
+        absentDaysCount,
+        absentPenalty,
+        offDaysCount,
+        excusedDaysCount,
+        signalCutCount,
+        signalCutAmount,
+        customBonus,
+        customDeduction,
+        notes: adj.notes || '',
+        totalPenalties,
+        netSalary,
+        dailyBreakdown
+      });
+    }
+
+    res.json({
+      periodKey: pKey,
+      periodType,
+      startDate,
+      endDate,
+      totalStreamers: auditResults.length,
+      auditResults
+    });
+  } catch (err) {
+    console.error('[Finance getPenaltyAudit] Error:', err);
+    res.status(500).json({ message: 'Gagal melakukan audit denda & gaji streamer' });
+  }
+};
+
+export const saveSalaryAdjustment = async (req, res) => {
+  try {
+    const { streamerId, periodKey, signalCutCount, customBonus, customDeduction, notes } = req.body;
+
+    if (!streamerId || !periodKey) {
+      return res.status(400).json({ message: 'streamerId dan periodKey wajib diisi' });
+    }
+
+    const count = parseInt(signalCutCount || 0, 10);
+    const cutAmount = count * 30000;
+    const bonus = parseFloat(customBonus || 0);
+    const deduction = parseFloat(customDeduction || 0);
+
+    const upsertRes = await pool.query(`
+      INSERT INTO streamer_salary_adjustments (
+        streamer_id, period_key, signal_cut_count, signal_cut_amount,
+        custom_bonus, custom_deduction, notes, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ON CONFLICT (streamer_id, period_key) DO UPDATE SET
+        signal_cut_count = EXCLUDED.signal_cut_count,
+        signal_cut_amount = EXCLUDED.signal_cut_amount,
+        custom_bonus = EXCLUDED.custom_bonus,
+        custom_deduction = EXCLUDED.custom_deduction,
+        notes = EXCLUDED.notes,
+        updated_at = NOW()
+      RETURNING *
+    `, [streamerId, periodKey, count, cutAmount, bonus, deduction, notes || '']);
+
+    res.json({ success: true, adjustment: upsertRes.rows[0] });
+  } catch (err) {
+    console.error('[Finance saveSalaryAdjustment] Error:', err);
+    res.status(500).json({ message: 'Gagal menyimpan penyesuaian potongan sinyal' });
+  }
+};
+
+export const toggleDailyExcusedStatus = async (req, res) => {
+  try {
+    const { streamerId, tanggal, isExcused, catatan } = req.body;
+
+    if (!streamerId || !tanggal) {
+      return res.status(400).json({ message: 'streamerId dan tanggal wajib diisi' });
+    }
+
+    const targetStatus = isExcused ? 'Izin' : 'Normal';
+    const noteText = catatan || (isExcused ? 'Dispensasi Izin WA' : '');
+
+    // Check if report exists
+    const checkRes = await pool.query(`
+      SELECT id FROM daily_reports 
+      WHERE streamer_id = $1 AND tanggal = $2
+    `, [streamerId, tanggal]);
+
+    if (checkRes.rows.length > 0) {
+      await pool.query(`
+        UPDATE daily_reports
+        SET status_izin = $1, catatan_izin = $2
+        WHERE streamer_id = $3 AND tanggal = $4
+      `, [targetStatus, noteText, streamerId, tanggal]);
+    } else {
+      // Insert a placeholder report with kategori Non Streaming / Izin
+      await pool.query(`
+        INSERT INTO daily_reports (
+          streamer_id, tanggal, kategori, status_izin, catatan_izin,
+          tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
+          live_duration, chat_count, registration_count, ftd_count
+        ) VALUES ($1, $2, 'Non Streaming', $3, $4, 0, 0, 0, 0, 0, 0, 0, 0)
+        ON CONFLICT (streamer_id, tanggal) DO UPDATE SET
+          status_izin = EXCLUDED.status_izin,
+          catatan_izin = EXCLUDED.catatan_izin
+      `, [streamerId, tanggal, targetStatus, noteText]);
+    }
+
+    res.json({ success: true, message: `Status izin tgl ${tanggal} berhasil diubah ke ${targetStatus}` });
+  } catch (err) {
+    console.error('[Finance toggleDailyExcusedStatus] Error:', err);
+    res.status(500).json({ message: 'Gagal mengubah status izin' });
+  }
+};
+

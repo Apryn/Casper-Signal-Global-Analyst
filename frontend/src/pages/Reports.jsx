@@ -458,22 +458,6 @@ const Reports = () => {
       }
     });
 
-    let offAbsenSectionHtml = '';
-    Object.values(summaryMap).forEach(s => {
-      if (s.offDates.length > 0 || s.noReportDates.length > 0) {
-        const offPills = s.offDates.map(d => `<span style="display: inline-block; background: #fef3c7; color: #d97706; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px 3px 2px 0;">${d}</span>`).join('');
-        const absenPills = s.noReportDates.map(d => `<span style="display: inline-block; background: #ffe4e6; color: #be123c; border: 1px solid #fecdd3; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin: 2px 3px 2px 0;">${d}</span>`).join('');
-        
-        offAbsenSectionHtml += `
-          <div style="border-bottom: 1px solid #f1f5f9; padding: 6px 0;">
-            <div style="font-weight: bold; font-size: 11.5px; color: #0f172a; margin-bottom: 3px;">${s.name}</div>
-            ${s.offDates.length > 0 ? `<div style="font-size: 11px; margin-bottom: 2px;"><span style="color: #d97706; font-weight: 600; width: 140px; display: inline-block;">Hari Off (${s.offDates.length}):</span> ${offPills}</div>` : ''}
-            ${s.noReportDates.length > 0 ? `<div style="font-size: 11px;"><span style="color: #be123c; font-weight: 600; width: 140px; display: inline-block;">Tidak Ngerekap (${s.noReportDates.length}):</span> ${absenPills}</div>` : ''}
-          </div>
-        `;
-      }
-    });
-
     const htmlContent = `
       <html>
         <head>
@@ -532,13 +516,6 @@ const Reports = () => {
             <div class="section-title" style="color: #be123c; margin-top: 16px;">3. Rincian Tanggal Live Durasi Kurang (&lt; 4 Jam SOP)</div>
             <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
               ${under4hSectionHtml}
-            </div>
-          ` : ''}
-
-          ${offAbsenSectionHtml ? `
-            <div class="section-title" style="color: #d97706; margin-top: 24px; page-break-before: always; break-before: page;">4. Rincian Tanggal Off &amp; Tidak Ngerekap</div>
-            <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px;">
-              ${offAbsenSectionHtml}
             </div>
           ` : ''}
 
