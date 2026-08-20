@@ -3245,11 +3245,11 @@ const Finance = () => {
       {/* MODAL AUDIT 1: DRILLDOWN RINCIAN HARIAN & DISPENSASI IZIN */}
       {drilldownStreamer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-4xl max-h-[92vh] bg-slate-950 border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-200">
+          <div className="w-full max-w-4xl max-h-[92vh] bg-[#0c101d] border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-200">
             {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-800/80 flex justify-between items-center bg-slate-900/60">
+            <div className="px-6 py-4 border-b border-slate-800/80 flex justify-between items-center bg-slate-900/40">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/20 border border-indigo-500/30 text-indigo-400 font-black text-sm">
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600/20 text-indigo-400 font-black text-xs border border-indigo-500/20">
                   {drilldownStreamer.nama.slice(0, 2).toUpperCase()}
                 </div>
                 <div>
@@ -3258,69 +3258,69 @@ const Finance = () => {
                       Audit Kedisiplinan: <span className="text-indigo-400">{drilldownStreamer.nama}</span>
                     </h3>
                     {drilldownStreamer.isVerified ? (
-                      <span className="text-[11px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <span className="text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                         <CheckCircle2 className="h-3 w-3" />
                         <span>Sudah Di-Check</span>
                       </span>
                     ) : (
-                      <span className="text-[11px] bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <span className="text-[11px] bg-amber-500/10 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
                         <Clock className="h-3 w-3" />
                         <span>Belum Di-Check</span>
                       </span>
                     )}
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                  <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2 font-sans">
                     <span>{drilldownStreamer.bankName}: <span className="text-slate-300 font-mono">{drilldownStreamer.bankAccountNumber}</span> ({drilldownStreamer.bankAccountHolder})</span>
                     <span className="text-slate-600">•</span>
-                    <span className="text-slate-400 font-mono">Periode: {auditStartDate} s/d {auditEndDate}</span>
+                    <span className="text-slate-400">Periode: <span className="font-mono text-slate-300">{auditStartDate} s/d {auditEndDate}</span></span>
                   </div>
                 </div>
               </div>
 
               <button
                 onClick={() => setDrilldownStreamer(null)}
-                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800/80 transition-colors"
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800/60 transition-colors"
                 title="Tutup Modal"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Quick Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-4 bg-slate-900/30 border-b border-slate-800/80 text-xs">
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
-                <span className="text-[11px] text-slate-400 font-medium block mb-0.5">Gaji Pokok</span>
+            {/* Clean KPI Metrics Strip */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 py-3.5 bg-slate-900/20 border-b border-slate-800/80 text-xs">
+              <div className="flex flex-col">
+                <span className="text-[11px] text-slate-400 mb-0.5">Gaji Pokok</span>
                 <span className="text-sm font-bold text-white font-mono">{formatRupiah(drilldownStreamer.baseSalary)}</span>
               </div>
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
-                <span className="text-[11px] text-rose-400/90 font-medium block mb-0.5">Denda Disiplin</span>
+              <div className="flex flex-col">
+                <span className="text-[11px] text-slate-400 mb-0.5">Total Denda Disiplin</span>
                 <span className="text-sm font-bold text-rose-400 font-mono">
                   -{formatRupiah(drilldownStreamer.shortagePenalty + drilldownStreamer.noReportPenalty + drilldownStreamer.absentPenalty)}
                 </span>
               </div>
-              <div className="bg-slate-900/80 p-3 rounded-xl border border-slate-800/80">
-                <span className="text-[11px] text-amber-400/90 font-medium block mb-0.5">Potongan Sinyal ({drilldownStreamer.signalCutCount}x)</span>
-                <span className="text-sm font-bold text-amber-400 font-mono">-{formatRupiah(drilldownStreamer.signalCutAmount)}</span>
+              <div className="flex flex-col">
+                <span className="text-[11px] text-slate-400 mb-0.5">Potongan Sinyal ({drilldownStreamer.signalCutCount}x)</span>
+                <span className="text-sm font-bold text-slate-300 font-mono">-{formatRupiah(drilldownStreamer.signalCutAmount)}</span>
               </div>
-              <div className="bg-emerald-950/20 p-3 rounded-xl border border-emerald-500/30">
-                <span className="text-[11px] text-emerald-400 font-medium block mb-0.5">Gaji Bersih Diterima</span>
-                <span className="text-sm font-extrabold text-emerald-400 font-mono">{formatRupiah(drilldownStreamer.netSalary)}</span>
+              <div className="flex flex-col">
+                <span className="text-[11px] text-emerald-400 font-semibold mb-0.5">Gaji Bersih Diterima</span>
+                <span className="text-base font-extrabold text-emerald-400 font-mono">{formatRupiah(drilldownStreamer.netSalary)}</span>
               </div>
             </div>
 
             {/* Daily Table Body */}
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="border-b border-slate-800 text-[10.5px] font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-slate-950/95 backdrop-blur-xs">
-                    <th className="py-2.5 px-3">Tanggal</th>
-                    <th className="py-2.5 px-3">Status &amp; Durasi</th>
-                    <th className="py-2.5 px-3">Rincian Potongan</th>
-                    <th className="py-2.5 px-3 text-right">Total Denda</th>
-                    <th className="py-2.5 px-3 text-center">Dispensasi / Aksi</th>
+                  <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-[#0c101d] z-10">
+                    <th className="py-3 px-3 w-28">Tanggal</th>
+                    <th className="py-3 px-3">Aktivitas &amp; Durasi</th>
+                    <th className="py-3 px-3">Keterangan Denda</th>
+                    <th className="py-3 px-3 text-right w-36">Total Denda</th>
+                    <th className="py-3 px-3 text-center w-36">Dispensasi</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-850">
+                <tbody className="divide-y divide-slate-850/60 font-sans">
                   {drilldownStreamer.dailyBreakdown?.map((day) => {
                     const hasPenalty = day.totalDayPenalty > 0;
                     return (
@@ -3328,127 +3328,101 @@ const Finance = () => {
                         key={day.dateStr}
                         className={`transition-colors ${
                           day.isSunday
-                            ? 'bg-slate-900/20 opacity-70'
+                            ? 'bg-slate-900/10 text-slate-500'
                             : hasPenalty
-                            ? 'bg-rose-950/15 hover:bg-rose-950/25'
-                            : 'hover:bg-slate-900/40'
+                            ? 'bg-rose-950/10 hover:bg-rose-950/20'
+                            : 'hover:bg-slate-800/20'
                         }`}
                       >
-                        {/* Tanggal */}
-                        <td className="py-3 px-3 font-mono font-medium text-slate-300 whitespace-nowrap">
-                          <span className="font-semibold text-white">{day.shortDate}</span>
+                        {/* 1. Tanggal */}
+                        <td className="py-2.5 px-3 font-mono text-slate-300 whitespace-nowrap">
+                          <span className="font-semibold">{day.shortDate}</span>
                           {day.isSunday && (
-                            <span className="ml-1.5 text-[10px] text-amber-400/80 font-sans font-normal">(Minggu)</span>
+                            <span className="ml-1.5 text-[10px] text-slate-500 font-normal font-sans">(Minggu)</span>
                           )}
                         </td>
 
-                        {/* Status & Durasi */}
-                        <td className="py-3 px-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10.5px] font-semibold ${
-                                    day.isSunday
-                                      ? 'bg-slate-800 text-slate-400'
-                                      : day.isCompensated
-                                      ? 'bg-cyan-950/60 text-cyan-300 border border-cyan-500/30'
-                                      : day.isExcused
-                                      ? 'bg-amber-950/60 text-amber-300 border border-amber-500/30'
-                                      : day.statusLabel === 'OK'
-                                      ? 'bg-emerald-950/40 text-emerald-400 border border-emerald-500/20'
-                                      : 'bg-rose-950/40 text-rose-400 border border-rose-500/20'
-                                  }`}
-                                >
-                                  {day.statusLabel}
+                        {/* 2. Aktivitas & Durasi */}
+                        <td className="py-2.5 px-3">
+                          {day.isSunday ? (
+                            <span className="text-slate-500 text-xs">Libur Rutin</span>
+                          ) : (
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {day.statusLabel === 'OK' ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-400 font-medium text-xs">
+                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{day.liveDuration || 4} Jam Live</span>
                                 </span>
+                              ) : day.liveDuration > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-amber-400 font-medium text-xs">
+                                  <Clock className="h-3.5 w-3.5 shrink-0" />
+                                  <span>{day.liveDuration} Jam Live (Kurang {4 - day.liveDuration}h)</span>
+                                </span>
+                              ) : (
+                                <span className="text-slate-400 text-xs">Tidak Live / Absen</span>
+                              )}
 
-                                {!day.isSunday && (
-                                  <button
-                                    onClick={() => handleUpdateDailyLiveDuration(day)}
-                                    className="px-2 py-0.5 rounded text-[10.5px] font-mono font-bold bg-slate-800/80 text-slate-300 border border-slate-700 hover:border-indigo-500 hover:text-indigo-300 hover:bg-indigo-950/30 transition-all flex items-center gap-1"
-                                    title="Klik untuk ubah durasi live"
-                                  >
-                                    <Edit3 className="h-2.5 w-2.5 text-slate-400" />
-                                    <span>{day.liveDuration > 0 ? `${day.liveDuration} Jam` : '0 Jam'}</span>
-                                  </button>
-                                )}
-                              </div>
+                              {/* Quick Edit Durasi Link */}
+                              <button
+                                onClick={() => handleUpdateDailyLiveDuration(day)}
+                                className="text-[10px] text-slate-500 hover:text-indigo-400 hover:underline flex items-center gap-0.5 ml-1 transition-colors"
+                                title="Ubah durasi live"
+                              >
+                                <Edit3 className="h-2.5 w-2.5" />
+                                <span>Edit</span>
+                              </button>
 
-                              {/* Timestamp / Bot Report Status */}
-                              {!day.isSunday && (
-                                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono">
-                                  {day.submittedAt ? (
-                                    <span className="flex items-center gap-1 text-slate-400">
-                                      <Clock className="h-2.5 w-2.5 text-slate-500" />
-                                      <span>Kirim: {formatSubmittedAt(day.submittedAt)}</span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-rose-400/80 font-sans">❌ Tidak kirim bot</span>
-                                  )}
-
-                                  {day.rawMessage && day.rawMessage !== '[Manual Input]' && (
-                                    <button
-                                      onClick={() =>
-                                        setViewingRawMessage({
-                                          date: day.shortDate,
-                                          streamer: drilldownStreamer.nama,
-                                          message: day.rawMessage,
-                                          time: formatSubmittedAt(day.submittedAt),
-                                        })
-                                      }
-                                      className="text-amber-400/90 hover:text-amber-300 hover:underline font-mono"
-                                      title="Lihat pesan bot asli"
-                                    >
-                                      [Chat]
-                                    </button>
-                                  )}
-                                </div>
+                              {/* Timestamp / Bot Chat button */}
+                              {day.rawMessage && day.rawMessage !== '[Manual Input]' && (
+                                <button
+                                  onClick={() =>
+                                    setViewingRawMessage({
+                                      date: day.shortDate,
+                                      streamer: drilldownStreamer.nama,
+                                      message: day.rawMessage,
+                                      time: formatSubmittedAt(day.submittedAt),
+                                    })
+                                  }
+                                  className="text-[10px] text-indigo-400/80 hover:text-indigo-300 underline font-mono ml-auto"
+                                  title="Lihat pesan bot asli"
+                                >
+                                  [Chat Bot]
+                                </button>
                               )}
                             </div>
-                          </div>
+                          )}
                         </td>
 
-                        {/* Rincian Potongan */}
-                        <td className="py-3 px-3 font-mono">
-                          {hasPenalty ? (
-                            <div className="flex flex-wrap gap-1">
-                              {day.shortagePenalty > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-950/50 text-rose-300 border border-rose-500/30">
-                                  Durasi: -{formatRupiah(day.shortagePenalty)}
-                                </span>
-                              )}
-                              {day.noReportPenalty > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-950/50 text-rose-300 border border-rose-500/30">
-                                  Telat: -{formatRupiah(day.noReportPenalty)}
-                                </span>
-                              )}
-                              {day.absentPenalty > 0 && (
-                                <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-rose-950/50 text-rose-300 border border-rose-500/30">
-                                  Absen: -{formatRupiah(day.absentPenalty)}
-                                </span>
-                              )}
+                        {/* 3. Keterangan Denda */}
+                        <td className="py-2.5 px-3">
+                          {day.isSunday ? (
+                            <span className="text-slate-600">-</span>
+                          ) : hasPenalty ? (
+                            <div className="text-xs text-rose-400/90 font-mono flex items-center gap-1.5 flex-wrap">
+                              {day.shortagePenalty > 0 && <span>Durasi Kurang (-{formatRupiah(day.shortagePenalty)})</span>}
+                              {day.noReportPenalty > 0 && <span>• Telat/Lupa Rekap (-{formatRupiah(day.noReportPenalty)})</span>}
+                              {day.absentPenalty > 0 && <span>• Absen (-{formatRupiah(day.absentPenalty)})</span>}
                             </div>
                           ) : (
-                            <span className="text-slate-600 text-xs">-</span>
+                            <span className="text-slate-500 text-xs">SOP Terpenuhi (Rp 0)</span>
                           )}
                         </td>
 
-                        {/* Total Denda Hari Ini */}
-                        <td className="py-3 px-3 text-right font-mono">
+                        {/* 4. Total Denda (Single line nowrap) */}
+                        <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
                           {hasPenalty ? (
                             <span className="font-bold text-rose-400">-{formatRupiah(day.totalDayPenalty)}</span>
                           ) : (
-                            <span className="font-semibold text-emerald-400">Rp 0</span>
+                            <span className="text-slate-500">Rp 0</span>
                           )}
                         </td>
 
-                        {/* Dispensasi / Aksi */}
-                        <td className="py-3 px-3 text-center">
+                        {/* 5. Dispensasi / Aksi */}
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {day.isSunday ? (
-                            <span className="text-[10px] text-slate-500 font-medium italic">Libur Rutin</span>
+                            <span className="text-slate-600 text-xs">-</span>
                           ) : day.isCompensated ? (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-[10.5px] font-semibold">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/40 text-cyan-300 text-[11px] font-medium border border-cyan-500/20">
                               <span>🔄 Kompensasi</span>
                               <button
                                 onClick={() => handleToggleDailyExcuse(day)}
@@ -3457,10 +3431,10 @@ const Finance = () => {
                               >
                                 ×
                               </button>
-                            </div>
+                            </span>
                           ) : day.isExcused ? (
-                            <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-950/60 border border-amber-500/30 text-amber-300 text-[10.5px] font-semibold">
-                              <span>✅ Izin Sah</span>
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300 text-[11px] font-medium border border-amber-500/20">
+                              <span>✅ Izin Bebas Denda</span>
                               <button
                                 onClick={() => handleToggleDailyExcuse(day)}
                                 className="text-slate-400 hover:text-rose-400 ml-1 font-bold text-xs"
@@ -3468,32 +3442,27 @@ const Finance = () => {
                               >
                                 ×
                               </button>
-                            </div>
+                            </span>
                           ) : hasPenalty ? (
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="inline-flex items-center gap-1">
                               <button
                                 onClick={() => handleToggleDailyExcuse(day)}
-                                className="px-2 py-1 rounded-md text-[10px] font-bold text-amber-300 bg-amber-950/50 border border-amber-500/30 hover:bg-amber-500 hover:text-black transition-all"
+                                className="px-2 py-0.5 rounded text-[11px] text-amber-400 hover:bg-amber-950/40 hover:text-amber-300 transition-colors"
                                 title="Tandai izin sah via WA agar bebas denda"
                               >
                                 + Izin
                               </button>
+                              <span className="text-slate-700">|</span>
                               <button
                                 onClick={() => handleSetDailyCompensation(day)}
-                                className="px-2 py-1 rounded-md text-[10px] font-bold text-cyan-300 bg-cyan-950/50 border border-cyan-500/30 hover:bg-cyan-500 hover:text-black transition-all"
+                                className="px-2 py-0.5 rounded text-[11px] text-cyan-400 hover:bg-cyan-950/40 hover:text-cyan-300 transition-colors"
                                 title="Tandai janji ganti jam live"
                               >
-                                🔄 Kompensasi
+                                Kompensasi
                               </button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => handleToggleDailyExcuse(day)}
-                              className="px-2 py-0.5 rounded text-[10px] text-slate-500 hover:text-amber-300 hover:bg-amber-950/30 border border-transparent hover:border-amber-500/30 transition-all"
-                              title="Tambah catatan izin jika diperlukan"
-                            >
-                              + Izin
-                            </button>
+                            <span className="text-slate-600 text-xs">-</span>
                           )}
                         </td>
                       </tr>
@@ -3504,11 +3473,11 @@ const Finance = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="px-5 py-3.5 border-t border-slate-800 bg-slate-900/60 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
+            <div className="px-6 py-3.5 border-t border-slate-800 bg-slate-900/40 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
                 <button
                   onClick={() => generateStreamerAuditWaSlip(drilldownStreamer)}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-600 hover:text-black transition-all shadow-sm"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-600 hover:text-black transition-all"
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
                   <span>Salin Slip WA</span>
@@ -3516,7 +3485,7 @@ const Finance = () => {
 
                 <button
                   onClick={() => handleToggleVerify(drilldownStreamer)}
-                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-sm ${
+                  className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
                     drilldownStreamer.isVerified
                       ? 'bg-rose-950/30 text-rose-300 border-rose-500/30 hover:bg-rose-600 hover:text-white'
                       : 'bg-indigo-950/40 text-indigo-300 border-indigo-500/30 hover:bg-indigo-600 hover:text-white'
@@ -3538,9 +3507,9 @@ const Finance = () => {
 
               <button
                 onClick={() => setDrilldownStreamer(null)}
-                className="px-4 py-1.5 rounded-xl text-xs font-bold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-all shadow-sm"
+                className="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 transition-colors"
               >
-                Selesai &amp; Tutup
+                Tutup
               </button>
             </div>
           </div>
