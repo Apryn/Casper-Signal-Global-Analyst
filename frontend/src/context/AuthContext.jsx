@@ -42,7 +42,13 @@ export const AuthProvider = ({ children }) => {
       setUser(userData);
       return { success: true };
     } catch (err) {
-      const errMsg = err.response?.data?.message || 'Kode aktivasi salah.';
+      console.error('Login error:', err);
+      let errMsg = 'Kode aktivasi salah.';
+      if (err.response?.data?.message) {
+        errMsg = err.response.data.message;
+      } else if (err.message) {
+        errMsg = `Error: ${err.message}`;
+      }
       return { success: false, error: errMsg };
     }
   };
