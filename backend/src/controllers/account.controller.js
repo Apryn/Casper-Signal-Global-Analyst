@@ -1,4 +1,5 @@
 import { query } from '../config/db.js';
+import { discoverNewContent } from '../services/social.service.js';
 
 // GET /api/accounts -> Retrieve all streamer accounts
 export const getAllAccounts = async (req, res) => {
@@ -53,6 +54,10 @@ export const addAccount = async (req, res) => {
        RETURNING *`,
       [id, platform, username, link || '', channel_id || null]
     );
+
+    // Trigger instant crawl for newly added account
+    discoverNewContent().catch(err => console.warn(`[Account Controller]: Instant crawl error: ${err.message}`));
+
     res.status(201).json(result.rows[0]);
   } catch (error) {
     if (error.code === '23505') {
@@ -91,6 +96,9 @@ export const updateAccount = async (req, res) => {
        RETURNING *`,
       [platform, username, link || '', channel_id || null, accountId]
     );
+
+    // Trigger instant crawl for updated account
+    discoverNewContent().catch(err => console.warn(`[Account Controller]: Instant crawl error: ${err.message}`));
 
     res.json(result.rows[0]);
   } catch (error) {
