@@ -50,10 +50,15 @@ const PORT = process.env.PORT || 5000;
 // CORS — allow frontend origins explicitly
 // ============================================================
 const allowedOrigins = [
-  'http://localhost:5173',  // Vite dev server
+  'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:80',
+  'http://localhost:81',
   'http://localhost',
+  'http://187.77.156.219',
+  'http://187.77.156.219:81',
+  'http://187.77.156.219:5001',
+  'http://187.77.156.219:80',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
 
@@ -62,6 +67,10 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, Postman, server-to-server)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Allow any localhost or VPS IP port
+    if (/^http:\/\/(localhost|127\.0\.0\.1|187\.77\.156\.219)(:\d+)?$/.test(origin)) {
+      return callback(null, true);
+    }
     // In development, allow all origins
     if (process.env.NODE_ENV !== 'production') return callback(null, true);
     callback(new Error(`CORS: Origin ${origin} not allowed`));
