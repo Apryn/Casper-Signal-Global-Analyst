@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS streamer_accounts (
     username VARCHAR(255) NOT NULL,
     link VARCHAR(500),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_platform_username UNIQUE (platform, username)
+    CONSTRAINT unique_streamer_platform_username UNIQUE (streamer_id, platform, username)
 );
 
 -- 7. Social media contents catalog
