@@ -27,6 +27,10 @@ echo ""
 echo "▶ [2/4] Update dependencies backend & run DB migrations..."
 cd "$APP_DIR/backend"
 npm install --omit=dev
+
+# Pastikan library crawler Python (yt-dlp & curl-cffi) terpasang di VPS
+pip3 install yt-dlp curl-cffi --break-system-packages 2>/dev/null || pip3 install yt-dlp curl-cffi 2>/dev/null || pip install yt-dlp curl-cffi 2>/dev/null || true
+
 node src/db/sync_env_neon.js 2>/dev/null || true
 node src/db/migrate_live_tracking.js 2>/dev/null || true
 node src/db/migrate_schedule_live_duration.js 2>/dev/null || true

@@ -723,6 +723,7 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
      liveDuration || 0.0, liveDuration || 0.0, chatCount || 0, registrationCount || 0, ftdCount || 0,
      rawMessage]
   );
+
   return res.rows[0];
 };
 

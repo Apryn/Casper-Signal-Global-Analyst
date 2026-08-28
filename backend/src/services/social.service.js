@@ -1,4 +1,10 @@
 import { query } from '../config/db.js';
+import { spawn } from 'child_process';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 /**
  * Extracts YouTube Video ID from a URL.
@@ -111,6 +117,34 @@ const resolveSecUidFromTikWM = async (cleanUsername) => {
     }
   } catch (error) {
     console.warn(`[Social Service]: TikWM secUid lookup failed for ${cleanUsername}: ${error.message}`);
+  }
+  return null;
+};
+
+/**
+ * Attempts to resolve secUid by scraping the mobile TikTok user profile.
+ * Works even when RapidAPI or TikWM are unavailable or quota-exhausted.
+ */
+const resolveSecUidFromProfileScrape = async (cleanUsername) => {
+  try {
+    const url = `https://www.tiktok.com/@${cleanUsername}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const match = html.match(/secUid["':\s]+([a-zA-Z0-9_-]{40,})/);
+    if (match) {
+      console.log(`[Social Service]: Resolved secUid from mobile TikTok profile for ${cleanUsername}: ${match[1]}`);
+      return match[1];
+    }
+  } catch (error) {
+    console.warn(`[Social Service]: Profile scrape secUid lookup failed for ${cleanUsername}: ${error.message}`);
   }
   return null;
 };
@@ -513,9 +547,25 @@ export const syncSocialMetrics = async () => {
         }
       } else if (row.platform === 'TikTok' && row.link) {
         metrics = await fetchTikTokVideoMetrics(row.link);
-        if (!metrics) {
-          console.log(`[Social Service]: API failed/missing for TikTok, trying TikWM fallback for ${row.link}...`);
-          metrics = await scrapeTikTokViaUserPosts(row.link, row.account_username);
+        if (!metrics && row.account_username) {
+          try {
+            const userVideos = await fetchRealTikTokVideos(row.account_username, 30);
+            const videoIdMatch = row.link.match(/video\/(\d+)/);
+            if (videoIdMatch) {
+              const targetId = videoIdMatch[1];
+              const matched = userVideos.find(v => v.id === targetId || (v.link && v.link.includes(targetId)));
+              if (matched) {
+                metrics = {
+                  views: matched.views,
+                  likes: matched.likes,
+                  comments: matched.comments,
+                  shares: matched.shares
+                };
+              }
+            }
+          } catch (e) {
+            console.warn(`[Social Service]: Failed to sync metrics via TikTok crawler for ${row.link}: ${e.message}`);
+          }
         }
       }
 
@@ -641,11 +691,57 @@ const resolveStreamerFromTitle = (title, defaultStreamerId, allStreamers) => {
 };
 
 /**
- * Scans all registered streamer accounts and auto-discovers new posts.
- * Crawls actual YouTube RSS feeds and TikTok RapidAPI/TikWM, auto-matching streamers by title keywords.
+ * Crawls real TikTok videos directly from a user profile using python yt-dlp with browser impersonation.
+ * Bypasses TikTok bot blocks and extracts real titles, video links, upload dates, views, likes, comments, and shares.
+ */
+export const fetchRealTikTokVideos = (username, maxVideos = 30) => {
+  return new Promise((resolve) => {
+    const clean = username.replace(/^@+/, '').trim();
+    if (!clean) return resolve([]);
+
+    const scriptPath = path.join(__dirname, '../scripts/crawl_tiktok.py');
+    const pythonExe = process.platform === 'win32' ? 'python' : 'python3';
+
+    const child = spawn(pythonExe, [scriptPath, clean, String(maxVideos)]);
+
+    let stdout = '';
+    let stderr = '';
+
+    child.stdout.on('data', (data) => {
+      stdout += data.toString('utf-8');
+    });
+
+    child.stderr.on('data', (data) => {
+      stderr += data.toString('utf-8');
+    });
+
+    child.on('close', (code) => {
+      if (code !== 0) {
+        console.warn(`[Social Service]: Python TikTok crawler exited with code ${code} for @${clean}: ${stderr}`);
+        return resolve([]);
+      }
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        resolve(Array.isArray(parsed) ? parsed : []);
+      } catch (e) {
+        console.warn(`[Social Service]: Failed to parse Python TikTok output for @${clean}: ${e.message}`);
+        resolve([]);
+      }
+    });
+
+    child.on('error', (err) => {
+      console.warn(`[Social Service]: Error spawning Python TikTok crawler for @${clean}: ${err.message}`);
+      resolve([]);
+    });
+  });
+};
+
+/**
+ * Scans all registered streamer accounts and auto-discovers real new posts.
+ * Crawls YouTube channels via RSS feeds and TikTok profiles using the real yt-dlp crawler.
  */
 export const discoverNewContent = async () => {
-  console.log('[Social Service]: Starting auto-discovery scan for new uploads...');
+  console.log('[Social Service]: Starting auto-discovery scan for real video uploads...');
   let discoveredCount = 0;
 
   try {
@@ -676,10 +772,8 @@ export const discoverNewContent = async () => {
             );
 
             if (existsCheck.rows.length === 0) {
-              // Smart match streamer from video title
               const assignedStreamerId = resolveStreamerFromTitle(video.title, acc.streamer_id, allStreamers);
 
-              // Insert with zero metrics — no fake/random starter values
               const insertResult = await query(
                 `INSERT INTO content (streamer_id, platform, title, upload_date, link, views, likes, comments, shares, account_id)
                  VALUES ($1, $2, $3, $4, $5, 0, 0, 0, 0, $6)
@@ -695,7 +789,6 @@ export const discoverNewContent = async () => {
               );
               const newId = insertResult.rows[0].id;
 
-              // Immediately try to fetch real metrics from YouTube API or scraper
               let realMetrics = await fetchYoutubeMetrics(video.link);
               if (!realMetrics) {
                 realMetrics = await scrapeYoutubeWatchPage(video.link);
@@ -705,9 +798,6 @@ export const discoverNewContent = async () => {
                   `UPDATE content SET views = $1, likes = $2, comments = $3, shares = $4 WHERE id = $5`,
                   [realMetrics.views, realMetrics.likes, realMetrics.comments, realMetrics.shares, newId]
                 );
-                console.log(`[Social Service]: Fetched real metrics for new video "${video.title}" — ${realMetrics.views} views`);
-              } else {
-                console.log(`[Social Service]: Could not fetch real metrics for "${video.title}" — stored with 0 views (will be updated on next sync)`);
               }
 
               discoveredCount++;
@@ -715,11 +805,13 @@ export const discoverNewContent = async () => {
           }
         }
       } else if (acc.platform === 'TikTok' && acc.username) {
-        console.log(`[Social Service]: Crawling TikTok account for streamer ${acc.streamer_name}...`);
-        const tiktokVideos = await fetchTikTokRssVideos(acc.username, acc.link);
-        console.log(`[Social Service]: Found ${tiktokVideos.length} videos on TikTok for ${acc.streamer_name}`);
+        console.log(`[Social Service]: Crawling real TikTok videos for streamer ${acc.streamer_name} (@${acc.username})...`);
+        const tiktokVideos = await fetchRealTikTokVideos(acc.username, 30);
+        console.log(`[Social Service]: Found ${tiktokVideos.length} real videos on TikTok for ${acc.streamer_name} (@${acc.username})`);
         
         for (const video of tiktokVideos) {
+          if (!video.link) continue;
+
           const existsCheck = await query(
             'SELECT id FROM content WHERE link = $1',
             [video.link]
@@ -733,24 +825,38 @@ export const discoverNewContent = async () => {
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
               [
                 assignedStreamerId,
-                acc.platform,
+                'TikTok',
                 video.title,
-                video.uploadDate,
+                video.uploadDate || new Date().toISOString().split('T')[0],
                 video.link,
-                video.views,
-                video.likes,
-                video.comments,
-                video.shares,
+                video.views || 0,
+                video.likes || 0,
+                video.comments || 0,
+                video.shares || 0,
                 acc.id
               ]
             );
             discoveredCount++;
+          } else {
+            // Update existing video metrics and title
+            await query(
+              `UPDATE content 
+               SET views = $1, likes = $2, comments = $3, shares = $4, title = COALESCE(NULLIF($5, ''), title), upload_date = COALESCE($6, upload_date)
+               WHERE id = $7`,
+              [
+                video.views || 0,
+                video.likes || 0,
+                video.comments || 0,
+                video.shares || 0,
+                video.title,
+                video.uploadDate || null,
+                existsCheck.rows[0].id
+              ]
+            );
           }
         }
       } else {
-        // Instagram, Facebook:
-        // Do NOT generate mock fallback content in production to maintain data integrity!
-        console.log(`[Social Service]: Skipping crawler for ${acc.platform} account of ${acc.streamer_name} (requires manual entry or dedicated crawler API).`);
+        console.log(`[Social Service]: Skipping crawler for ${acc.platform} account of ${acc.streamer_name}.`);
       }
     }
 
