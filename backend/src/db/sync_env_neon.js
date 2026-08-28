@@ -6,20 +6,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const envPath = path.join(__dirname, '../../.env');
 
-const TARGET_NEON_URL = 'postgresql://neondb_owner:npg_ev2P0rstmxFi@ep-aged-resonance-ao2prpdw-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require';
+const TARGET_SUPABASE_URL = 'postgresql://postgres.drcdghaavgdswkelfwfw:szfOROAfJGmzRNJI@aws-0-ap-south-1.pooler.supabase.com:6543/postgres';
 
 try {
   if (fs.existsSync(envPath)) {
     let content = fs.readFileSync(envPath, 'utf8');
-    if (!content.includes('ep-aged-resonance-ao2prpdw')) {
-      console.log('🔄 Updating DATABASE_URL in .env to Neon database...');
-      content = content.replace(/DATABASE_URL=.*/g, `DATABASE_URL=${TARGET_NEON_URL}`);
+    if (!content.includes('supabase.com')) {
+      console.log('🔄 Updating DATABASE_URL in .env to Supabase...');
+      content = content.replace(/DATABASE_URL=.*/g, `DATABASE_URL=${TARGET_SUPABASE_URL}`);
       fs.writeFileSync(envPath, content, 'utf8');
-      console.log('✅ .env successfully updated to Neon database!');
+      console.log('✅ .env successfully updated to Supabase!');
     } else {
-      console.log('✅ .env is already pointing to Neon database.');
+      console.log('✅ .env is already pointing to Supabase.');
     }
   }
 } catch (e) {
-  console.error('Error syncing .env to Neon:', e.message);
+  console.error('Error syncing .env to Supabase:', e.message);
 }
