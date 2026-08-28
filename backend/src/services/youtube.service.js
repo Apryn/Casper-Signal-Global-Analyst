@@ -120,21 +120,37 @@ export const getYouTubeConcurrentViewers = async (videoId, apiKey) => {
 
 export const checkYouTubeLiveViaScrape = async (identifier) => {
   if (!identifier) return { isLive: false, videoId: null, title: null };
-  const cleanId = identifier.trim();
-
-  // Support videoId (11 chars), @handle, UC... channel ID, or legacy channel name
-  const isDirectVideoId = cleanId.length === 11 && !cleanId.startsWith('UC') && !cleanId.startsWith('@');
+  const raw = identifier.trim();
+  const cleanId = raw;
   const urlsToTry = [];
 
-  if (isDirectVideoId) {
-    urlsToTry.push(`https://www.youtube.com/watch?v=${cleanId}`);
-  } else if (cleanId.startsWith('@')) {
-    urlsToTry.push(`https://www.youtube.com/${cleanId}/live`);
-  } else if (cleanId.startsWith('UC')) {
-    urlsToTry.push(`https://www.youtube.com/channel/${cleanId}/live`);
+  if (raw.startsWith('http://') || raw.startsWith('https://')) {
+    const trimmed = raw.replace(/\/+$/, '');
+    if (trimmed.includes('/watch?v=')) {
+      urlsToTry.push(trimmed);
+    } else if (trimmed.endsWith('/live')) {
+      urlsToTry.push(trimmed);
+    } else {
+      urlsToTry.push(`${trimmed}/live`);
+    }
+
+    const handleMatch = trimmed.match(/youtube\.com\/(@[a-zA-Z0-9_.-]+)/i);
+    if (handleMatch) {
+      urlsToTry.push(`https://www.youtube.com/${handleMatch[1]}/live`);
+    }
+    const chMatch = trimmed.match(/youtube\.com\/channel\/(UC[a-zA-Z0-9_-]+)/i);
+    if (chMatch) {
+      urlsToTry.push(`https://www.youtube.com/channel/${chMatch[1]}/live`);
+    }
+  } else if (raw.length === 11 && !raw.startsWith('UC') && !raw.startsWith('@') && !raw.includes('/')) {
+    urlsToTry.push(`https://www.youtube.com/watch?v=${raw}`);
+  } else if (raw.startsWith('@')) {
+    urlsToTry.push(`https://www.youtube.com/${raw}/live`);
+  } else if (raw.startsWith('UC')) {
+    urlsToTry.push(`https://www.youtube.com/channel/${raw}/live`);
   } else {
-    urlsToTry.push(`https://www.youtube.com/@${cleanId}/live`);
-    urlsToTry.push(`https://www.youtube.com/channel/${cleanId}/live`);
+    urlsToTry.push(`https://www.youtube.com/@${raw}/live`);
+    urlsToTry.push(`https://www.youtube.com/channel/${raw}/live`);
   }
 
   for (const url of urlsToTry) {
@@ -473,8 +489,8 @@ const handleChannelLive = async (account, liveInfo, sendNotification) => {
 
     console.log(`[Live Detection]: Terdeteksi live aktif tanpa jadwal untuk streamer ID ${streamer_id}. Membuat sesi otomatis...`);
     const insertRes = await query(
-      `INSERT INTO schedule (streamer_id, platform, start_time, end_time, actual_start_time, status, live_link, lateness_minutes, notes)
-       VALUES ($1, $2, $3, $4, $5, 'Live', $6, 0, 'Auto-Detected Live')
+      `INSERT INTO schedule (streamer_id, platform, start_time, end_time, actual_start_time, status, live_link, lateness_minutes)
+       VALUES ($1, $2, $3, $4, $5, 'Live', $6, 0)
        RETURNING *`,
       [
         streamer_id,
@@ -774,33 +790,32 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
   // Bersihkan buffer confirmation yang sudah expired (> 2 jam) di awal setiap cycle
   await dbBuffer.cleanup();
 
-  // Ambil semua akun YouTube dengan channel_id
+  // Ambil semua akun YouTube (baik yang punya channel_id maupun link / username)
   const accountsRes = await query(
-    `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, s.nama
+    `SELECT sa.id, sa.streamer_id, sa.channel_id, sa.username, sa.link, s.nama
      FROM streamer_accounts sa
      JOIN streamers s ON sa.streamer_id = s.id
      WHERE sa.platform = 'YouTube'
-       AND sa.channel_id IS NOT NULL
-       AND sa.channel_id <> ''`
+       AND ((sa.channel_id IS NOT NULL AND sa.channel_id <> '') OR (sa.link IS NOT NULL AND sa.link <> '') OR (sa.username IS NOT NULL AND sa.username <> ''))`
   );
 
   const accounts = accountsRes.rows;
   if (accounts.length === 0) {
-    console.log('[YouTube Service] Tidak ada channel YouTube dengan channel_id terdaftar.');
+    console.log('[YouTube Service] Tidak ada channel YouTube terdaftar.');
   } else {
     console.log(`[YouTube Service] Checking ${accounts.length} YouTube channel(s)...`);
 
-      // Deduplicate: satu channel_id bisa dipunya 2 streamer
-      // Kita cek per channel_id, lalu tentukan streamer berdasarkan jadwal
-      const uniqueChannels = [...new Map(accounts.map(a => [a.channel_id, a])).values()];
+      const getTargetId = (a) => a.channel_id || a.link || a.username;
+      const uniqueChannels = [...new Map(accounts.map(a => [getTargetId(a), a])).values()];
 
       for (const account of uniqueChannels) {
         try {
-          const liveInfo = await checkChannelLiveStatus(account.channel_id, apiKey);
+          const targetIdentifier = getTargetId(account);
+          const liveInfo = await checkChannelLiveStatus(targetIdentifier, apiKey);
 
           if (liveInfo.isLive) {
             // Channel sedang live → cari semua streamer yang pakai channel ini
-            const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
+            const channelAccounts = accounts.filter(a => getTargetId(a) === targetIdentifier);
 
             // Cocokkan judul live stream dengan nama streamer yang terdaftar
             const streamersRes = await query('SELECT id, nama FROM streamers');
@@ -947,7 +962,7 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 if (crossChannelLive.rows.length > 0) {
                   const other = crossChannelLive.rows[0];
                   console.log(`[YouTube Service] ⛔ Cross-channel dedup: video ${liveInfo.videoId} sudah Live milik ${other.nama} (schedule #${other.id}). Mustahil live di 2 channel — tolak sebagai video rekomendasi palsu.`);
-                  await dbBuffer.delete(account.channel_id); // hapus buffer agar tidak persist
+                  await dbBuffer.delete(targetIdentifier); // hapus buffer agar tidak persist
                   continue;
                 }
 
@@ -966,11 +981,11 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                   // Langsung lanjut ke create schedule, skip guard 3
                 } else {
                   // Cek buffer dari database (persistent, survive restart)
-                  const pending = await dbBuffer.get(account.channel_id);
+                  const pending = await dbBuffer.get(targetIdentifier);
 
                   if (!pending || pending.video_id !== liveInfo.videoId) {
                     // Deteksi pertama kali → simpan ke DB buffer, tunggu siklus berikutnya
-                    await dbBuffer.set(account.channel_id, liveInfo.videoId, displayName);
+                    await dbBuffer.set(targetIdentifier, liveInfo.videoId, displayName);
                     console.log(`[YouTube Service] 🟡 ${displayName} terdeteksi live PERTAMA (video: ${liveInfo.videoId}). Tunggu konfirmasi siklus ke-2 (~2 menit)...`);
                     continue;
                   }
@@ -983,7 +998,7 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                 }
 
                 // ── Confirmed! Buat schedule instan ──────────────────────────────────────────
-                await dbBuffer.delete(account.channel_id); // Hapus dari buffer setelah dikonfirmasi
+                await dbBuffer.delete(targetIdentifier); // Hapus dari buffer setelah dikonfirmasi
                 console.log(`[YouTube Service] 🔴 ${displayName} DIKONFIRMASI live YouTube di luar jadwal. Membuat schedule instan...`);
                 
                 const startTime = liveInfo.actualStartTime || new Date(now.getTime() - 15 * 60 * 1000);
@@ -1018,8 +1033,8 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
             }
           } else {
             // Channel offline → hapus dari DB confirmation buffer + tutup sesi aktif
-            await dbBuffer.delete(account.channel_id);
-            const channelAccounts = accounts.filter(a => a.channel_id === account.channel_id);
+            await dbBuffer.delete(targetIdentifier);
+            const channelAccounts = accounts.filter(a => getTargetId(a) === targetIdentifier);
             for (const acc of channelAccounts) {
               await handleChannelOffline(acc, sendNotification);
             }
