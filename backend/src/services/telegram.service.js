@@ -382,19 +382,20 @@ const extractLive = (rawText) => {
     return parseFloat(total.toFixed(2));
   }
 
-  // B1: Single-line "LIVE : 5 JAM" or "LIVE: 5 JAM" or "Live: 4" or "SESI LIVE: 4" (on the same line)
-  const liveJamSameLine = text.match(/\b(?:SESI\s+)?LIVE\s*:[ \t]*(\d+(?:[.,]\d+)?)(?:[ \t]*jam)?(?:\s|$)/i);
+  // B1: Single-line "LIVE : 5 JAM" or "LIVE: jam 4,5 jam" or "Live: 4" or "SESI LIVE: 4"
+  const liveJamSameLine = text.match(/\b(?:SESI\s+)?LIVE\s*:[ \t]*(?:jam\s+)?(\d+(?:[.,]\d+)?)(?:[ \t]*jam)?(?:\s|$)/i);
   if (liveJamSameLine) {
     return parseFloat(parseFloat(liveJamSameLine[1].replace(',', '.')).toFixed(2));
   }
 
-  // B2: Multi-line LIVE block: "LIVE:" or "SESI LIVE" followed by newline and then lines with "X jam" or bare number "X"
+  // B2: Multi-line LIVE block: "LIVE:" or "SESI LIVE" followed by newline and then lines with "X jam" or "jam X jam" or bare number "X"
   const liveBlockMatch = text.match(/\b(?:SESI\s+)?LIVE\s*:?\s*\n([\s\S]*?)(?=\n[A-Z]{2,}\s*:|$)/i);
   if (liveBlockMatch) {
     const blockLines = liveBlockMatch[1].split('\n');
     let total = 0;
     for (const bl of blockLines) {
-      const m = bl.trim().match(/^(\d+(?:[.,]\d+)?)(?:\s*jam)?$/i);
+      const cleanBl = bl.trim().replace(/^jam\s+/i, '');
+      const m = cleanBl.match(/^(\d+(?:[.,]\d+)?)(?:\s*jam.*)?$/i);
       if (m) total += parseFloat(m[1].replace(',', '.'));
     }
     if (total > 0) return parseFloat(total.toFixed(2));
