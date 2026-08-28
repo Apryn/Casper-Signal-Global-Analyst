@@ -21,25 +21,17 @@ async function seedRealStreamers() {
   try {
     await client.query('BEGIN');
 
-    // Clean existing streamers & accounts to prevent duplicates
-    await client.query('DELETE FROM weekly_evaluations');
-    await client.query('DELETE FROM notifications');
-    await client.query('DELETE FROM schedule');
-    await client.query('DELETE FROM content');
-    await client.query('DELETE FROM scores');
-    await client.query('DELETE FROM targets');
-    await client.query('DELETE FROM daily_reports');
-    await client.query('DELETE FROM streamer_accounts');
-    await client.query('DELETE FROM streamers');
+    // Non-destructive: insert streamers and accounts without deleting anything
 
-    await client.query('ALTER SEQUENCE streamers_id_seq RESTART WITH 1');
-    await client.query('ALTER SEQUENCE streamer_accounts_id_seq RESTART WITH 1');
 
     for (const streamer of realStreamers) {
       // 1. Insert Streamer
       const streamerRes = await client.query(
         `INSERT INTO streamers (nama, platform, telegram_username)
          VALUES ($1, $2, $3)
+         ON CONFLICT (nama) DO UPDATE SET
+           platform = EXCLUDED.platform,
+           telegram_username = EXCLUDED.telegram_username
          RETURNING id`,
         [streamer.name, streamer.platform, streamer.telegram_username]
       );

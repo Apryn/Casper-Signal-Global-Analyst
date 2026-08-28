@@ -1,17 +1,7 @@
 -- Initialize schema for Casper Signal Analytics Dashboard
 
--- Drop tables if they exist
-DROP TABLE IF EXISTS notifications CASCADE;
-DROP TABLE IF EXISTS schedule CASCADE;
-DROP TABLE IF EXISTS content CASCADE;
-DROP TABLE IF EXISTS scores CASCADE;
-DROP TABLE IF EXISTS targets CASCADE;
-DROP TABLE IF EXISTS daily_reports CASCADE;
-DROP TABLE IF EXISTS weekly_evaluations CASCADE;
-DROP TABLE IF EXISTS streamer_accounts CASCADE;
-DROP TABLE IF EXISTS streamers CASCADE;
-DROP TABLE IF EXISTS users CASCADE;
-DROP TABLE IF EXISTS config CASCADE;
+-- Schema setup for Casper Signal Analytics (Non-destructive: CREATE TABLE IF NOT EXISTS)
+
 
 
 -- 1. Users table (for dashboard access)

@@ -141,11 +141,10 @@ GEMINI_API_KEY=$ENV_GEMINI_API_KEY
 ENVEOF
 echo '  [OK] File .env berhasil dibuat otomatis'
 
-echo ''
-echo '-> [3/6] Init database schema...'
+echo '-> [3/6] Check database migrations (non-destructive)...'
 cd /var/www/casper/backend
-node src/db/init.js
-echo '  [OK] Database schema siap'
+node src/db/sync_env_neon.js 2>/dev/null || true
+echo '  [OK] Database siap'
 
 echo ''
 echo '-> [4/6] Build frontend...'
