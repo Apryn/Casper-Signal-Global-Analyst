@@ -44,10 +44,15 @@ CREATE TABLE daily_reports (
     instagram_upload INTEGER NOT NULL DEFAULT 0,
     facebook_upload INTEGER NOT NULL DEFAULT 0,
     live_duration NUMERIC(5,2) NOT NULL DEFAULT 0.0,
+    reported_live_duration NUMERIC(5,2) DEFAULT NULL,
     chat_count INTEGER NOT NULL DEFAULT 0,
     registration_count INTEGER NOT NULL DEFAULT 0,
     ftd_count INTEGER NOT NULL DEFAULT 0,
     raw_message TEXT,
+    content_submitted BOOLEAN DEFAULT FALSE,
+    content_link TEXT,
+    status_izin VARCHAR(50) DEFAULT NULL,
+    catatan_izin TEXT DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT unique_date_streamer UNIQUE (tanggal, streamer_id)
 );
@@ -108,6 +113,14 @@ CREATE TABLE schedule (
     start_time TIMESTAMP WITH TIME ZONE NOT NULL,
     end_time TIMESTAMP WITH TIME ZONE NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'Scheduled' CHECK (status IN ('Scheduled', 'Live', 'Completed', 'Cancelled')),
+    actual_start_time TIMESTAMP WITH TIME ZONE,
+    actual_end_time TIMESTAMP WITH TIME ZONE,
+    live_duration NUMERIC(5,2) DEFAULT 0,
+    lateness_minutes INTEGER DEFAULT 0,
+    substitute_streamer_id INTEGER REFERENCES streamers(id) ON DELETE SET NULL,
+    is_sick BOOLEAN DEFAULT FALSE,
+    live_link TEXT,
+    pre_live_submitted BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 

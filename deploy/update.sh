@@ -27,6 +27,7 @@ echo ""
 echo "▶ [2/4] Update dependencies backend & run DB migrations..."
 cd "$APP_DIR/backend"
 npm install --omit=dev
+node src/db/sync_env_neon.js 2>/dev/null || true
 node src/db/migrate_live_tracking.js 2>/dev/null || true
 node src/db/migrate_schedule_live_duration.js 2>/dev/null || true
 node src/db/migrate_live_detection_buffer.js 2>/dev/null || true
