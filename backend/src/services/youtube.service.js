@@ -76,6 +76,40 @@ const dbBuffer = {
   }
 };
 
+const offlineBuffer = {
+  async get(channelId) {
+    try {
+      const res = await query(
+        'SELECT * FROM offline_detection_buffer WHERE channel_id = $1',
+        [channelId]
+      );
+      return res.rows[0] || null;
+    } catch (e) {
+      return null;
+    }
+  },
+  async set(channelId) {
+    try {
+      await query(
+        `INSERT INTO offline_detection_buffer (channel_id, first_seen_at)
+         VALUES ($1, NOW())
+         ON CONFLICT (channel_id) DO NOTHING`,
+        [channelId]
+      );
+    } catch (e) {}
+  },
+  async delete(channelId) {
+    try {
+      await query('DELETE FROM offline_detection_buffer WHERE channel_id = $1', [channelId]);
+    } catch (e) {}
+  },
+  async cleanup() {
+    try {
+      await query("DELETE FROM offline_detection_buffer WHERE first_seen_at < NOW() - INTERVAL '2 hours'");
+    } catch (e) {}
+  }
+};
+
 // ── Helper: format menit ke string "X jam Y menit" ───────────────────────
 const formatDuration = (minutes) => {
   const h = Math.floor(minutes / 60);
@@ -1030,13 +1064,50 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                   await sendNotification(msg, targetChatId);
                 }
               }
-            }
+            // Hapus offline buffer karena channel aktif live
+            await offlineBuffer.delete(targetIdentifier);
           } else {
-            // Channel offline → hapus dari DB confirmation buffer + tutup sesi aktif
-            await dbBuffer.delete(targetIdentifier);
+            // Channel offline → periksa apakah ada schedule aktif yang perlu ditutup
             const channelAccounts = accounts.filter(a => getTargetId(a) === targetIdentifier);
-            for (const acc of channelAccounts) {
-              await handleChannelOffline(acc, sendNotification);
+            const streamerIds = channelAccounts.map(a => a.streamer_id);
+
+            const activeLiveRes = await query(
+              `SELECT id, streamer_id FROM schedule
+               WHERE (streamer_id = ANY($1) OR substitute_streamer_id = ANY($1))
+                 AND LOWER(platform) = 'youtube'
+                 AND status = 'Live'
+                 AND actual_start_time IS NOT NULL
+                 AND actual_end_time IS NULL`,
+              [streamerIds]
+            );
+
+            if (activeLiveRes.rows.length > 0) {
+              // Ada sesi Live aktif yang terdeteksi offline -> gunakan grace period 4 menit
+              const pendingOffline = await offlineBuffer.get(targetIdentifier);
+              const now = new Date();
+
+              if (!pendingOffline) {
+                // Deteksi offline pertama kali -> simpan ke offline buffer, jangan langsung tutup
+                await offlineBuffer.set(targetIdentifier);
+                console.log(`[YouTube Service] 🟡 Channel ${targetIdentifier} terdeteksi offline PERTAMA. Buffer toleransi 4 menit sebelum sesi ditutup.`);
+              } else {
+                const elapsedMs = now.getTime() - new Date(pendingOffline.first_seen_at).getTime();
+                if (elapsedMs >= 4 * 60 * 1000) {
+                  // Dikonfirmasi benar-benar offline selama 4 menit -> tutup sesi
+                  await offlineBuffer.delete(targetIdentifier);
+                  await dbBuffer.delete(targetIdentifier);
+                  console.log(`[YouTube Service] 🏁 Channel ${targetIdentifier} dikonfirmasi offline (> 4 mnt). Menutup sesi live...`);
+                  for (const acc of channelAccounts) {
+                    await handleChannelOffline(acc, sendNotification);
+                  }
+                } else {
+                  console.log(`[YouTube Service] 🟡 Channel ${targetIdentifier} dalam masa tenggang offline (${Math.floor(elapsedMs / 60000)}/4 mnt). Menjaga status Live.`);
+                }
+              }
+            } else {
+              // Tidak ada sesi live aktif -> bersihkan buffer
+              await offlineBuffer.delete(targetIdentifier);
+              await dbBuffer.delete(targetIdentifier);
             }
           }
 
@@ -1119,12 +1190,43 @@ export const checkTikTokLiveStatus = async (sendNotification = async () => {}) =
       try {
         const liveInfo = await checkTikTokUserLive(acc.username);
 
+        const bufferKey = `tt_${acc.username}`;
         if (liveInfo.isLive) {
+          await offlineBuffer.delete(bufferKey);
           console.log(`[TikTok Service] 🔴 ${acc.nama} (@${acc.username}) TERDETEKSI LIVE TIKTOK!`);
           await handleChannelLive(acc, liveInfo, sendNotification);
         } else {
-          // Offline -> tutup sesi jika sebelumnya sedang live
-          await handleChannelOffline(acc, sendNotification);
+          // Periksa apakah ada jadwal aktif berstatus Live untuk akun ini
+          const activeLiveRes = await query(
+            `SELECT id FROM schedule
+             WHERE (streamer_id = $1 OR substitute_streamer_id = $1)
+               AND LOWER(platform) = 'tiktok'
+               AND status = 'Live'
+               AND actual_start_time IS NOT NULL
+               AND actual_end_time IS NULL`,
+            [acc.streamer_id]
+          );
+
+          if (activeLiveRes.rows.length > 0) {
+            const pendingOffline = await offlineBuffer.get(bufferKey);
+            const now = new Date();
+
+            if (!pendingOffline) {
+              await offlineBuffer.set(bufferKey);
+              console.log(`[TikTok Service] 🟡 Akun @${acc.username} terdeteksi offline PERTAMA. Buffer toleransi 4 menit.`);
+            } else {
+              const elapsedMs = now.getTime() - new Date(pendingOffline.first_seen_at).getTime();
+              if (elapsedMs >= 4 * 60 * 1000) {
+                await offlineBuffer.delete(bufferKey);
+                console.log(`[TikTok Service] 🏁 Akun @${acc.username} dikonfirmasi offline (> 4 mnt). Menutup sesi live...`);
+                await handleChannelOffline(acc, sendNotification);
+              } else {
+                console.log(`[TikTok Service] 🟡 Akun @${acc.username} dalam masa tenggang offline (${Math.floor(elapsedMs / 60000)}/4 mnt).`);
+              }
+            }
+          } else {
+            await offlineBuffer.delete(bufferKey);
+          }
         }
 
         await new Promise(r => setTimeout(r, 400));
