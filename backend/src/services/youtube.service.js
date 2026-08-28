@@ -462,10 +462,38 @@ const findMatchingSchedule = async (streamerId, videoId = null) => {
 const handleChannelLive = async (account, liveInfo, sendNotification) => {
   const { streamer_id } = account;
   // Pass videoId agar findMatchingSchedule bisa recover jadwal Completed yang masih live
-  const schedule = await findMatchingSchedule(streamer_id, liveInfo.videoId || null);
+  let schedule = await findMatchingSchedule(streamer_id, liveInfo.videoId || null);
 
+  // Jika tidak ada jadwal terdaftar, buat sesi jadwal live otomatis (Opsi 2)
   if (!schedule) {
-    console.log(`[YouTube/TikTok Service] Terdeteksi live untuk streamer ID ${streamer_id}, tapi tidak ada jadwal matching.`);
+    const now = new Date();
+    const startTime = liveInfo.actualStartTime || now;
+    const endTime = new Date(startTime.getTime() + 2 * 60 * 60 * 1000);
+    const liveLink = liveInfo.liveLink || (account.platform === 'YouTube' ? `https://www.youtube.com/watch?v=${liveInfo.videoId}` : (liveInfo.videoId ? `https://www.tiktok.com/@${account.username}/video/${liveInfo.videoId}` : null));
+
+    console.log(`[Live Detection]: Terdeteksi live aktif tanpa jadwal untuk streamer ID ${streamer_id}. Membuat sesi otomatis...`);
+    const insertRes = await query(
+      `INSERT INTO schedule (streamer_id, platform, start_time, end_time, actual_start_time, status, live_link, lateness_minutes, notes)
+       VALUES ($1, $2, $3, $4, $5, 'Live', $6, 0, 'Auto-Detected Live')
+       RETURNING *`,
+      [
+        streamer_id,
+        account.platform || 'YouTube',
+        startTime.toISOString(),
+        endTime.toISOString(),
+        startTime.toISOString(),
+        liveLink
+      ]
+    );
+    schedule = insertRes.rows[0];
+
+    // Catat data penonton awal (live_viewer_history)
+    const initialViewers = liveInfo.viewerCount || 0;
+    await query(
+      `INSERT INTO live_viewer_history (schedule_id, streamer_id, platform, viewer_count)
+       VALUES ($1, $2, $3, $4)`,
+      [schedule.id, streamer_id, account.platform || 'YouTube', initialViewers]
+    );
     return;
   }
 
