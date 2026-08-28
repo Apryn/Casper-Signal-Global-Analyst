@@ -1,11 +1,8 @@
 -- Initialize schema for Casper Signal Analytics Dashboard
-
 -- Schema setup for Casper Signal Analytics (Non-destructive: CREATE TABLE IF NOT EXISTS)
 
-
-
 -- 1. Users table (for dashboard access)
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
     nama VARCHAR(255) NOT NULL,
     username VARCHAR(100) UNIQUE NOT NULL,
@@ -15,7 +12,7 @@ CREATE TABLE users (
 );
 
 -- 2. Streamers table
-CREATE TABLE streamers (
+CREATE TABLE IF NOT EXISTS streamers (
     id SERIAL PRIMARY KEY,
     nama VARCHAR(255) UNIQUE NOT NULL,
     platform VARCHAR(100) NOT NULL DEFAULT 'TikTok',
@@ -24,7 +21,7 @@ CREATE TABLE streamers (
 );
 
 -- 3. Daily reports table
-CREATE TABLE daily_reports (
+CREATE TABLE IF NOT EXISTS daily_reports (
     id SERIAL PRIMARY KEY,
     tanggal DATE NOT NULL,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
@@ -48,7 +45,7 @@ CREATE TABLE daily_reports (
 );
 
 -- 4. Targets management table
-CREATE TABLE targets (
+CREATE TABLE IF NOT EXISTS targets (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
     target_type VARCHAR(50) NOT NULL CHECK (target_type IN ('live_duration', 'uploads', 'registrations', 'ftds')),
@@ -59,7 +56,7 @@ CREATE TABLE targets (
 );
 
 -- 5. Calculated scoring history
-CREATE TABLE scores (
+CREATE TABLE IF NOT EXISTS scores (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
     score NUMERIC(5,2) NOT NULL DEFAULT 0.00,
@@ -69,7 +66,7 @@ CREATE TABLE scores (
 );
 
 -- 6. Streamer Accounts table
-CREATE TABLE streamer_accounts (
+CREATE TABLE IF NOT EXISTS streamer_accounts (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
     platform VARCHAR(100) NOT NULL CHECK (platform IN ('TikTok', 'YouTube', 'Instagram', 'Facebook')),
@@ -80,7 +77,7 @@ CREATE TABLE streamer_accounts (
 );
 
 -- 7. Social media contents catalog
-CREATE TABLE content (
+CREATE TABLE IF NOT EXISTS content (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
     platform VARCHAR(100) NOT NULL,
@@ -96,7 +93,7 @@ CREATE TABLE content (
 );
 
 -- 8. Streaming timetables (Live Scheduler)
-CREATE TABLE schedule (
+CREATE TABLE IF NOT EXISTS schedule (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
     platform VARCHAR(100) NOT NULL,
@@ -115,7 +112,7 @@ CREATE TABLE schedule (
 );
 
 -- 9. Weekly Evaluations table
-CREATE TABLE weekly_evaluations (
+CREATE TABLE IF NOT EXISTS weekly_evaluations (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER NOT NULL REFERENCES streamers(id) ON DELETE CASCADE,
     start_date DATE NOT NULL,
@@ -131,7 +128,7 @@ CREATE TABLE weekly_evaluations (
 );
 
 -- 10. Bot notifications audit logs
-CREATE TABLE notifications (
+CREATE TABLE IF NOT EXISTS notifications (
     id SERIAL PRIMARY KEY,
     streamer_id INTEGER REFERENCES streamers(id) ON DELETE CASCADE,
     message TEXT NOT NULL,
@@ -142,7 +139,7 @@ CREATE TABLE notifications (
 );
 
 -- 11. Configuration key-values
-CREATE TABLE config (
+CREATE TABLE IF NOT EXISTS config (
     id SERIAL PRIMARY KEY,
     key VARCHAR(100) UNIQUE NOT NULL,
     value TEXT NOT NULL,
@@ -150,10 +147,10 @@ CREATE TABLE config (
 );
 
 -- Indexing for performance
-CREATE INDEX idx_reports_tanggal ON daily_reports(tanggal);
-CREATE INDEX idx_reports_streamer ON daily_reports(streamer_id);
-CREATE INDEX idx_targets_streamer ON targets(streamer_id);
-CREATE INDEX idx_content_streamer ON content(streamer_id);
-CREATE INDEX idx_schedule_streamer ON schedule(streamer_id);
-CREATE INDEX idx_schedule_times ON schedule(start_time, end_time);
+CREATE INDEX IF NOT EXISTS idx_reports_tanggal ON daily_reports(tanggal);
+CREATE INDEX IF NOT EXISTS idx_reports_streamer ON daily_reports(streamer_id);
+CREATE INDEX IF NOT EXISTS idx_targets_streamer ON targets(streamer_id);
+CREATE INDEX IF NOT EXISTS idx_content_streamer ON content(streamer_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_streamer ON schedule(streamer_id);
+CREATE INDEX IF NOT EXISTS idx_schedule_times ON schedule(start_time, end_time);
 
