@@ -26,10 +26,21 @@ export const getReports = async (req, res) => {
              r.content_link, 
              r.status_izin, 
              r.catatan_izin,
+             er.status as excuse_status,
+             er.kategori as excuse_kategori,
+             er.keterangan as excuse_keterangan,
              s.nama as streamer_name, 
              s.platform as streamer_platform
       FROM daily_reports r
       JOIN streamers s ON r.streamer_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT er.status, er.kategori, er.keterangan
+        FROM streamer_excuse_requests er
+        WHERE er.streamer_id = r.streamer_id 
+          AND er.tanggal_izin = r.tanggal
+        ORDER BY er.created_at DESC
+        LIMIT 1
+      ) er ON true
       WHERE 1=1
     `;
     const params = [];

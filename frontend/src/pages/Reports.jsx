@@ -79,10 +79,20 @@ const Reports = () => {
     catatan_izin: ''
   });
   const [streamers, setStreamers] = useState([]);
+  const [excuseRequests, setExcuseRequests] = useState([]);
   const [modalError, setModalError] = useState('');
   const [modalSuccess, setModalSuccess] = useState('');
 
-  // Fetch streamers on mount
+  const fetchExcuses = async () => {
+    try {
+      const res = await api.get('/excuses/list');
+      setExcuseRequests(res.data.requests || []);
+    } catch (err) {
+      console.error('Error fetching excuse requests:', err);
+    }
+  };
+
+  // Fetch streamers and excuses on mount
   useEffect(() => {
     const fetchStreamers = async () => {
       try {
@@ -93,6 +103,7 @@ const Reports = () => {
       }
     };
     fetchStreamers();
+    fetchExcuses();
   }, []);
 
   const handleOpenAddModal = () => {
@@ -911,10 +922,37 @@ const Reports = () => {
               const dayReports = groupedByDate[date] || [];
               const reportStreamerNames = new Set(dayReports.map(r => r.streamer_name ? r.streamer_name.toLowerCase().trim() : ''));
 
+              // Helper to find excuse request matching streamer and date
+              const findExcuseForStreamerAndDate = (streamerId, streamerName, dateStr) => {
+                if (!excuseRequests || excuseRequests.length === 0) return null;
+                return excuseRequests.find(req => {
+                  const dateMatch = req.tanggalIzin === dateStr;
+                  const idMatch = streamerId && Number(req.streamerId) === Number(streamerId);
+                  const nameMatch = streamerName && req.streamerNama && req.streamerNama.toLowerCase().trim() === streamerName.toLowerCase().trim();
+                  return dateMatch && (idMatch || nameMatch);
+                });
+              };
+
               // Find registered streamers who HAVEN'T submitted a report for this date
               const missingStreamers = streamers.filter(s => {
                 if (searchName && !s.nama.toLowerCase().includes(searchName.toLowerCase())) return false;
                 return !reportStreamerNames.has(s.nama.toLowerCase().trim());
+              });
+
+              // Breakdown missing streamers into excused vs unexcused
+              const excusedMissing = missingStreamers.filter(s => {
+                const excuse = findExcuseForStreamerAndDate(s.id, s.nama, date);
+                return excuse && excuse.status === 'Approved';
+              });
+
+              const pendingMissing = missingStreamers.filter(s => {
+                const excuse = findExcuseForStreamerAndDate(s.id, s.nama, date);
+                return excuse && excuse.status === 'Pending';
+              });
+
+              const unexcusedMissing = missingStreamers.filter(s => {
+                const excuse = findExcuseForStreamerAndDate(s.id, s.nama, date);
+                return !excuse || excuse.status === 'Rejected';
               });
 
               const dayFtds = dayReports.reduce((s, r) => s + (r.ftd_count || 0), 0);
@@ -925,8 +963,16 @@ const Reports = () => {
               const workedSopCount = dayReports.filter(r => {
                 const isStreaming = r.kategori === 'Streaming';
                 const liveMet = parseFloat(r.live_duration || 0) >= MIN_LIVE_HOURS;
-                return !isStreaming || liveMet;
+                const matched = findExcuseForStreamerAndDate(r.streamer_id, r.streamer_name, date);
+                const isExcused = (r.status_izin && r.status_izin !== 'Normal') || matched?.status === 'Approved' || r.excuse_status === 'Approved';
+                return !isStreaming || liveMet || isExcused;
               }).length;
+
+              const totalDayIzinCount = dayReports.filter(r => {
+                const matched = findExcuseForStreamerAndDate(r.streamer_id, r.streamer_name, date);
+                const st = r.status_izin || (matched?.status === 'Approved' ? matched.kategori : r.excuse_status === 'Approved' ? r.excuse_kategori : 'Normal');
+                return st !== 'Normal';
+              }).length + excusedMissing.length;
 
               return (
                 <div key={date} className="space-y-4 bg-slate-950/40 p-5 rounded-2xl border border-slate-800/80 shadow-lg">
@@ -939,8 +985,11 @@ const Reports = () => {
                         <h3 className="text-sm font-bold text-white tracking-wide">{formatDate(date)}</h3>
                         <p className="text-[11px] text-slate-400 mt-0.5">
                           <strong className="text-emerald-400 font-semibold">{dayReports.length}</strong> melapor &bull;{' '}
-                          <strong className={missingStreamers.length > 0 ? 'text-rose-400 font-semibold' : 'text-slate-400 font-normal'}>
-                            {missingStreamers.length} belum melapor/absen
+                          {totalDayIzinCount > 0 && (
+                            <span className="text-blue-400 font-semibold">{totalDayIzinCount} izin &bull; </span>
+                          )}
+                          <strong className={unexcusedMissing.length > 0 ? 'text-rose-400 font-semibold' : 'text-slate-400 font-normal'}>
+                            {unexcusedMissing.length} belum melapor
                           </strong>
                         </p>
                       </div>
@@ -970,19 +1019,82 @@ const Reports = () => {
                           0 FTD
                         </span>
                       )}
+                      {totalDayIzinCount > 0 && (
+                        <span className="text-[11px] px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 border border-blue-500/30 font-mono font-semibold flex items-center gap-1 shadow-sm">
+                          <span>📝</span> {totalDayIzinCount} Izin
+                        </span>
+                      )}
                       <span className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono font-semibold">
                         {workedSopCount}/{dayReports.length + missingStreamers.length} SOP (4h)
                       </span>
                     </div>
                   </div>
 
-                  {/* Missing Streamers Alert Bar */}
-                  {missingStreamers.length > 0 && (
+                  {/* 1. Streamer Izin Resmi (ACC) Bar */}
+                  {excusedMissing.length > 0 && (
+                    <div className="p-3.5 rounded-xl border border-blue-900/50 bg-blue-950/25 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-blue-300 flex items-center gap-1.5">
+                          <span>📋</span>
+                          <span>{excusedMissing.length} Streamer Izin Resmi (ACC):</span>
+                        </span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-md bg-blue-900/60 text-blue-200 border border-blue-700/50 font-medium">
+                          Bebas Presensi
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        {excusedMissing.map(s => {
+                          const excuse = findExcuseForStreamerAndDate(s.id, s.nama, date);
+                          return (
+                            <span key={s.id} className="px-2.5 py-1.5 rounded-lg bg-blue-500/15 text-blue-200 font-semibold text-[11px] border border-blue-500/30 flex items-center gap-1.5 shadow-sm">
+                              <span>{s.nama}</span>
+                              <span className="text-[10px] text-blue-400/80 font-normal">({s.platform || 'TikTok'})</span>
+                              {excuse && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 font-medium italic">
+                                  {excuse.kategori}: "{excuse.keterangan}"
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 2. Streamer Pending Excuse Bar */}
+                  {pendingMissing.length > 0 && (
+                    <div className="p-3.5 rounded-xl border border-amber-900/40 bg-amber-950/20 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+                          <span>⏳</span>
+                          <span>{pendingMissing.length} Streamer Mengajukan Izin (Menunggu ACC):</span>
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap gap-2 pt-0.5">
+                        {pendingMissing.map(s => {
+                          const excuse = findExcuseForStreamerAndDate(s.id, s.nama, date);
+                          return (
+                            <span key={s.id} className="px-2.5 py-1.5 rounded-lg bg-amber-500/15 text-amber-200 font-semibold text-[11px] border border-amber-500/30 flex items-center gap-1.5 shadow-sm">
+                              <span>{s.nama}</span>
+                              {excuse && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-900/60 text-amber-300 font-medium italic">
+                                  {excuse.kategori}: "{excuse.keterangan}"
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 3. Missing Streamers Alert Bar (Unexcused) */}
+                  {unexcusedMissing.length > 0 && (
                     <div className="p-3.5 rounded-xl border border-rose-900/40 bg-rose-950/20 space-y-2.5">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
                           <span>❌</span>
-                          <span>{missingStreamers.length} Streamer Belum Melapor:</span>
+                          <span>{unexcusedMissing.length} Streamer Belum Melapor (Tanpa Keterangan):</span>
                         </span>
                         <button
                           onClick={handleSendTelegramReminder}
@@ -995,7 +1107,7 @@ const Reports = () => {
                       </div>
 
                       <div className="flex flex-wrap gap-2 pt-0.5">
-                        {missingStreamers.map(s => (
+                        {unexcusedMissing.map(s => (
                           <span key={s.id} className="px-2.5 py-1 rounded-lg bg-rose-500/10 text-rose-300 font-semibold text-[11px] border border-rose-500/20 flex items-center gap-1">
                             {s.nama} <span className="text-[9.5px] text-rose-400/70 font-normal">({s.platform || 'TikTok'})</span>
                           </span>
@@ -1015,11 +1127,29 @@ const Reports = () => {
                         const isSopMet = liveHours >= MIN_LIVE_HOURS;
                         const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
 
+                        // Determine excuse status
+                        const matchedExcuse = findExcuseForStreamerAndDate(report.streamer_id, report.streamer_name, date);
+                        const rawStatusIzin = (report.status_izin && report.status_izin !== 'Normal')
+                          ? report.status_izin
+                          : (matchedExcuse && matchedExcuse.status === 'Approved')
+                            ? (matchedExcuse.kategori || 'Izin')
+                            : (report.excuse_status === 'Approved')
+                              ? (report.excuse_kategori || 'Izin')
+                              : 'Normal';
+
+                        const isExcused = rawStatusIzin !== 'Normal';
+                        const isPendingExcuse = !isExcused && (matchedExcuse?.status === 'Pending' || report.excuse_status === 'Pending');
+                        const catatanIzin = report.catatan_izin || matchedExcuse?.keterangan || report.excuse_keterangan || '';
+
                         return (
                           <div
                             key={report.id}
                             className={`relative rounded-2xl border p-4 transition-all duration-200 hover:scale-[1.01] hover:shadow-xl flex flex-col justify-between ${
-                              !isStreaming
+                              isExcused
+                                ? 'bg-gradient-to-b from-slate-900/90 to-blue-950/30 border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.12)]'
+                                : isPendingExcuse
+                                ? 'bg-gradient-to-b from-slate-900/90 to-amber-950/20 border-amber-500/30'
+                                : !isStreaming
                                 ? 'bg-slate-900/60 border-slate-800'
                                 : isSopMet
                                 ? 'bg-gradient-to-b from-slate-900/90 to-emerald-950/20 border-emerald-500/30'
@@ -1056,10 +1186,45 @@ const Reports = () => {
 
                               {/* SOP Status Pill Header & Izin Badge */}
                               <div className="mb-3 space-y-1.5">
-                                {!isStreaming ? (
+                                {isExcused ? (
+                                  <div className="space-y-1.5">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-500/15 text-blue-300 text-[11px] font-bold border border-blue-500/30 w-full justify-center truncate shadow-sm">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse shrink-0"></span>
+                                      {rawStatusIzin.toLowerCase().includes('sakit')
+                                        ? `🩺 Izin Sakit ${liveHours > 0 ? `(${liveHours.toFixed(1)}h)` : ''}`
+                                        : rawStatusIzin.toLowerCase().includes('kompensasi')
+                                        ? `🟣 Kompensasi ${liveHours > 0 ? `(${liveHours.toFixed(1)}h / 4h)` : ''}`
+                                        : rawStatusIzin === 'Mati Lampu'
+                                        ? `⚡ Kendala Teknis / PLN ${liveHours > 0 ? `(${liveHours.toFixed(1)}h)` : ''}`
+                                        : rawStatusIzin === 'Izin Telat'
+                                        ? `🟡 Izin Telat (${liveHours.toFixed(1)}h / 4h)`
+                                        : rawStatusIzin.toLowerCase().includes('off') || rawStatusIzin.toLowerCase().includes('libur')
+                                        ? `🏖️ ${rawStatusIzin}`
+                                        : `🔵 Izin: ${rawStatusIzin} ${liveHours > 0 ? `(${liveHours.toFixed(1)}h)` : ''}`}
+                                    </span>
+                                    {catatanIzin && (
+                                      <div className="text-[10px] px-2.5 py-1 rounded-lg bg-blue-950/60 text-blue-200 border border-blue-800/50 flex items-center gap-1.5">
+                                        <span className="text-blue-400 font-bold shrink-0">Alasan:</span>
+                                        <span className="truncate italic font-medium" title={catatanIzin}>"{catatanIzin}"</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : isPendingExcuse ? (
+                                  <div className="space-y-1.5">
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/15 text-amber-300 text-[11px] font-bold border border-amber-500/30 w-full justify-center truncate">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse shrink-0"></span>
+                                      ⏳ Pengajuan Izin Menunggu ACC {liveHours > 0 ? `(${liveHours.toFixed(1)}h)` : ''}
+                                    </span>
+                                    {catatanIzin && (
+                                      <div className="text-[10px] px-2 py-0.5 rounded bg-amber-950/40 text-amber-200 border border-amber-800/40 truncate" title={catatanIzin}>
+                                        Alasan: "{catatanIzin}"
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : !isStreaming ? (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 text-slate-400 text-[11px] font-semibold border border-slate-700/60 w-full justify-center truncate">
                                     <span className="w-1.5 h-1.5 rounded-full bg-slate-500 shrink-0"></span>
-                                    {report.status_izin && report.status_izin !== 'Normal' ? `🔵 ${report.status_izin}` : 'Non-Streaming (Off/Izin)'}
+                                    Non-Streaming (Off)
                                   </span>
                                 ) : isSopMet ? (
                                   <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400 text-[11px] font-bold border border-emerald-500/20 w-full justify-center truncate">
@@ -1072,13 +1237,6 @@ const Reports = () => {
                                     ⚠️ Live Kurang ({liveHours.toFixed(1)}h / 4h) {hasDiff && `(Lap: ${reportedHours.toFixed(1)}h)`}
                                   </span>
                                 )}
-
-                                {report.status_izin && report.status_izin !== 'Normal' && isStreaming && (
-                                  <div className="text-[10px] px-2 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800 flex items-center justify-between gap-1">
-                                    <span className="font-semibold text-amber-400">Status: {report.status_izin}</span>
-                                    {report.catatan_izin && <span className="text-slate-400 italic truncate max-w-[120px]" title={report.catatan_izin}>"{report.catatan_izin}"</span>}
-                                  </div>
-                                )}
                               </div>
 
                               {/* Metrics Grid 4-Cols */}
@@ -1087,7 +1245,7 @@ const Reports = () => {
                                 <div className="min-w-0">
                                   <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Live</p>
                                   {liveHours > 0 ? (
-                                    <p className={`text-xs font-bold font-mono truncate ${isSopMet ? 'text-emerald-400' : 'text-amber-400'}`} title={hasDiff ? `Selisih laporan! Bot mencatat ${liveHours} jam, sedangkan streamer melapor ${reportedHours} jam.` : undefined}>
+                                    <p className={`text-xs font-bold font-mono truncate ${isExcused ? 'text-blue-300' : isSopMet ? 'text-emerald-400' : 'text-amber-400'}`} title={hasDiff ? `Selisih laporan! Bot mencatat ${liveHours} jam, sedangkan streamer melapor ${reportedHours} jam.` : undefined}>
                                       {liveHours}h {hasDiff && <span className="text-[9px] text-rose-400 font-normal">({reportedHours}h) ⚠️</span>}
                                     </p>
                                   ) : (
