@@ -1064,6 +1064,7 @@ export const checkYouTubeLiveStatus = async (sendNotification = async () => {}) 
                   await sendNotification(msg, targetChatId);
                 }
               }
+            }
             // Hapus offline buffer karena channel aktif live
             await offlineBuffer.delete(targetIdentifier);
           } else {
