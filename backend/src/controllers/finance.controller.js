@@ -555,11 +555,21 @@ export const getPenaltyAudit = async (req, res) => {
     // 1. Get all streamers and their payroll profiles
     const streamersRes = await pool.query(`
       SELECT s.id as streamer_id, s.nama, s.platform,
-             p.id as profile_id, p.bank_name, p.bank_account_number, p.bank_account_holder,
+             p.id as profile_id, 
+             COALESCE(p.bank_name, 'BSI') as bank_name, 
+             p.bank_account_number, 
+             p.bank_account_holder,
              COALESCE(p.salary_15, 1000000.00) as salary_15,
              COALESCE(p.salary_1, 2000000.00) as salary_1
       FROM streamers s
-      LEFT JOIN payroll_profiles p ON p.streamer_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT * FROM payroll_profiles p
+        WHERE p.streamer_id = s.id 
+           OR LOWER(TRIM(p.name)) = LOWER(TRIM(s.nama))
+           OR (LOWER(s.nama) = 'teizza' AND (LOWER(p.name) LIKE '%teizza%' OR LOWER(p.name) LIKE '%key team%'))
+        ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
+        LIMIT 1
+      ) p ON true
       ORDER BY s.nama ASC
     `);
 
