@@ -693,7 +693,41 @@ const upsertStreamer = async (rawName, uploads) => {
   throw new Error(`Streamer "${name}" tidak terdaftar di database.`);
 };
 
-const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration, chatCount, registrationCount, ftdCount, rawMessage) => {
+// Extract izin note from text (e.g. "2 jam - izin sesi 2", "Izin sakit", "Kendala mati lampu")
+const extractIzinFromText = (text) => {
+  const lines = text.split('\n');
+  let statusIzin = 'Normal';
+  let catatanIzin = '';
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/\b(?:izin|sakit|cuti|mati\s*lampu|kendala|pln|off|libur)\b/i.test(trimmed)) {
+      if (/\bsakit\b/i.test(trimmed)) {
+        statusIzin = 'Sakit';
+      } else if (/\bmati\s*lampu\b|\bkendala\b|\bpln\b/i.test(trimmed)) {
+        statusIzin = 'Mati Lampu';
+      } else if (/\btelat\b|\butang\b/i.test(trimmed)) {
+        statusIzin = 'Izin Telat';
+      } else if (/\bcuti\b|\boff\b|\blibur\b/i.test(trimmed)) {
+        statusIzin = 'Izin Off';
+      } else {
+        statusIzin = 'Izin';
+      }
+
+      const dashMatch = trimmed.match(/[-:]\s*(.+)$/);
+      if (dashMatch) {
+        catatanIzin = dashMatch[1].trim();
+      } else {
+        catatanIzin = trimmed;
+      }
+      break;
+    }
+  }
+
+  return { statusIzin, catatanIzin };
+};
+
+const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration, chatCount, registrationCount, ftdCount, rawMessage, statusIzin = 'Normal', catatanIzin = '') => {
   const { tiktok = 0, youtube = 0, instagram = 0, facebook = 0, totalVidio = 0 } = uploads;
 
   // If individual upload counts are all 0 but we have a total, distribute to tiktok
@@ -703,8 +737,9 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
     `INSERT INTO daily_reports (
        tanggal, streamer_id, kategori,
        tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
-       live_duration, reported_live_duration, chat_count, registration_count, ftd_count, raw_message
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       live_duration, reported_live_duration, chat_count, registration_count, ftd_count, raw_message,
+       status_izin, catatan_izin
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
      ON CONFLICT (tanggal, streamer_id) DO UPDATE SET
        kategori          = EXCLUDED.kategori,
        tiktok_upload     = EXCLUDED.tiktok_upload,
@@ -716,12 +751,16 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
        chat_count        = EXCLUDED.chat_count,
        registration_count= EXCLUDED.registration_count,
        ftd_count         = EXCLUDED.ftd_count,
-       raw_message       = EXCLUDED.raw_message
+       raw_message       = EXCLUDED.raw_message,
+       status_izin       = CASE WHEN EXCLUDED.status_izin <> 'Normal' THEN EXCLUDED.status_izin ELSE daily_reports.status_izin END,
+       catatan_izin      = CASE WHEN EXCLUDED.catatan_izin <> '' THEN EXCLUDED.catatan_izin ELSE daily_reports.catatan_izin END
      RETURNING *`,
     [tanggal, streamerId, kategori,
      ttiktok, youtube, instagram, facebook,
      liveDuration || 0.0, liveDuration || 0.0, chatCount || 0, registrationCount || 0, ftdCount || 0,
-     rawMessage]
+     rawMessage,
+     statusIzin || 'Normal',
+     catatanIzin || '']
   );
 
   return res.rows[0];
@@ -799,12 +838,15 @@ export const parseMessageText = async (rawText) => {
   const chatCount         = extractField(todayReportText, 'CHAT\\s+MASUK\\s*(?:WA/TELE|TELE|DM|TT|TELEGRAM)?', 'Total\\s+chat', '^CHAT\\b');
   const registrationCount = extractField(todayReportText, 'JUMLAH\\s+REGISTRASI', 'Total\\s+registrasi', '^REGISTRASI\\b');
   const ftdCount          = extractField(todayReportText, 'JUMLAH\\s+FTD', 'JUMLAH\\s+TTD', 'Total\\s+(?:ftd|ttd)', '^FTD\\b');
+  const { statusIzin, catatanIzin } = extractIzinFromText(todayReportText);
 
   const streamerId = await upsertStreamer(rawName, uploads);
   const report     = await upsertReport(
     tanggal, streamerId, kategori,
     uploads, liveDuration, chatCount, registrationCount, ftdCount,
-    rawText
+    rawText,
+    statusIzin,
+    catatanIzin
   );
 
   // ── PROCESS COMPENSATION (IF PRESENT) ──
