@@ -3332,10 +3332,11 @@ const Finance = () => {
                       >
                         {/* 1. Tanggal */}
                         <td className="py-2.5 px-3 font-mono text-slate-300 whitespace-nowrap">
-                          <span className="font-semibold">{day.shortDate}</span>
-                          {day.isSunday && (
-                            <span className="ml-1.5 text-[10px] text-slate-500 font-normal font-sans">(Minggu)</span>
-                          )}
+                          <span className={`font-semibold ${day.isSunday ? 'text-slate-400' : 'text-white'}`}>
+                            {day.shortDate?.includes(',')
+                              ? day.shortDate
+                              : `${['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][new Date(day.dateStr + 'T12:00:00').getDay()]}, ${day.shortDate}`}
+                          </span>
                         </td>
 
                         {/* 2. Aktivitas & Durasi */}

@@ -599,6 +599,8 @@ export const getPenaltyAudit = async (req, res) => {
 
     // Generate list of all dates in range
     const allDates = [];
+    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
     let curr = new Date(startDate + 'T12:00:00');
     const end = new Date(endDate + 'T12:00:00');
     while (curr <= end) {
@@ -608,7 +610,8 @@ export const getPenaltyAudit = async (req, res) => {
       allDates.push({
         dateStr: `${y}-${m}-${d}`,
         dayOfWeek: curr.getDay(), // 0 = Sunday
-        shortDate: `${parseInt(d, 10)} ${['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][curr.getMonth()]}`
+        dayName: dayNames[curr.getDay()],
+        shortDate: `${dayNames[curr.getDay()]}, ${parseInt(d, 10)} ${monthNames[curr.getMonth()]}`
       });
       curr.setDate(curr.getDate() + 1);
     }
