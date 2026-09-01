@@ -776,7 +776,7 @@ const Finance = () => {
 
     const todayStr = new Date().toLocaleDateString('id-ID', {
       day: 'numeric',
-      month: 'long',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -800,33 +800,33 @@ const Finance = () => {
       const isPaid = item.status === 'Paid';
       return `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="text-align: center; padding: 4px 6px; font-size: 9px;">${idx + 1}</td>
-          <td style="padding: 4px 6px; font-size: 9.5px; font-weight: 700; color: #0f172a;">
+          <td style="text-align: center; padding: 4.5px 5px; font-size: 8.5px; color: #64748b;">${idx + 1}</td>
+          <td style="padding: 4.5px 6px; font-size: 9px; font-weight: 700; color: #0f172a;">
             ${item.recipient_name}
-            <span style="display: inline-block; margin-left: 4px; padding: 1px 4px; border-radius: 3px; font-size: 8px; font-weight: 700; background: #e2e8f0; color: #334155; text-transform: uppercase;">${item.role}</span>
-            ${item.notes ? `<div style="font-size: 8px; color: #d97706; font-style: italic;">📝 ${item.notes}</div>` : ''}
+            <span style="display: inline-block; margin-left: 3px; padding: 0.5px 3.5px; border-radius: 2px; font-size: 7.5px; font-weight: 600; background: #f1f5f9; color: #475569; text-transform: uppercase;">${item.role}</span>
+            ${item.notes ? `<div style="font-size: 7.5px; color: #b45309; font-weight: normal;">• ${item.notes}</div>` : ''}
           </td>
-          <td style="padding: 4px 6px; font-size: 8.5px; color: #475569;">
-            <strong>${item.bank_name || 'BCA'}</strong> - ${item.bank_account_number || '-'}<br/>
-            <span style="font-size: 8px; color: #64748b;">a/n ${item.bank_account_holder || item.recipient_name}</span>
+          <td style="padding: 4.5px 6px; font-size: 8.5px; color: #334155;">
+            <strong>${item.bank_name || 'BCA'}</strong> ${item.bank_account_number || '-'}<br/>
+            <span style="font-size: 7.5px; color: #64748b;">a/n ${item.bank_account_holder || item.recipient_name}</span>
           </td>
-          <td style="text-align: right; padding: 4px 6px; font-size: 9px; font-weight: 600;">${formatRupiah(item.base_amount)}</td>
-          <td style="text-align: right; padding: 4px 6px; font-size: 8.5px;">
-            ${parseFloat(item.bonus_amount) > 0 ? `<span style="color: #059669; font-weight: 600;">+${formatRupiah(item.bonus_amount)}</span>` : ''}
+          <td style="text-align: right; padding: 4.5px 6px; font-size: 8.5px;">${formatRupiah(item.base_amount)}</td>
+          <td style="text-align: right; padding: 4.5px 6px; font-size: 8px;">
+            ${parseFloat(item.bonus_amount) > 0 ? `<span style="color: #16a34a; font-weight: 600;">+${formatRupiah(item.bonus_amount)}</span>` : ''}
             ${parseFloat(item.bonus_amount) > 0 && parseFloat(item.deduction_amount) > 0 ? '<br/>' : ''}
             ${parseFloat(item.deduction_amount) > 0 ? `<span style="color: #dc2626; font-weight: 600;">-${formatRupiah(item.deduction_amount)}</span>` : ''}
             ${parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 ? '-' : ''}
           </td>
-          <td style="text-align: right; padding: 4px 6px; font-size: 9.5px; font-weight: 800; color: #0f172a; background: #f8fafc;">
+          <td style="text-align: right; padding: 4.5px 6px; font-size: 9px; font-weight: 700; color: #0f172a;">
             ${formatRupiah(item.final_amount)}
           </td>
-          <td style="text-align: center; padding: 4px 6px;">
-            <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; ${
+          <td style="text-align: center; padding: 4.5px 6px;">
+            <span style="display: inline-block; padding: 1.5px 6px; border-radius: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; ${
               isPaid 
-                ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' 
-                : 'background: #fef3c7; color: #b45309; border: 1px solid #fcd34d;'
+                ? 'background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;' 
+                : 'background: #fef3c7; color: #b45309; border: 1px solid #fde68a;'
             }">
-              ${isPaid ? '✓ SUDAH DIBAYAR (LUNAS)' : '⏳ BELUM DIBAYAR'}
+              ${isPaid ? '✓ Lunas' : '⏳ Belum Dibayar'}
             </span>
           </td>
         </tr>
@@ -838,21 +838,20 @@ const Finance = () => {
     const html = `
       <html>
         <head>
-          <title>Casper Signal — Laporan Penggajian & Rekap Kas</title>
+          <title>Casper Signal — Rekap Penggajian & Kas</title>
           <style>
             * { box-sizing: border-box; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 14px 18px; margin: 0; line-height: 1.3; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #4f46e5; padding-bottom: 8px; margin-bottom: 10px; }
-            h1 { font-size: 15px; color: #0f172a; margin: 0; font-weight: 800; text-transform: uppercase; }
-            .subtitle { font-size: 9.5px; color: #64748b; margin-top: 2px; }
-            .meta { font-size: 8.5px; color: #64748b; text-align: right; line-height: 1.35; }
-            .summary-box { display: flex; gap: 8px; margin-bottom: 10px; }
-            .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc; }
-            .card-title { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: 700; }
-            .card-val { font-size: 12px; font-weight: 800; margin-top: 2px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-            th { background-color: #f1f5f9; padding: 5px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 8px; color: #334155; }
-            .status-bar { display: flex; justify-content: space-between; align-items: center; background: #e0e7ff; border: 1px solid #c7d2fe; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 9px; color: #3730a3; font-weight: 700; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 12px 16px; margin: 0; line-height: 1.3; }
+            .header-bar { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px; }
+            .title { font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin: 0; }
+            .subtitle { font-size: 8.5px; color: #64748b; margin-top: 1px; }
+            .meta { font-size: 8.5px; color: #475569; text-align: right; line-height: 1.35; }
+            .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px; }
+            .summary-item { text-align: left; }
+            .summary-label { font-size: 7.5px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+            .summary-value { font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 1px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 2px; }
+            th { background: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
             @media print {
               @page { size: A4 landscape; margin: 6mm 8mm; }
               body { padding: 0; margin: 0; }
@@ -860,71 +859,61 @@ const Finance = () => {
           </style>
         </head>
         <body>
-          <div class="header">
+          <div class="header-bar">
             <div>
-              <h1>Casper Signal BI — Rekap Penggajian (Payroll) &amp; Uang Kas</h1>
-              <div class="subtitle">Daftar Rincian Transfer Gaji Karyawan, Streamer &amp; Tim Operasional</div>
+              <h1 class="title">Casper Signal — Rekap Penggajian &amp; Status Transfer</h1>
+              <div class="subtitle">Periode: <strong>${period.title}</strong> (${period.period_type === '15th' ? 'Termin 1 - Tgl 15' : 'Termin 2 - Tgl 1'})</div>
             </div>
             <div class="meta">
-              <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
-              <strong>Periode:</strong> ${period.title} (${period.period_type === '15th' ? 'Termin 1 (Tgl 15)' : 'Termin 2 (Tgl 1)'})<br/>
-              <strong>Total Tim:</strong> ${items.length} Anggota | <strong>Lunas:</strong> ${paidItems.length} | <strong>Belum:</strong> ${pendingItems.length}
+              <strong>Tgl Cetak:</strong> ${todayStr}<br/>
+              <strong>Total Tim:</strong> ${items.length} Orang (${paidItems.length} Lunas / ${pendingItems.length} Belum)
             </div>
           </div>
 
-          <div class="summary-box">
-            <div class="card">
-              <div class="card-title">Total Anggaran Periode</div>
-              <div class="card-val" style="color: #0f172a;">${formatRupiah(totalFinal)}</div>
-              <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${items.length} Penerima Terdaftar</div>
+          <div class="summary-bar">
+            <div class="summary-item">
+              <div class="summary-label">Total Anggaran</div>
+              <div class="summary-value">${formatRupiah(totalFinal)}</div>
             </div>
-            <div class="card" style="background: #ecfdf5; border-color: #a7f3d0;">
-              <div class="card-title" style="color: #047857;">Sudah Ditransfer (Lunas)</div>
-              <div class="card-val" style="color: #047857;">${formatRupiah(totalPaid)}</div>
-              <div style="font-size: 8px; color: #059669; margin-top: 1px;">${paidItems.length} Orang Selesai Transfer</div>
+            <div class="summary-item">
+              <div class="summary-label" style="color: #166534;">Sudah Ditransfer (Lunas)</div>
+              <div class="summary-value" style="color: #166534;">${formatRupiah(totalPaid)} <span style="font-size: 8px; font-weight: normal;">(${paidItems.length} org)</span></div>
             </div>
-            <div class="card" style="background: ${pendingItems.length > 0 ? '#fffbeb' : '#f8fafc'}; border-color: ${pendingItems.length > 0 ? '#fde68a' : '#cbd5e1'};">
-              <div class="card-title" style="color: ${pendingItems.length > 0 ? '#b45309' : '#64748b'};">Sisa Belum Ditransfer (Pending)</div>
-              <div class="card-val" style="color: ${pendingItems.length > 0 ? '#b45309' : '#0f172a'};">${formatRupiah(totalPending)}</div>
-              <div style="font-size: 8px; color: #b45309; margin-top: 1px;">${pendingItems.length} Orang Belum Dibayar</div>
+            <div class="summary-item">
+              <div class="summary-label" style="color: #b45309;">Sisa Belum Ditransfer</div>
+              <div class="summary-value" style="color: #b45309;">${formatRupiah(totalPending)} <span style="font-size: 8px; font-weight: normal;">(${pendingItems.length} org)</span></div>
             </div>
-            <div class="card" style="background: #f0fdf4; border-color: #bbf7d0;">
-              <div class="card-title" style="color: #166534;">Saldo Uang Kas (Petty Cash)</div>
-              <div class="card-val" style="color: #166534;">${formatRupiah(cashSummary.saldo_kas)}</div>
-              <div style="font-size: 8px; color: #166534; margin-top: 1px;">Kas Masuk: ${formatRupiah(cashSummary.total_masuk)} | Keluar: ${formatRupiah(cashSummary.total_keluar)}</div>
+            <div class="summary-item">
+              <div class="summary-label">Saldo Uang Kas (Petty Cash)</div>
+              <div class="summary-value">${formatRupiah(cashSummary.saldo_kas)}</div>
             </div>
-          </div>
-
-          <div class="status-bar">
-            <div>📊 Progres Pembayaran: ${paidItems.length} dari ${items.length} Orang Sudah Ditransfer (${items.length > 0 ? Math.round((paidItems.length / items.length) * 100) : 0}%)</div>
-            <div>💰 Sisa Dana yang Harus Dibayar: ${formatRupiah(totalPending)}</div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th style="text-align: center; width: 24px;">No</th>
+                <th style="text-align: center; width: 22px;">No</th>
                 <th>Nama Anggota &amp; Role</th>
                 <th>Rekening Bank Tujuan</th>
                 <th style="text-align: right;">Gaji Pokok</th>
                 <th style="text-align: right;">Bonus / Potongan</th>
-                <th style="text-align: right; background: #e2e8f0;">Total Ditransfer</th>
-                <th style="text-align: center; width: 140px;">Status Pembayaran</th>
+                <th style="text-align: right; background: #e2e8f0;">Total Transfer</th>
+                <th style="text-align: center; width: 120px;">Status</th>
               </tr>
             </thead>
             <tbody>
               ${rowsHtml}
             </tbody>
             <tfoot>
-              <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #94a3b8;">
-                <td colspan="3" style="padding: 6px; font-size: 9px; text-transform: uppercase;">TOTAL KESELURUHAN</td>
-                <td style="text-align: right; padding: 6px; font-size: 9px;">${formatRupiah(totalBase)}</td>
-                <td style="text-align: right; padding: 6px; font-size: 8.5px;">
+              <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #0f172a;">
+                <td colspan="3" style="padding: 5px; font-size: 8.5px; text-transform: uppercase;">TOTAL KESELURUHAN</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px;">${formatRupiah(totalBase)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8px;">
                   ${totalBonus > 0 ? `+${formatRupiah(totalBonus)}` : ''} 
                   ${totalDeduction > 0 ? `-${formatRupiah(totalDeduction)}` : ''}
                 </td>
-                <td style="text-align: right; padding: 6px; font-size: 10px; color: #0f172a; background: #e2e8f0;">${formatRupiah(totalFinal)}</td>
-                <td style="text-align: center; padding: 6px; font-size: 8.5px; color: #047857;">
+                <td style="text-align: right; padding: 5px; font-size: 9.5px; color: #0f172a; background: #e2e8f0;">${formatRupiah(totalFinal)}</td>
+                <td style="text-align: center; padding: 5px; font-size: 8px; color: #166534;">
                   ${paidItems.length} Lunas / ${pendingItems.length} Pending
                 </td>
               </tr>
@@ -954,7 +943,7 @@ const Finance = () => {
 
     const todayStr = new Date().toLocaleDateString('id-ID', {
       day: 'numeric',
-      month: 'long',
+      month: 'short',
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
@@ -986,21 +975,21 @@ const Finance = () => {
       });
       return `
         <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="text-align: center; padding: 4px 6px; font-size: 9px;">${idx + 1}</td>
-          <td style="padding: 4px 6px; font-size: 9px; font-family: monospace;">${dateFormatted}</td>
-          <td style="text-align: center; padding: 4px 6px;">
-            <span style="display: inline-block; padding: 1.5px 6px; border-radius: 4px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; ${
+          <td style="text-align: center; padding: 4.5px 5px; font-size: 8.5px; color: #64748b;">${idx + 1}</td>
+          <td style="padding: 4.5px 6px; font-size: 8.5px; font-family: monospace;">${dateFormatted}</td>
+          <td style="text-align: center; padding: 4.5px 6px;">
+            <span style="display: inline-block; padding: 1px 5px; border-radius: 3px; font-size: 8px; font-weight: 700; text-transform: uppercase; ${
               isIncome 
-                ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' 
-                : 'background: #ffe4e6; color: #be123c; border: 1px solid #fda4af;'
+                ? 'background: #dcfce7; color: #166534;' 
+                : 'background: #fee2e2; color: #991b1b;'
             }">
-              ${isIncome ? '🟢 Kas Masuk' : '🔴 Pengeluaran'}
+              ${isIncome ? '🟢 Masuk' : '🔴 Keluar'}
             </span>
           </td>
-          <td style="padding: 4px 6px; font-size: 9px; font-weight: 700; color: #1e293b;">${tx.kategori}</td>
-          <td style="padding: 4px 6px; font-size: 9px; color: #334155;">${tx.keterangan || '-'}</td>
-          <td style="padding: 4px 6px; font-size: 8.5px; color: #64748b;">${tx.created_by || 'Admin'}</td>
-          <td style="text-align: right; padding: 4px 6px; font-size: 9.5px; font-weight: 800; font-family: monospace; color: ${isIncome ? '#047857' : '#be123c'};">
+          <td style="padding: 4.5px 6px; font-size: 8.5px; font-weight: 700; color: #1e293b;">${tx.kategori}</td>
+          <td style="padding: 4.5px 6px; font-size: 8.5px; color: #334155;">${tx.keterangan || '-'}</td>
+          <td style="padding: 4.5px 6px; font-size: 8px; color: #64748b;">${tx.created_by || 'Admin'}</td>
+          <td style="text-align: right; padding: 4.5px 6px; font-size: 9px; font-weight: 700; font-family: monospace; color: ${isIncome ? '#166534' : '#991b1b'};">
             ${isIncome ? '+' : '-'}${formatRupiah(tx.nominal)}
           </td>
         </tr>
@@ -1013,17 +1002,17 @@ const Finance = () => {
           <title>Casper Signal — Buku Arus Uang Kas & Pengeluaran</title>
           <style>
             * { box-sizing: border-box; }
-            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 14px 18px; margin: 0; line-height: 1.3; }
-            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #4f46e5; padding-bottom: 8px; margin-bottom: 10px; }
-            h1 { font-size: 15px; color: #0f172a; margin: 0; font-weight: 800; text-transform: uppercase; }
-            .subtitle { font-size: 9.5px; color: #64748b; margin-top: 2px; }
-            .meta { font-size: 8.5px; color: #64748b; text-align: right; line-height: 1.35; }
-            .summary-box { display: flex; gap: 8px; margin-bottom: 10px; }
-            .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc; }
-            .card-title { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: 700; }
-            .card-val { font-size: 12px; font-weight: 800; margin-top: 2px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-            th { background-color: #f1f5f9; padding: 5px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 8px; color: #334155; }
+            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 12px 16px; margin: 0; line-height: 1.3; }
+            .header-bar { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #0f172a; padding-bottom: 6px; margin-bottom: 8px; }
+            .title { font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin: 0; }
+            .subtitle { font-size: 8.5px; color: #64748b; margin-top: 1px; }
+            .meta { font-size: 8.5px; color: #475569; text-align: right; line-height: 1.35; }
+            .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px; }
+            .summary-item { text-align: left; }
+            .summary-label { font-size: 7.5px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+            .summary-value { font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 1px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 2px; }
+            th { background: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
             @media print {
               @page { size: A4 landscape; margin: 6mm 8mm; }
               body { padding: 0; margin: 0; }
@@ -1031,66 +1020,65 @@ const Finance = () => {
           </style>
         </head>
         <body>
-          <div class="header">
+          <div class="header-bar">
             <div>
-              <h1>Casper Signal BI — Buku Arus Uang Kas &amp; Pengeluaran Operasional</h1>
+              <h1 class="title">Casper Signal — Buku Arus Uang Kas &amp; Pengeluaran</h1>
               <div class="subtitle">Laporan Mutasi Petty Cash, Pemasukan Bos &amp; Pengeluaran Operasional</div>
             </div>
             <div class="meta">
-              <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
-              <strong>Filter Transaksi:</strong> ${cashFilterType === 'All' ? 'Semua Tipe' : cashFilterType === 'Masuk' ? 'Hanya Kas Masuk' : 'Hanya Pengeluaran'}<br/>
-              <strong>Total Data:</strong> ${filteredTx.length} Transaksi Tercatat
+              <strong>Tgl Cetak:</strong> ${todayStr}<br/>
+              <strong>Filter:</strong> ${cashFilterType === 'All' ? 'Semua Transaksi' : cashFilterType === 'Masuk' ? 'Hanya Kas Masuk' : 'Hanya Pengeluaran'} (${filteredTx.length} data)
             </div>
           </div>
 
-          <div class="summary-box">
-            <div class="card" style="background: #ecfdf5; border-color: #a7f3d0;">
-              <div class="card-title" style="color: #047857;">Saldo Kas Saat Ini (Petty Cash)</div>
-              <div class="card-val" style="color: #047857;">${formatRupiah(cashSummary.saldo_kas)}</div>
+          <div class="summary-bar">
+            <div class="summary-item">
+              <div class="summary-label">Saldo Kas Terkini</div>
+              <div class="summary-value" style="color: ${cashSummary.saldo_kas < 0 ? '#991b1b' : '#166534'};">${formatRupiah(cashSummary.saldo_kas)}</div>
             </div>
-            <div class="card">
-              <div class="card-title">Total Kas Masuk (Keseluruhan)</div>
-              <div class="card-val" style="color: #059669;">${formatRupiah(cashSummary.total_masuk)}</div>
+            <div class="summary-item">
+              <div class="summary-label">Total Kas Masuk</div>
+              <div class="summary-value" style="color: #166534;">${formatRupiah(cashSummary.total_masuk)}</div>
             </div>
-            <div class="card">
-              <div class="card-title">Total Pengeluaran (Keseluruhan)</div>
-              <div class="card-val" style="color: #be123c;">${formatRupiah(cashSummary.total_keluar)}</div>
+            <div class="summary-item">
+              <div class="summary-label">Total Pengeluaran</div>
+              <div class="summary-value" style="color: #991b1b;">${formatRupiah(cashSummary.total_keluar)}</div>
             </div>
-            <div class="card">
-              <div class="card-title">Total Realisasi Payroll Paid</div>
-              <div class="card-val" style="color: #4f46e5;">${formatRupiah(cashSummary.total_payroll_paid)}</div>
+            <div class="summary-item">
+              <div class="summary-label">Realisasi Payroll Cair</div>
+              <div class="summary-value">${formatRupiah(cashSummary.total_payroll_paid)}</div>
             </div>
           </div>
 
           <table>
             <thead>
               <tr>
-                <th style="text-align: center; width: 24px;">No</th>
-                <th style="width: 80px;">Tanggal</th>
-                <th style="text-align: center; width: 110px;">Tipe</th>
+                <th style="text-align: center; width: 22px;">No</th>
+                <th style="width: 75px;">Tanggal</th>
+                <th style="text-align: center; width: 90px;">Tipe</th>
                 <th>Kategori</th>
                 <th>Keterangan</th>
-                <th style="width: 90px;">Dicatat Oleh</th>
-                <th style="text-align: right; width: 120px;">Nominal</th>
+                <th style="width: 85px;">Pencatat</th>
+                <th style="text-align: right; width: 110px;">Nominal</th>
               </tr>
             </thead>
             <tbody>
               ${filteredTx.length === 0 ? `
                 <tr>
-                  <td colspan="7" style="text-align: center; padding: 20px; color: #94a3b8; font-style: italic;">
+                  <td colspan="7" style="text-align: center; padding: 15px; color: #94a3b8; font-style: italic;">
                     Tidak ada catatan transaksi uang kas sesuai filter.
                   </td>
                 </tr>
               ` : rowsHtml}
             </tbody>
             <tfoot>
-              <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #94a3b8;">
-                <td colspan="3" style="padding: 6px; font-size: 9px; text-transform: uppercase;">TOTAL TRANSAKSI TAMPIL</td>
-                <td colspan="3" style="padding: 6px; font-size: 8.5px; color: #64748b;">
-                  Masuk: <strong style="color: #059669;">+${formatRupiah(totalMasukFiltered)}</strong> | 
-                  Keluar: <strong style="color: #dc2626;">-${formatRupiah(totalKeluarFiltered)}</strong>
+              <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #0f172a;">
+                <td colspan="3" style="padding: 5px; font-size: 8.5px; text-transform: uppercase;">TOTAL TAMPIL</td>
+                <td colspan="3" style="padding: 5px; font-size: 8px; color: #64748b;">
+                  Masuk: <strong style="color: #166534;">+${formatRupiah(totalMasukFiltered)}</strong> | 
+                  Keluar: <strong style="color: #991b1b;">-${formatRupiah(totalKeluarFiltered)}</strong>
                 </td>
-                <td style="text-align: right; padding: 6px; font-size: 10px; color: #0f172a; background: #e2e8f0;">
+                <td style="text-align: right; padding: 5px; font-size: 9.5px; color: #0f172a; background: #e2e8f0;">
                   ${formatRupiah(totalMasukFiltered - totalKeluarFiltered)}
                 </td>
               </tr>
