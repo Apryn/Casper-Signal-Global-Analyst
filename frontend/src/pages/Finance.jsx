@@ -36,7 +36,8 @@ import {
   AlertTriangle,
   FileText,
   ChevronRight,
-  Filter
+  Filter,
+  Settings
 } from 'lucide-react';
 
 const Finance = () => {
@@ -169,6 +170,32 @@ const Finance = () => {
     bank_account_number: '',
     bank_account_holder: '',
   });
+
+  // Finance Rules / SOP Settings
+  const [financeRules, setFinanceRules] = useState({
+    baseSalary15th: 1000000,
+    baseSalaryMonthEnd: 2000000,
+    standardLiveDurationHours: 4.0,
+    durationShortagePenaltyPerHour: 30000,
+    recapDeadlineTime: '08:00',
+    noReportPenaltyPerDay: 150000,
+    absentPenaltyPerSession: 60000,
+    sessionsPerDay: 2,
+    signalCutPenaltyPerEvent: 30000,
+  });
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [editingRules, setEditingRules] = useState({
+    baseSalary15th: 1000000,
+    baseSalaryMonthEnd: 2000000,
+    standardLiveDurationHours: 4.0,
+    durationShortagePenaltyPerHour: 30000,
+    recapDeadlineTime: '08:00',
+    noReportPenaltyPerDay: 150000,
+    absentPenaltyPerSession: 60000,
+    sessionsPerDay: 2,
+    signalCutPenaltyPerEvent: 30000,
+  });
+  const [isSavingRules, setIsSavingRules] = useState(false);
 
   // ==========================================
   // HELPERS
@@ -1095,11 +1122,41 @@ const Finance = () => {
     printWindow.document.close();
   };
 
+  const fetchFinanceRules = async () => {
+    try {
+      const res = await api.get('/finance/rules');
+      if (res.data?.rules) {
+        setFinanceRules(res.data.rules);
+      }
+    } catch (err) {
+      console.error('Error fetching finance rules:', err);
+    }
+  };
+
+  const handleSaveFinanceRules = async (e) => {
+    e.preventDefault();
+    setIsSavingRules(true);
+    try {
+      const res = await api.post('/finance/rules', { rules: editingRules });
+      if (res.data?.success) {
+        setFinanceRules(res.data.rules);
+        setShowRulesModal(false);
+        await fetchPenaltyAudit(auditStartDate, auditEndDate, auditPeriodType);
+      }
+    } catch (err) {
+      console.error('Error saving finance rules:', err);
+      alert(err.response?.data?.message || 'Gagal menyimpan ketentuan aturan.');
+    } finally {
+      setIsSavingRules(false);
+    }
+  };
+
   const fetchAllData = async () => {
     if (!isUnlocked) return;
     setLoading(true);
     try {
       await Promise.all([
+        fetchFinanceRules(),
         fetchPenaltyAudit(),
         fetchCashSummary(),
         fetchTransactions(),
@@ -1853,35 +1910,47 @@ const Finance = () => {
 
           {/* ── RULES & SOP ACCORDION BANNER ── */}
           <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-rose-500/10 border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
-            <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
               <div className="flex items-center gap-2 text-xs font-extrabold text-amber-400 uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />
                 <span>Ketentuan Skema Gaji &amp; Aturan Denda Otomatis</span>
               </div>
-              <span className="text-[10px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-400/30">
-                SOP Aktif
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-400/30">
+                  SOP Aktif
+                </span>
+                <button
+                  onClick={() => {
+                    setEditingRules({ ...financeRules });
+                    setShowRulesModal(true);
+                  }}
+                  className="flex items-center gap-1.5 text-[11px] font-extrabold px-3 py-1 bg-amber-400 text-black border-2 border-black rounded-xl shadow-tactile-sm hover:bg-amber-300 active:scale-95 transition-all"
+                >
+                  <Settings className="h-3.5 w-3.5" />
+                  <span>Ubah Ketentuan SOP</span>
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-[11px] text-slate-300 pt-1">
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-white mb-0.5">💰 Gaji Pokok 3 Juta</div>
-                <div className="text-[10px] text-slate-400">Tgl 15: Rp 1jt • Akhir Bln: Rp 2jt</div>
+                <div className="font-extrabold text-white mb-0.5">💰 Gaji Pokok {((financeRules.baseSalary15th + financeRules.baseSalaryMonthEnd) / 1000000).toLocaleString('id-ID')} Juta</div>
+                <div className="text-[10px] text-slate-400">Tgl 15: {formatRupiah(financeRules.baseSalary15th)} • Akhir Bln: {formatRupiah(financeRules.baseSalaryMonthEnd)}</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">⏱️ Durasi SOP 4 Jam</div>
-                <div className="text-[10px] text-slate-400">Kurang durasi: -Rp 30.000 / Jam</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">⏱️ Durasi SOP {financeRules.standardLiveDurationHours} Jam</div>
+                <div className="text-[10px] text-slate-400">Kurang durasi: -{formatRupiah(financeRules.durationShortagePenaltyPerHour)} / Jam</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">📝 Batas Rekap 08:00</div>
-                <div className="text-[10px] text-slate-400">Telat: -Rp 150.000 (Bebas denda durasi)</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
+                <div className="text-[10px] text-slate-400">Telat: -{formatRupiah(financeRules.noReportPenaltyPerDay)} (Bebas denda durasi)</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-rose-300 mb-0.5">🚫 Absen / Bolos</div>
-                <div className="text-[10px] text-slate-400">Tidak live: -Rp 60.000 / Sesi (2 sesi)</div>
+                <div className="text-[10px] text-slate-400">Tidak live: -{formatRupiah(financeRules.absentPenaltyPerSession)} / Sesi ({financeRules.sessionsPerDay} sesi = -{formatRupiah(financeRules.absentPenaltyPerSession * financeRules.sessionsPerDay)})</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-amber-300 mb-0.5">📉 Pembagian Sinyal</div>
-                <div className="text-[10px] text-slate-400">Potongan: -Rp 30.000 / kejadian</div>
+                <div className="text-[10px] text-slate-400">Potongan: -{formatRupiah(financeRules.signalCutPenaltyPerEvent)} / kejadian</div>
               </div>
             </div>
           </div>
@@ -4076,6 +4145,238 @@ const Finance = () => {
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AUDIT 3: EDIT KETENTUAN SKEMA GAJI & DENDA SOP */}
+      {showRulesModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-fade-in">
+          <div className="w-full max-w-2xl bg-dark-card border-3 border-black rounded-2xl p-6 shadow-tactile-lg relative max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start pb-3 border-b-2 border-black mb-4">
+              <div>
+                <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
+                  <ShieldCheck className="h-5 w-5 text-amber-400" />
+                  <span>Ubah Ketentuan Skema Gaji &amp; Aturan Denda SOP</span>
+                </h3>
+                <div className="text-xs text-slate-400 mt-0.5">
+                  Sesuaikan nilai denda, batas waktu rekap, dan skema gaji default streamer.
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRulesModal(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveFinanceRules} className="space-y-4">
+              {/* Section 1: Skema Gaji Pokok Default */}
+              <div className="bg-dark-panel border-2 border-black rounded-xl p-3.5 space-y-3">
+                <div className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <DollarSign className="h-3.5 w-3.5" />
+                  <span>1. Skema Gaji Pokok Default (Standar 3 Juta / Bulan)</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Termin 1 (Tgl 15) — Default Rp
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="50000"
+                      required
+                      value={editingRules.baseSalary15th}
+                      onChange={(e) => setEditingRules({ ...editingRules, baseSalary15th: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Saat ini: {formatRupiah(editingRules.baseSalary15th)}</div>
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Termin 2 (Akhir Bulan) — Default Rp
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="50000"
+                      required
+                      value={editingRules.baseSalaryMonthEnd}
+                      onChange={(e) => setEditingRules({ ...editingRules, baseSalaryMonthEnd: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Saat ini: {formatRupiah(editingRules.baseSalaryMonthEnd)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Durasi SOP & Denda Kekurangan Durasi */}
+              <div className="bg-dark-panel border-2 border-black rounded-xl p-3.5 space-y-3">
+                <div className="text-[11px] font-extrabold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>2. Durasi SOP Live &amp; Denda Kurang Durasi</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Target Durasi SOP Live Harian (Jam)
+                    </label>
+                    <input
+                      type="number"
+                      min="0.5"
+                      max="24"
+                      step="0.5"
+                      required
+                      value={editingRules.standardLiveDurationHours}
+                      onChange={(e) => setEditingRules({ ...editingRules, standardLiveDurationHours: parseFloat(e.target.value) || 4.0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Standar SOP: {editingRules.standardLiveDurationHours} Jam / hari</div>
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Denda Kurang Durasi per Jam (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5000"
+                      required
+                      value={editingRules.durationShortagePenaltyPerHour}
+                      onChange={(e) => setEditingRules({ ...editingRules, durationShortagePenaltyPerHour: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Potongan: {formatRupiah(editingRules.durationShortagePenaltyPerHour)} / jam</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Batas Rekap & Denda Tidak Kirim Rekap */}
+              <div className="bg-dark-panel border-2 border-black rounded-xl p-3.5 space-y-3">
+                <div className="text-[11px] font-extrabold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileSpreadsheet className="h-3.5 w-3.5" />
+                  <span>3. Batas Waktu Rekapan &amp; Denda Telat/Tidak Rekap</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Batas Jam Rekapan Harian (WIB)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="08:00"
+                      value={editingRules.recapDeadlineTime}
+                      onChange={(e) => setEditingRules({ ...editingRules, recapDeadlineTime: e.target.value })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Format: 08:00 (Pagi WIB)</div>
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Denda Tidak Rekap / Telat Rekap per Hari (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="10000"
+                      required
+                      value={editingRules.noReportPenaltyPerDay}
+                      onChange={(e) => setEditingRules({ ...editingRules, noReportPenaltyPerDay: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Denda: {formatRupiah(editingRules.noReportPenaltyPerDay)} / hari</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 4: Denda Absen (Tidak Live) & Potongan Sinyal */}
+              <div className="bg-dark-panel border-2 border-black rounded-xl p-3.5 space-y-3">
+                <div className="text-[11px] font-extrabold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertCircle className="h-3.5 w-3.5" />
+                  <span>4. Denda Absen / Bolos &amp; Potongan Sinyal</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Denda Absen per Sesi (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5000"
+                      required
+                      value={editingRules.absentPenaltyPerSession}
+                      onChange={(e) => setEditingRules({ ...editingRules, absentPenaltyPerSession: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Per Sesi: {formatRupiah(editingRules.absentPenaltyPerSession)}</div>
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Jumlah Sesi per Hari
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      step="1"
+                      required
+                      value={editingRules.sessionsPerDay}
+                      onChange={(e) => setEditingRules({ ...editingRules, sessionsPerDay: parseInt(e.target.value, 10) || 1 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Total Absen 1 Hari: {formatRupiah(editingRules.absentPenaltyPerSession * editingRules.sessionsPerDay)}</div>
+                  </div>
+                  <div>
+                    <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
+                      Denda Sinyal per Kejadian (Rp)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="5000"
+                      required
+                      value={editingRules.signalCutPenaltyPerEvent}
+                      onChange={(e) => setEditingRules({ ...editingRules, signalCutPenaltyPerEvent: parseFloat(e.target.value) || 0 })}
+                      className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
+                    />
+                    <div className="text-[10px] text-slate-400 mt-1">Potongan: {formatRupiah(editingRules.signalCutPenaltyPerEvent)} / kejadian</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-3 flex justify-end gap-2 border-t-2 border-black">
+                <button
+                  type="button"
+                  onClick={() => setShowRulesModal(false)}
+                  disabled={isSavingRules}
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 bg-dark-panel border-2 border-black hover:bg-slate-800"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingRules}
+                  className="px-5 py-2 rounded-xl text-xs font-extrabold text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400 disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSavingRules ? (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      <span>Menyimpan...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5" />
+                      <span>Simpan Ketentuan SOP</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

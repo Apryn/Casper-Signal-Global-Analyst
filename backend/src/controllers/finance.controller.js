@@ -539,64 +539,132 @@ export const deleteTransaction = async (req, res) => {
 };
 
 // ==========================================
-// 5. AUTOMATED PENALTY & SALARY AUDIT
+// 5. AUTOMATED FINANCE RULES & AUDIT
 // ==========================================
 
+export const DEFAULT_FINANCE_RULES = {
+  baseSalary15th: 1000000,
+  baseSalaryMonthEnd: 2000000,
+  standardLiveDurationHours: 4.0,
+  durationShortagePenaltyPerHour: 30000,
+  recapDeadlineTime: '08:00',
+  noReportPenaltyPerDay: 150000,
+  absentPenaltyPerSession: 60000,
+  sessionsPerDay: 2,
+  signalCutPenaltyPerEvent: 30000
+};
+
+export const getFinanceRules = async (req, res) => {
+  try {
+    const result = await pool.query("SELECT value FROM config WHERE key = 'finance_rules'");
+    if (result.rows.length > 0 && result.rows[0].value) {
+      try {
+        const parsed = JSON.parse(result.rows[0].value);
+        return res.json({ success: true, rules: { ...DEFAULT_FINANCE_RULES, ...parsed } });
+      } catch (e) {}
+    }
+    return res.json({ success: true, rules: DEFAULT_FINANCE_RULES });
+  } catch (err) {
+    console.error('[Finance getFinanceRules] Error:', err);
+    return res.status(500).json({ message: 'Gagal mengambil konfigurasi aturan denda' });
+  }
+};
+
+export const updateFinanceRules = async (req, res) => {
+  try {
+    const incoming = req.body.rules || req.body || {};
+    const newRules = {
+      baseSalary15th: parseFloat(incoming.baseSalary15th) >= 0 ? parseFloat(incoming.baseSalary15th) : DEFAULT_FINANCE_RULES.baseSalary15th,
+      baseSalaryMonthEnd: parseFloat(incoming.baseSalaryMonthEnd) >= 0 ? parseFloat(incoming.baseSalaryMonthEnd) : DEFAULT_FINANCE_RULES.baseSalaryMonthEnd,
+      standardLiveDurationHours: parseFloat(incoming.standardLiveDurationHours) > 0 ? parseFloat(incoming.standardLiveDurationHours) : DEFAULT_FINANCE_RULES.standardLiveDurationHours,
+      durationShortagePenaltyPerHour: parseFloat(incoming.durationShortagePenaltyPerHour) >= 0 ? parseFloat(incoming.durationShortagePenaltyPerHour) : DEFAULT_FINANCE_RULES.durationShortagePenaltyPerHour,
+      recapDeadlineTime: String(incoming.recapDeadlineTime || DEFAULT_FINANCE_RULES.recapDeadlineTime),
+      noReportPenaltyPerDay: parseFloat(incoming.noReportPenaltyPerDay) >= 0 ? parseFloat(incoming.noReportPenaltyPerDay) : DEFAULT_FINANCE_RULES.noReportPenaltyPerDay,
+      absentPenaltyPerSession: parseFloat(incoming.absentPenaltyPerSession) >= 0 ? parseFloat(incoming.absentPenaltyPerSession) : DEFAULT_FINANCE_RULES.absentPenaltyPerSession,
+      sessionsPerDay: parseInt(incoming.sessionsPerDay, 10) > 0 ? parseInt(incoming.sessionsPerDay, 10) : DEFAULT_FINANCE_RULES.sessionsPerDay,
+      signalCutPenaltyPerEvent: parseFloat(incoming.signalCutPenaltyPerEvent) >= 0 ? parseFloat(incoming.signalCutPenaltyPerEvent) : DEFAULT_FINANCE_RULES.signalCutPenaltyPerEvent,
+    };
+
+    await pool.query(
+      `INSERT INTO config (key, value, updated_at) VALUES ('finance_rules', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+      [JSON.stringify(newRules)]
+    );
+
+    return res.json({ success: true, message: 'Ketentuan aturan denda berhasil diperbarui', rules: newRules });
+  } catch (err) {
+    console.error('[Finance updateFinanceRules] Error:', err);
+    return res.status(500).json({ message: 'Gagal memperbarui aturan denda' });
+  }
+};
+
+// ── 5. PENALTY & SALARY AUTOMATED AUDIT ──────────────────────────────────────────
 export const getPenaltyAudit = async (req, res) => {
   try {
-    const { startDate, endDate, periodType = '15th', periodKey } = req.query;
+    const { startDate, endDate, periodType = '15th' } = req.query;
 
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'startDate dan endDate wajib diisi' });
     }
 
-    const pKey = periodKey || `${startDate.slice(0, 7)}_${periodType}`;
+    const pKey = `${startDate}_${endDate}_${periodType}`;
 
-    // 1. Get all streamers and their payroll profiles
+    // 0. Fetch dynamic rules from config table
+    let rules = DEFAULT_FINANCE_RULES;
+    try {
+      const rulesRes = await pool.query("SELECT value FROM config WHERE key = 'finance_rules'");
+      if (rulesRes.rows.length > 0 && rulesRes.rows[0].value) {
+        rules = { ...DEFAULT_FINANCE_RULES, ...JSON.parse(rulesRes.rows[0].value) };
+      }
+    } catch (e) {
+      console.warn('[Finance Audit] Failed to parse finance_rules, using default:', e.message);
+    }
+
+    // 1. Get all active streamers with profiles
     const streamersRes = await pool.query(`
-      SELECT s.id as streamer_id, s.nama, s.platform,
-             p.id as profile_id, 
-             COALESCE(p.bank_name, 'BSI') as bank_name, 
-             p.bank_account_number, 
-             p.bank_account_holder,
-             COALESCE(p.salary_15, 1000000.00) as salary_15,
-             COALESCE(p.salary_1, 2000000.00) as salary_1
+      SELECT 
+        s.id AS streamer_id,
+        s.nama,
+        s.platform,
+        p.id AS profile_id,
+        p.role,
+        p.bank_name,
+        p.bank_account_number,
+        p.bank_account_holder,
+        p.salary_15,
+        p.salary_1
       FROM streamers s
-      LEFT JOIN LATERAL (
-        SELECT * FROM payroll_profiles p
-        WHERE p.streamer_id = s.id 
-           OR LOWER(TRIM(p.name)) = LOWER(TRIM(s.nama))
-           OR (LOWER(s.nama) = 'teizza' AND (LOWER(p.name) LIKE '%teizza%' OR LOWER(p.name) LIKE '%key team%'))
-        ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
-        LIMIT 1
-      ) p ON true
+      LEFT JOIN payroll_profiles p ON (
+        LOWER(TRIM(p.recipient_name)) = LOWER(TRIM(s.nama)) OR p.streamer_id = s.id
+      )
+      WHERE s.status = 'Active' OR s.status IS NULL
       ORDER BY s.nama ASC
     `);
 
-    // 2. Get all reports in date range
+    // 2. Get all daily reports in the date range
     const reportsRes = await pool.query(`
-      SELECT r.id, 
-             TO_CHAR(r.tanggal, 'YYYY-MM-DD') as tanggal, 
-             r.streamer_id, 
-             r.kategori, 
-             COALESCE(r.live_duration, 0.0) as live_duration,
-             r.raw_message, 
-             r.created_at,
-             r.status_izin, 
-             r.catatan_izin
-      FROM daily_reports r
-      WHERE r.tanggal >= $1 AND r.tanggal <= $2
-      ORDER BY r.tanggal ASC
+      SELECT 
+        id,
+        streamer_id,
+        TO_CHAR(tanggal, 'YYYY-MM-DD') AS tanggal,
+        kategori,
+        live_duration,
+        reported_live_duration,
+        status_izin,
+        catatan_izin,
+        raw_message,
+        created_at
+      FROM daily_reports
+      WHERE tanggal >= $1::date AND tanggal <= $2::date
     `, [startDate, endDate]);
 
     // Index reports by "streamer_id_YYYY-MM-DD"
     const reportMap = {};
     for (const r of reportsRes.rows) {
-      const key = `${r.streamer_id}_${r.tanggal}`;
-      reportMap[key] = r;
+      reportMap[`${r.streamer_id}_${r.tanggal}`] = r;
     }
 
-    // 3. Get saved adjustments (signal cuts, custom bonus/deduction)
+    // 3. Get saved adjustments
     const adjustmentsRes = await pool.query(`
       SELECT * FROM streamer_salary_adjustments 
       WHERE period_key = $1
@@ -607,7 +675,7 @@ export const getPenaltyAudit = async (req, res) => {
       adjMap[a.streamer_id] = a;
     }
 
-    // Generate list of all dates in range
+    // Generate date range
     const allDates = [];
     const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -619,40 +687,38 @@ export const getPenaltyAudit = async (req, res) => {
       const d = String(curr.getDate()).padStart(2, '0');
       allDates.push({
         dateStr: `${y}-${m}-${d}`,
-        dayOfWeek: curr.getDay(), // 0 = Sunday
-        dayName: dayNames[curr.getDay()],
+        dayOfWeek: curr.getDay(),
         shortDate: `${dayNames[curr.getDay()]}, ${parseInt(d, 10)} ${monthNames[curr.getMonth()]}`
       });
       curr.setDate(curr.getDate() + 1);
     }
 
-    // Calculate audit per streamer
     const auditResults = [];
 
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
       
       // Determine Base Salary based on periodType
-      let baseSalary = 1000000;
+      let baseSalary = rules.baseSalary15th;
       if (periodType === '15th') {
-        baseSalary = parseFloat(streamer.salary_15 || 1000000);
+        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th);
       } else if (periodType === '1st') {
-        baseSalary = parseFloat(streamer.salary_1 || 2000000);
+        baseSalary = parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd);
       } else if (periodType === 'full') {
-        baseSalary = parseFloat(streamer.salary_15 || 1000000) + parseFloat(streamer.salary_1 || 2000000);
+        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th) + parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd);
       }
 
       let totalLiveDuration = 0;
       let liveDaysCount = 0;
       let under4hCount = 0;
       let totalShortageHours = 0;
-      let shortagePenalty = 0; // Rp 30,000 / jam
+      let shortagePenalty = 0;
 
       let noReportDaysCount = 0;
-      let noReportPenalty = 0; // Rp 150,000 / hari
+      let noReportPenalty = 0;
 
       let absentDaysCount = 0;
-      let absentPenalty = 0; // Rp 60,000 / sesi (2 sesi = Rp 120,000 / hari)
+      let absentPenalty = 0;
 
       let offDaysCount = 0;
       let excusedDaysCount = 0;
@@ -714,12 +780,12 @@ export const getPenaltyAudit = async (req, res) => {
             const duration = parseFloat(rep.live_duration || 0);
             totalLiveDuration += duration;
 
-            // SOP Durasi (< 4.0 Jam)
-            if (duration < 4.0) {
-              const shortage = parseFloat((4.0 - duration).toFixed(2));
+            // SOP Durasi (< standardLiveDurationHours Jam)
+            if (duration < rules.standardLiveDurationHours) {
+              const shortage = parseFloat((rules.standardLiveDurationHours - duration).toFixed(2));
               dayItem.shortageHours = shortage;
               under4hCount++;
-              dayItem.shortagePenalty = Math.round(shortage * 30000);
+              dayItem.shortagePenalty = Math.round(shortage * rules.durationShortagePenaltyPerHour);
               totalShortageHours += shortage;
               shortagePenalty += dayItem.shortagePenalty;
               dayItem.statusLabel = `Durasi Kurang (${duration}h / -${shortage}h)`;
@@ -734,11 +800,12 @@ export const getPenaltyAudit = async (req, res) => {
           absentDaysCount++;
           noReportDaysCount++;
           
-          dayItem.absentPenalty = 120000; // 2 sesi x Rp 60,000
-          dayItem.noReportPenalty = 150000; // Rp 150,000
+          const dailyAbsentCost = rules.absentPenaltyPerSession * rules.sessionsPerDay;
+          dayItem.absentPenalty = dailyAbsentCost;
+          dayItem.noReportPenalty = rules.noReportPenaltyPerDay;
           
-          absentPenalty += 120000;
-          noReportPenalty += 150000;
+          absentPenalty += dailyAbsentCost;
+          noReportPenalty += rules.noReportPenaltyPerDay;
 
           dayItem.statusLabel = 'Absen (Tidak Live & Tidak Rekap)';
           dayItem.statusColor = 'red';
@@ -751,7 +818,7 @@ export const getPenaltyAudit = async (req, res) => {
       // Adjustments (Signal cut, custom bonus/deduction)
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
       const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
-      const signalCutAmount = parseFloat(adj.signal_cut_amount || (signalCutCount * 30000));
+      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * rules.signalCutPenaltyPerEvent));
       const customBonus = parseFloat(adj.custom_bonus || 0);
       const customDeduction = parseFloat(adj.custom_deduction || 0);
 
@@ -819,8 +886,19 @@ export const saveSalaryAdjustment = async (req, res) => {
       return res.status(400).json({ message: 'streamerId dan periodKey wajib diisi' });
     }
 
+    let signalRate = DEFAULT_FINANCE_RULES.signalCutPenaltyPerEvent;
+    try {
+      const rulesRes = await pool.query("SELECT value FROM config WHERE key = 'finance_rules'");
+      if (rulesRes.rows.length > 0 && rulesRes.rows[0].value) {
+        const parsed = JSON.parse(rulesRes.rows[0].value);
+        if (parsed.signalCutPenaltyPerEvent !== undefined) {
+          signalRate = parseFloat(parsed.signalCutPenaltyPerEvent);
+        }
+      }
+    } catch (e) {}
+
     const count = parseInt(signalCutCount || 0, 10);
-    const cutAmount = count * 30000;
+    const cutAmount = count * signalRate;
     const bonus = parseFloat(customBonus || 0);
     const deduction = parseFloat(customDeduction || 0);
 

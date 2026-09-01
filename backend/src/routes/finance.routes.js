@@ -21,7 +21,9 @@ import {
   saveSalaryAdjustment,
   toggleDailyExcusedStatus,
   updateDailyLiveDuration,
-  toggleStreamerVerification
+  toggleStreamerVerification,
+  getFinanceRules,
+  updateFinanceRules
 } from '../controllers/finance.controller.js';
 
 const router = express.Router();
@@ -33,7 +35,11 @@ router.use(authenticateToken);
 router.post('/verify-pin', verifyPin);
 router.post('/change-pin', changePin);
 
-// 2. Automated Penalty & Salary Audit
+// 2. Finance Rules & SOP Rates Settings
+router.get('/rules', getFinanceRules);
+router.post('/rules', updateFinanceRules);
+
+// 2b. Automated Penalty & Salary Audit
 router.get('/penalty-audit', getPenaltyAudit);
 router.post('/penalty-audit/adjust', saveSalaryAdjustment);
 router.post('/penalty-audit/toggle-excuse', toggleDailyExcusedStatus);
