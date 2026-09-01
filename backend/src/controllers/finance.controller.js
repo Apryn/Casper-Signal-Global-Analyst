@@ -800,18 +800,16 @@ export const getPenaltyAudit = async (req, res) => {
             }
           }
         } else {
-          // Missing report on non-Sunday
+          // Missing report on non-Sunday (Streamer Absen / Tidak Live)
           absentDaysCount++;
-          noReportDaysCount++;
           
           const dailyAbsentCost = rules.absentPenaltyPerSession * rules.sessionsPerDay;
           dayItem.absentPenalty = dailyAbsentCost;
-          dayItem.noReportPenalty = rules.noReportPenaltyPerDay;
+          dayItem.noReportPenalty = 0; // Tidak didenda ganda jika sudah kena denda absen
           
           absentPenalty += dailyAbsentCost;
-          noReportPenalty += rules.noReportPenaltyPerDay;
 
-          dayItem.statusLabel = 'Absen (Tidak Live & Tidak Rekap)';
+          dayItem.statusLabel = 'Absen (Tidak Live)';
           dayItem.statusColor = 'red';
         }
 
