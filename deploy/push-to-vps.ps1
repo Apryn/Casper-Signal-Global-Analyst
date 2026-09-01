@@ -5,9 +5,9 @@
 # =============================================================
 
 param(
-    [string]$VPS_IP = "0.0.0.0",         # < GANTI dengan IP VPS Hostinger kamu
-    [string]$VPS_USER = "root",            # < GANTI jika bukan root
-    [string]$SSH_KEY = ""                  # < Path ke SSH key jika pakai key (opsional)
+    [string]$VPS_IP = "187.77.156.219",         # IP VPS Hostinger
+    [string]$VPS_USER = "root",                 # User root VPS
+    [string]$SSH_KEY = ""                       # Path ke SSH key jika pakai key (opsional)
 )
 
 $START_TIME = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
