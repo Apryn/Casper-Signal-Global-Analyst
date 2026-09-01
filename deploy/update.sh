@@ -5,6 +5,9 @@
 #   Usage: bash /var/www/casper/deploy/update.sh
 # =============================================================
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+git config --global --add safe.directory /var/www/casper 2>/dev/null || true
+
 APP_DIR="/var/www/casper"
 START_TIME=$(date '+%Y-%m-%d %H:%M:%S')
 
@@ -18,6 +21,7 @@ echo ""
 # ── Pull kode terbaru ─────────────────────────────────────────
 echo "▶ [1/4] Pull kode terbaru dari GitHub..."
 cd "$APP_DIR"
+git config --global --add safe.directory /var/www/casper 2>/dev/null || true
 git fetch origin master
 git reset --hard origin/master
 echo "✅ Kode ter-update ke commit terbaru"
