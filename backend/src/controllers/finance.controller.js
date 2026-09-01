@@ -585,11 +585,13 @@ export const updateFinanceRules = async (req, res) => {
       signalCutPenaltyPerEvent: parseFloat(incoming.signalCutPenaltyPerEvent) >= 0 ? parseFloat(incoming.signalCutPenaltyPerEvent) : DEFAULT_FINANCE_RULES.signalCutPenaltyPerEvent,
     };
 
-    await pool.query(
-      `INSERT INTO config (key, value, updated_at) VALUES ('finance_rules', $1, NOW())
-       ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-      [JSON.stringify(newRules)]
-    );
+    const val = JSON.stringify(newRules);
+    const existing = await pool.query("SELECT id FROM config WHERE key = 'finance_rules'");
+    if (existing.rows.length > 0) {
+      await pool.query("UPDATE config SET value = $1 WHERE key = 'finance_rules'", [val]);
+    } else {
+      await pool.query("INSERT INTO config (key, value) VALUES ('finance_rules', $1)", [val]);
+    }
 
     return res.json({ success: true, message: 'Ketentuan aturan denda berhasil diperbarui', rules: newRules });
   } catch (err) {
