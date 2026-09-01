@@ -1007,10 +1007,10 @@ const Finance = () => {
             .title { font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin: 0; }
             .subtitle { font-size: 8.5px; color: #64748b; margin-top: 1px; }
             .meta { font-size: 8.5px; color: #475569; text-align: right; line-height: 1.35; }
-            .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px; }
+            .summary-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 12px; margin-bottom: 8px; }
             .summary-item { text-align: left; }
             .summary-label { font-size: 7.5px; text-transform: uppercase; color: #64748b; font-weight: 700; }
-            .summary-value { font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 1px; }
+            .summary-value { font-size: 11px; font-weight: 800; color: #0f172a; margin-top: 1px; }
             table { width: 100%; border-collapse: collapse; margin-top: 2px; }
             th { background: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
             @media print {
@@ -1043,10 +1043,6 @@ const Finance = () => {
             <div class="summary-item">
               <div class="summary-label">Total Pengeluaran</div>
               <div class="summary-value" style="color: #991b1b;">${formatRupiah(cashSummary.total_keluar)}</div>
-            </div>
-            <div class="summary-item">
-              <div class="summary-label">Realisasi Payroll Cair</div>
-              <div class="summary-value">${formatRupiah(cashSummary.total_payroll_paid)}</div>
             </div>
           </div>
 
