@@ -601,13 +601,13 @@ export const updateFinanceRules = async (req, res) => {
 // ── 5. PENALTY & SALARY AUTOMATED AUDIT ──────────────────────────────────────────
 export const getPenaltyAudit = async (req, res) => {
   try {
-    const { startDate, endDate, periodType = '15th' } = req.query;
+    const { startDate, endDate, periodType = '15th', periodKey } = req.query;
 
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'startDate dan endDate wajib diisi' });
     }
 
-    const pKey = `${startDate}_${endDate}_${periodType}`;
+    const pKey = periodKey || `${startDate.slice(0, 7)}_${periodType}`;
 
     // 0. Fetch dynamic rules from config table
     let rules = DEFAULT_FINANCE_RULES;
@@ -627,16 +627,20 @@ export const getPenaltyAudit = async (req, res) => {
         s.nama,
         s.platform,
         p.id AS profile_id,
-        p.role,
-        p.bank_name,
+        COALESCE(p.bank_name, 'BCA') AS bank_name,
         p.bank_account_number,
         p.bank_account_holder,
-        p.salary_15,
-        p.salary_1
+        COALESCE(p.salary_15, 1000000.00) AS salary_15,
+        COALESCE(p.salary_1, 2000000.00) AS salary_1
       FROM streamers s
-      LEFT JOIN payroll_profiles p ON (
-        LOWER(TRIM(p.recipient_name)) = LOWER(TRIM(s.nama)) OR p.streamer_id = s.id
-      )
+      LEFT JOIN LATERAL (
+        SELECT * FROM payroll_profiles p
+        WHERE p.streamer_id = s.id 
+           OR LOWER(TRIM(p.name)) = LOWER(TRIM(s.nama))
+           OR (LOWER(s.nama) = 'teizza' AND (LOWER(p.name) LIKE '%teizza%' OR LOWER(p.name) LIKE '%key team%'))
+        ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
+        LIMIT 1
+      ) p ON true
       WHERE s.status = 'Active' OR s.status IS NULL
       ORDER BY s.nama ASC
     `);
