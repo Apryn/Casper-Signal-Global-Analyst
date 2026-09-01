@@ -641,7 +641,7 @@ export const getPenaltyAudit = async (req, res) => {
         ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
         LIMIT 1
       ) p ON true
-      WHERE s.status = 'Active' OR s.status IS NULL
+      WHERE p.is_active IS TRUE OR p.is_active IS NULL
       ORDER BY s.nama ASC
     `);
 
