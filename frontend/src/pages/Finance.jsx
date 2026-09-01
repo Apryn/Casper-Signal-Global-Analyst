@@ -608,7 +608,7 @@ const Finance = () => {
     text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bulan)' : 'Full 1 Bulan'})\n`;
     text += `------------------------------------\n`;
     text += `💵 *Gaji Pokok:* ${formatRupiah(s.baseSalary)}\n\n`;
-    text += `*Rincian Potongan & Denda:* \n`;
+    text += `*Ringkasan Denda & Potongan:*\n`;
     
     if (s.shortagePenalty > 0) {
       text += `• Denda Durasi Kurang (${s.totalShortageHours}h / ${s.under4hCount}x): -${formatRupiah(s.shortagePenalty)}\n`;
@@ -638,18 +638,48 @@ const Finance = () => {
       text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
     }
 
-    // Hutang Kompensasi Jam Notes (jika ada)
-    if (s.compensationNotes && s.compensationNotes.length > 0) {
-      text += `\n📌 *CATATAN HUTANG KOMPENSASI JAM LIVE:*\n`;
-      s.compensationNotes.forEach((c) => {
-        text += `• ${c.date}: ${c.note} (Denda ditangguhkan/bebas potongan)\n`;
+    // Detail Per Tanggal (Rincian untuk cross-check streamer)
+    const absentDates = s.dailyBreakdown?.filter(d => d.absentPenalty > 0) || [];
+    const shortageDates = s.dailyBreakdown?.filter(d => d.shortagePenalty > 0) || [];
+    const noReportDates = s.dailyBreakdown?.filter(d => d.noReportPenalty > 0) || [];
+    const excuseDates = s.dailyBreakdown?.filter(d => !d.isSunday && (d.isExcused || d.isCompensated)) || [];
+
+    if (absentDates.length > 0 || shortageDates.length > 0 || noReportDates.length > 0) {
+      text += `\n📋 *RINCIAN TANGGAL PELANGGARAN:*\n`;
+      
+      if (absentDates.length > 0) {
+        text += `🔴 *Absen / Tidak Live (${absentDates.length} Hari):*\n`;
+        absentDates.forEach(d => {
+          text += `  - ${d.shortDate} (-${formatRupiah(d.absentPenalty)})\n`;
+        });
+      }
+
+      if (shortageDates.length > 0) {
+        text += `⏱️ *Durasi Kurang (${shortageDates.length} Hari):*\n`;
+        shortageDates.forEach(d => {
+          text += `  - ${d.shortDate}: Live ${d.liveDuration}h (Kurang -${d.shortageHours}h -> -${formatRupiah(d.shortagePenalty)})\n`;
+        });
+      }
+
+      if (noReportDates.length > 0) {
+        text += `📝 *Telat / Tidak Rekap (${noReportDates.length} Hari):*\n`;
+        noReportDates.forEach(d => {
+          text += `  - ${d.shortDate} (-${formatRupiah(d.noReportPenalty)})\n`;
+        });
+      }
+    }
+
+    if (excuseDates.length > 0) {
+      text += `\n📌 *IZIN & KOMPENSASI DISETUJUI:*\n`;
+      excuseDates.forEach(d => {
+        text += `  - ${d.shortDate}: ${d.statusLabel || d.catatanIzin || 'Izin Sah'} (Bebas Denda)\n`;
       });
     }
 
     text += `------------------------------------\n`;
     text += `🔴 *Total Potongan:* -${formatRupiah(s.totalPenalties)}\n`;
     text += `💰 *GAJI BERSIH (TAKE HOME PAY): ${formatRupiah(s.netSalary)}*\n\n`;
-    text += `_Mohon dicek kembali. Jika ada kendala, hubungi admin. Tetap semangat & salam profit! 🚀_`;
+    text += `_Mohon dicek kembali rincian tanggal di atas. Jika ada kendala/sanggahan, silakan hubungi admin. Tetap semangat & salam profit! 🚀_`;
 
     copyToClipboard(text, `audit-wa-${s.streamerId}`);
     setPreviewWaSlip({
