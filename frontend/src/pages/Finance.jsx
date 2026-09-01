@@ -149,6 +149,8 @@ const Finance = () => {
   const [selectedPeriodId, setSelectedPeriodId] = useState(null);
   const [currentPeriodDetail, setCurrentPeriodDetail] = useState(null);
   const [showNewPeriodModal, setShowNewPeriodModal] = useState(false);
+  const [payrollFilterStatus, setPayrollFilterStatus] = useState('All'); // 'All', 'Paid', 'Pending'
+  const [payrollSearch, setPayrollSearch] = useState('');
   const [newPeriodForm, setNewPeriodForm] = useState({
     period_type: '15th',
     period_date: new Date().toISOString().split('T')[0],
@@ -748,6 +750,352 @@ const Finance = () => {
               </div>
             </div>
           </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExportPayrollPdf = () => {
+    if (!currentPeriodDetail || !currentPeriodDetail.items) return;
+
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pop-up terblokir. Harap izinkan pop-up untuk mencetak laporan PDF.');
+      return;
+    }
+
+    const todayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const period = currentPeriodDetail.period;
+    const items = currentPeriodDetail.items;
+
+    const totalBase = items.reduce((acc, i) => acc + (parseFloat(i.base_amount) || 0), 0);
+    const totalBonus = items.reduce((acc, i) => acc + (parseFloat(i.bonus_amount) || 0), 0);
+    const totalDeduction = items.reduce((acc, i) => acc + (parseFloat(i.deduction_amount) || 0), 0);
+    const totalFinal = items.reduce((acc, i) => acc + (parseFloat(i.final_amount) || 0), 0);
+
+    const paidItems = items.filter(i => i.status === 'Paid');
+    const pendingItems = items.filter(i => i.status !== 'Paid');
+
+    const totalPaid = paidItems.reduce((acc, i) => acc + (parseFloat(i.final_amount) || 0), 0);
+    const totalPending = pendingItems.reduce((acc, i) => acc + (parseFloat(i.final_amount) || 0), 0);
+
+    const renderItemRow = (item, idx) => {
+      const isPaid = item.status === 'Paid';
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="text-align: center; padding: 4px 6px; font-size: 9px;">${idx + 1}</td>
+          <td style="padding: 4px 6px; font-size: 9.5px; font-weight: 700; color: #0f172a;">
+            ${item.recipient_name}
+            <span style="display: inline-block; margin-left: 4px; padding: 1px 4px; border-radius: 3px; font-size: 8px; font-weight: 700; background: #e2e8f0; color: #334155; text-transform: uppercase;">${item.role}</span>
+            ${item.notes ? `<div style="font-size: 8px; color: #d97706; font-style: italic;">📝 ${item.notes}</div>` : ''}
+          </td>
+          <td style="padding: 4px 6px; font-size: 8.5px; color: #475569;">
+            <strong>${item.bank_name || 'BCA'}</strong> - ${item.bank_account_number || '-'}<br/>
+            <span style="font-size: 8px; color: #64748b;">a/n ${item.bank_account_holder || item.recipient_name}</span>
+          </td>
+          <td style="text-align: right; padding: 4px 6px; font-size: 9px; font-weight: 600;">${formatRupiah(item.base_amount)}</td>
+          <td style="text-align: right; padding: 4px 6px; font-size: 8.5px;">
+            ${parseFloat(item.bonus_amount) > 0 ? `<span style="color: #059669; font-weight: 600;">+${formatRupiah(item.bonus_amount)}</span>` : ''}
+            ${parseFloat(item.bonus_amount) > 0 && parseFloat(item.deduction_amount) > 0 ? '<br/>' : ''}
+            ${parseFloat(item.deduction_amount) > 0 ? `<span style="color: #dc2626; font-weight: 600;">-${formatRupiah(item.deduction_amount)}</span>` : ''}
+            ${parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 ? '-' : ''}
+          </td>
+          <td style="text-align: right; padding: 4px 6px; font-size: 9.5px; font-weight: 800; color: #0f172a; background: #f8fafc;">
+            ${formatRupiah(item.final_amount)}
+          </td>
+          <td style="text-align: center; padding: 4px 6px;">
+            <span style="display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; ${
+              isPaid 
+                ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' 
+                : 'background: #fef3c7; color: #b45309; border: 1px solid #fcd34d;'
+            }">
+              ${isPaid ? '✓ SUDAH DIBAYAR (LUNAS)' : '⏳ BELUM DIBAYAR'}
+            </span>
+          </td>
+        </tr>
+      `;
+    };
+
+    const rowsHtml = items.map((item, idx) => renderItemRow(item, idx)).join('');
+
+    const html = `
+      <html>
+        <head>
+          <title>Casper Signal — Laporan Penggajian & Rekap Kas</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 14px 18px; margin: 0; line-height: 1.3; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #4f46e5; padding-bottom: 8px; margin-bottom: 10px; }
+            h1 { font-size: 15px; color: #0f172a; margin: 0; font-weight: 800; text-transform: uppercase; }
+            .subtitle { font-size: 9.5px; color: #64748b; margin-top: 2px; }
+            .meta { font-size: 8.5px; color: #64748b; text-align: right; line-height: 1.35; }
+            .summary-box { display: flex; gap: 8px; margin-bottom: 10px; }
+            .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc; }
+            .card-title { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+            .card-val { font-size: 12px; font-weight: 800; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            th { background-color: #f1f5f9; padding: 5px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 8px; color: #334155; }
+            .status-bar { display: flex; justify-content: space-between; align-items: center; background: #e0e7ff; border: 1px solid #c7d2fe; border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 9px; color: #3730a3; font-weight: 700; }
+            @media print {
+              @page { size: A4 landscape; margin: 6mm 8mm; }
+              body { padding: 0; margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>Casper Signal BI — Rekap Penggajian (Payroll) &amp; Uang Kas</h1>
+              <div class="subtitle">Daftar Rincian Transfer Gaji Karyawan, Streamer &amp; Tim Operasional</div>
+            </div>
+            <div class="meta">
+              <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
+              <strong>Periode:</strong> ${period.title} (${period.period_type === '15th' ? 'Termin 1 (Tgl 15)' : 'Termin 2 (Tgl 1)'})<br/>
+              <strong>Total Tim:</strong> ${items.length} Anggota | <strong>Lunas:</strong> ${paidItems.length} | <strong>Belum:</strong> ${pendingItems.length}
+            </div>
+          </div>
+
+          <div class="summary-box">
+            <div class="card">
+              <div class="card-title">Total Anggaran Periode</div>
+              <div class="card-val" style="color: #0f172a;">${formatRupiah(totalFinal)}</div>
+              <div style="font-size: 8px; color: #64748b; margin-top: 1px;">${items.length} Penerima Terdaftar</div>
+            </div>
+            <div class="card" style="background: #ecfdf5; border-color: #a7f3d0;">
+              <div class="card-title" style="color: #047857;">Sudah Ditransfer (Lunas)</div>
+              <div class="card-val" style="color: #047857;">${formatRupiah(totalPaid)}</div>
+              <div style="font-size: 8px; color: #059669; margin-top: 1px;">${paidItems.length} Orang Selesai Transfer</div>
+            </div>
+            <div class="card" style="background: ${pendingItems.length > 0 ? '#fffbeb' : '#f8fafc'}; border-color: ${pendingItems.length > 0 ? '#fde68a' : '#cbd5e1'};">
+              <div class="card-title" style="color: ${pendingItems.length > 0 ? '#b45309' : '#64748b'};">Sisa Belum Ditransfer (Pending)</div>
+              <div class="card-val" style="color: ${pendingItems.length > 0 ? '#b45309' : '#0f172a'};">${formatRupiah(totalPending)}</div>
+              <div style="font-size: 8px; color: #b45309; margin-top: 1px;">${pendingItems.length} Orang Belum Dibayar</div>
+            </div>
+            <div class="card" style="background: #f0fdf4; border-color: #bbf7d0;">
+              <div class="card-title" style="color: #166534;">Saldo Uang Kas (Petty Cash)</div>
+              <div class="card-val" style="color: #166534;">${formatRupiah(cashSummary.saldo_kas)}</div>
+              <div style="font-size: 8px; color: #166534; margin-top: 1px;">Kas Masuk: ${formatRupiah(cashSummary.total_masuk)} | Keluar: ${formatRupiah(cashSummary.total_keluar)}</div>
+            </div>
+          </div>
+
+          <div class="status-bar">
+            <div>📊 Progres Pembayaran: ${paidItems.length} dari ${items.length} Orang Sudah Ditransfer (${items.length > 0 ? Math.round((paidItems.length / items.length) * 100) : 0}%)</div>
+            <div>💰 Sisa Dana yang Harus Dibayar: ${formatRupiah(totalPending)}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: center; width: 24px;">No</th>
+                <th>Nama Anggota &amp; Role</th>
+                <th>Rekening Bank Tujuan</th>
+                <th style="text-align: right;">Gaji Pokok</th>
+                <th style="text-align: right;">Bonus / Potongan</th>
+                <th style="text-align: right; background: #e2e8f0;">Total Ditransfer</th>
+                <th style="text-align: center; width: 140px;">Status Pembayaran</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHtml}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #94a3b8;">
+                <td colspan="3" style="padding: 6px; font-size: 9px; text-transform: uppercase;">TOTAL KESELURUHAN</td>
+                <td style="text-align: right; padding: 6px; font-size: 9px;">${formatRupiah(totalBase)}</td>
+                <td style="text-align: right; padding: 6px; font-size: 8.5px;">
+                  ${totalBonus > 0 ? `+${formatRupiah(totalBonus)}` : ''} 
+                  ${totalDeduction > 0 ? `-${formatRupiah(totalDeduction)}` : ''}
+                </td>
+                <td style="text-align: right; padding: 6px; font-size: 10px; color: #0f172a; background: #e2e8f0;">${formatRupiah(totalFinal)}</td>
+                <td style="text-align: center; padding: 6px; font-size: 8.5px; color: #047857;">
+                  ${paidItems.length} Lunas / ${pendingItems.length} Pending
+                </td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <script>
+            window.onload = function() {
+              window.print();
+              setTimeout(function() { window.close(); }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
+
+  const handleExportCashPdf = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Pop-up terblokir. Harap izinkan pop-up untuk mencetak laporan PDF.');
+      return;
+    }
+
+    const todayStr = new Date().toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+
+    const filteredTx = transactions.filter(t => {
+      if (cashFilterType === 'Masuk' && t.tipe !== 'Masuk') return false;
+      if (cashFilterType === 'Keluar' && t.tipe !== 'Keluar') return false;
+      if (cashSearch) {
+        const q = cashSearch.toLowerCase();
+        return (
+          t.keterangan?.toLowerCase().includes(q) ||
+          t.kategori?.toLowerCase().includes(q) ||
+          t.created_by?.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+
+    const totalMasukFiltered = filteredTx.filter(t => t.tipe === 'Masuk').reduce((a, b) => a + parseFloat(b.nominal || 0), 0);
+    const totalKeluarFiltered = filteredTx.filter(t => t.tipe === 'Keluar').reduce((a, b) => a + parseFloat(b.nominal || 0), 0);
+
+    const rowsHtml = filteredTx.map((tx, idx) => {
+      const isIncome = tx.tipe === 'Masuk';
+      const dateFormatted = new Date(tx.tanggal).toLocaleDateString('id-ID', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+      return `
+        <tr style="border-bottom: 1px solid #e2e8f0;">
+          <td style="text-align: center; padding: 4px 6px; font-size: 9px;">${idx + 1}</td>
+          <td style="padding: 4px 6px; font-size: 9px; font-family: monospace;">${dateFormatted}</td>
+          <td style="text-align: center; padding: 4px 6px;">
+            <span style="display: inline-block; padding: 1.5px 6px; border-radius: 4px; font-size: 8.5px; font-weight: 800; text-transform: uppercase; ${
+              isIncome 
+                ? 'background: #dcfce7; color: #15803d; border: 1px solid #86efac;' 
+                : 'background: #ffe4e6; color: #be123c; border: 1px solid #fda4af;'
+            }">
+              ${isIncome ? '🟢 Kas Masuk' : '🔴 Pengeluaran'}
+            </span>
+          </td>
+          <td style="padding: 4px 6px; font-size: 9px; font-weight: 700; color: #1e293b;">${tx.kategori}</td>
+          <td style="padding: 4px 6px; font-size: 9px; color: #334155;">${tx.keterangan || '-'}</td>
+          <td style="padding: 4px 6px; font-size: 8.5px; color: #64748b;">${tx.created_by || 'Admin'}</td>
+          <td style="text-align: right; padding: 4px 6px; font-size: 9.5px; font-weight: 800; font-family: monospace; color: ${isIncome ? '#047857' : '#be123c'};">
+            ${isIncome ? '+' : '-'}${formatRupiah(tx.nominal)}
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    const html = `
+      <html>
+        <head>
+          <title>Casper Signal — Buku Arus Uang Kas & Pengeluaran</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 14px 18px; margin: 0; line-height: 1.3; }
+            .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2.5px solid #4f46e5; padding-bottom: 8px; margin-bottom: 10px; }
+            h1 { font-size: 15px; color: #0f172a; margin: 0; font-weight: 800; text-transform: uppercase; }
+            .subtitle { font-size: 9.5px; color: #64748b; margin-top: 2px; }
+            .meta { font-size: 8.5px; color: #64748b; text-align: right; line-height: 1.35; }
+            .summary-box { display: flex; gap: 8px; margin-bottom: 10px; }
+            .card { flex: 1; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 10px; background: #f8fafc; }
+            .card-title { font-size: 8px; text-transform: uppercase; color: #64748b; font-weight: 700; }
+            .card-val { font-size: 12px; font-weight: 800; margin-top: 2px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            th { background-color: #f1f5f9; padding: 5px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 8px; color: #334155; }
+            @media print {
+              @page { size: A4 landscape; margin: 6mm 8mm; }
+              body { padding: 0; margin: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <h1>Casper Signal BI — Buku Arus Uang Kas &amp; Pengeluaran Operasional</h1>
+              <div class="subtitle">Laporan Mutasi Petty Cash, Pemasukan Bos &amp; Pengeluaran Operasional</div>
+            </div>
+            <div class="meta">
+              <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
+              <strong>Filter Transaksi:</strong> ${cashFilterType === 'All' ? 'Semua Tipe' : cashFilterType === 'Masuk' ? 'Hanya Kas Masuk' : 'Hanya Pengeluaran'}<br/>
+              <strong>Total Data:</strong> ${filteredTx.length} Transaksi Tercatat
+            </div>
+          </div>
+
+          <div class="summary-box">
+            <div class="card" style="background: #ecfdf5; border-color: #a7f3d0;">
+              <div class="card-title" style="color: #047857;">Saldo Kas Saat Ini (Petty Cash)</div>
+              <div class="card-val" style="color: #047857;">${formatRupiah(cashSummary.saldo_kas)}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Total Kas Masuk (Keseluruhan)</div>
+              <div class="card-val" style="color: #059669;">${formatRupiah(cashSummary.total_masuk)}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Total Pengeluaran (Keseluruhan)</div>
+              <div class="card-val" style="color: #be123c;">${formatRupiah(cashSummary.total_keluar)}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Total Realisasi Payroll Paid</div>
+              <div class="card-val" style="color: #4f46e5;">${formatRupiah(cashSummary.total_payroll_paid)}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: center; width: 24px;">No</th>
+                <th style="width: 80px;">Tanggal</th>
+                <th style="text-align: center; width: 110px;">Tipe</th>
+                <th>Kategori</th>
+                <th>Keterangan</th>
+                <th style="width: 90px;">Dicatat Oleh</th>
+                <th style="text-align: right; width: 120px;">Nominal</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filteredTx.length === 0 ? `
+                <tr>
+                  <td colspan="7" style="text-align: center; padding: 20px; color: #94a3b8; font-style: italic;">
+                    Tidak ada catatan transaksi uang kas sesuai filter.
+                  </td>
+                </tr>
+              ` : rowsHtml}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f8fafc; font-weight: 800; border-top: 2px solid #94a3b8;">
+                <td colspan="3" style="padding: 6px; font-size: 9px; text-transform: uppercase;">TOTAL TRANSAKSI TAMPIL</td>
+                <td colspan="3" style="padding: 6px; font-size: 8.5px; color: #64748b;">
+                  Masuk: <strong style="color: #059669;">+${formatRupiah(totalMasukFiltered)}</strong> | 
+                  Keluar: <strong style="color: #dc2626;">-${formatRupiah(totalKeluarFiltered)}</strong>
+                </td>
+                <td style="text-align: right; padding: 6px; font-size: 10px; color: #0f172a; background: #e2e8f0;">
+                  ${formatRupiah(totalMasukFiltered - totalKeluarFiltered)}
+                </td>
+              </tr>
+            </tfoot>
+          </table>
 
           <script>
             window.onload = function() {
@@ -1944,6 +2292,17 @@ const Finance = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {currentPeriodDetail && (
+                <button
+                  onClick={handleExportPayrollPdf}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-indigo-300 bg-indigo-950/40 border-2 border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-sm transition-all"
+                  title="Cetak / Export PDF Laporan Penggajian & Kas"
+                >
+                  <Printer className="h-4 w-4" />
+                  <span>Cetak / Export PDF</span>
+                </button>
+              )}
+
               <button
                 onClick={() => setShowNewPeriodModal(true)}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400 hover:-translate-y-0.5 active:translate-y-0.5 transition-all"
@@ -2013,13 +2372,70 @@ const Finance = () => {
 
               {/* Recipients Table */}
               <div className="bg-dark-card border-2 border-black rounded-2xl shadow-tactile-sm overflow-hidden">
-                <div className="p-4 border-b-2 border-black flex justify-between items-center bg-dark-panel">
-                  <h3 className="text-xs font-extrabold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                    <span>📋 Daftar Penerima Gaji</span>
-                    <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px]">
-                      {currentPeriodDetail.items.length} Orang
-                    </span>
-                  </h3>
+                <div className="p-4 border-b-2 border-black flex flex-col md:flex-row md:items-center justify-between gap-3 bg-dark-panel">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-extrabold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+                      <span>📋 Daftar Penerima Gaji</span>
+                      <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 text-[10px]">
+                        {currentPeriodDetail.items.length} Orang
+                      </span>
+                    </h3>
+
+                    {/* Filter Status: All / Paid / Pending */}
+                    <div className="flex items-center bg-dark-card border-2 border-black rounded-xl p-0.5 shadow-inset-screen ml-1">
+                      <button
+                        onClick={() => setPayrollFilterStatus('All')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all ${
+                          payrollFilterStatus === 'All'
+                            ? 'bg-tactile-yellow text-black shadow-tactile-sm'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Semua ({currentPeriodDetail.items.length})
+                      </button>
+                      <button
+                        onClick={() => setPayrollFilterStatus('Paid')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all ${
+                          payrollFilterStatus === 'Paid'
+                            ? 'bg-emerald-500 text-black shadow-tactile-sm'
+                            : 'text-emerald-400 hover:text-emerald-300'
+                        }`}
+                      >
+                        ✓ Lunas ({currentPeriodDetail.items.filter((i) => i.status === 'Paid').length})
+                      </button>
+                      <button
+                        onClick={() => setPayrollFilterStatus('Pending')}
+                        className={`px-2.5 py-1 rounded-lg text-[10px] font-extrabold transition-all ${
+                          payrollFilterStatus === 'Pending'
+                            ? 'bg-amber-400 text-black shadow-tactile-sm'
+                            : 'text-amber-400 hover:text-amber-300'
+                        }`}
+                      >
+                        ⏳ Belum Dibayar ({currentPeriodDetail.items.filter((i) => i.status !== 'Paid').length})
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Cari penerima / rekening..."
+                        value={payrollSearch}
+                        onChange={(e) => setPayrollSearch(e.target.value)}
+                        className="bg-dark-card border-2 border-black rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inset-screen w-48"
+                      />
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
+                    </div>
+
+                    <button
+                      onClick={handleExportPayrollPdf}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-extrabold text-indigo-300 bg-indigo-950/40 border-2 border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-sm transition-all shrink-0"
+                    >
+                      <Printer className="h-3.5 w-3.5" />
+                      <span>Export PDF</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="overflow-x-auto">
@@ -2036,148 +2452,176 @@ const Finance = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800">
-                      {currentPeriodDetail.items.map((item) => {
-                        const isPaid = item.status === 'Paid';
-                        return (
-                          <tr
-                            key={item.id}
-                            className={`transition-all hover:bg-slate-900/60 ${isPaid ? 'bg-emerald-950/10' : ''
-                              }`}
-                          >
-                            {/* Name & Role */}
-                            <td className="py-3.5 px-4">
-                              <div className="font-bold text-white text-sm">{item.recipient_name}</div>
-                              <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${getRoleBadgeClass(item.role)}`}>
-                                {item.role}
-                              </span>
-                              {item.notes && (
-                                <div className="text-[10px] text-amber-400 mt-0.5 italic">
-                                  📝 {item.notes}
-                                </div>
-                              )}
-                            </td>
+                      {(() => {
+                        const filtered = currentPeriodDetail.items.filter((item) => {
+                          if (payrollFilterStatus === 'Paid' && item.status !== 'Paid') return false;
+                          if (payrollFilterStatus === 'Pending' && item.status === 'Paid') return false;
+                          if (payrollSearch) {
+                            const q = payrollSearch.toLowerCase();
+                            return (
+                              item.recipient_name?.toLowerCase().includes(q) ||
+                              item.role?.toLowerCase().includes(q) ||
+                              item.bank_name?.toLowerCase().includes(q) ||
+                              item.bank_account_number?.toLowerCase().includes(q) ||
+                              item.notes?.toLowerCase().includes(q)
+                            );
+                          }
+                          return true;
+                        });
 
-                            {/* Bank Details & Copy */}
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-1.5">
-                                <span className="font-extrabold text-indigo-400 uppercase">
-                                  {item.bank_name || 'BCA'}
+                        if (filtered.length === 0) {
+                          return (
+                            <tr>
+                              <td colSpan="7" className="text-center py-8 text-slate-500">
+                                Tidak ada data penerima gaji sesuai filter status / pencarian.
+                              </td>
+                            </tr>
+                          );
+                        }
+
+                        return filtered.map((item) => {
+                          const isPaid = item.status === 'Paid';
+                          return (
+                            <tr
+                              key={item.id}
+                              className={`transition-all hover:bg-slate-900/60 ${isPaid ? 'bg-emerald-950/10' : ''
+                                }`}
+                            >
+                              {/* Name & Role */}
+                              <td className="py-3.5 px-4">
+                                <div className="font-bold text-white text-sm">{item.recipient_name}</div>
+                                <span className={`inline-block px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wide border ${getRoleBadgeClass(item.role)}`}>
+                                  {item.role}
                                 </span>
-                                <span className="font-mono text-slate-200">
-                                  {item.bank_account_number || '-'}
-                                </span>
-                                {item.bank_account_number && (
+                                {item.notes && (
+                                  <div className="text-[10px] text-amber-400 mt-0.5 italic">
+                                    📝 {item.notes}
+                                  </div>
+                                )}
+                              </td>
+
+                              {/* Bank Details & Copy */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-extrabold text-indigo-400 uppercase">
+                                    {item.bank_name || 'BCA'}
+                                  </span>
+                                  <span className="font-mono text-slate-200">
+                                    {item.bank_account_number || '-'}
+                                  </span>
+                                  {item.bank_account_number && (
+                                    <button
+                                      onClick={() => copyToClipboard(item.bank_account_number, `acc-${item.id}`)}
+                                      title="Salin No Rekening"
+                                      className="p-1 rounded bg-dark-panel hover:bg-indigo-600 hover:text-white border border-slate-700 transition-all text-slate-400"
+                                    >
+                                      {copiedKey === `acc-${item.id}` ? (
+                                        <Check className="h-3 w-3 text-emerald-400" />
+                                      ) : (
+                                        <Copy className="h-3 w-3" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-400 truncate max-w-[160px]">
+                                  a/n {item.bank_account_holder || item.recipient_name}
+                                </div>
+                              </td>
+
+                              {/* Base Amount */}
+                              <td className="py-3.5 px-4 text-right font-medium text-slate-300">
+                                {formatRupiah(item.base_amount)}
+                              </td>
+
+                              {/* Adjustments */}
+                              <td className="py-3.5 px-4 text-right">
+                                {parseFloat(item.bonus_amount) > 0 && (
+                                  <div className="text-[11px] font-bold text-emerald-400">
+                                    +{formatRupiah(item.bonus_amount)}
+                                  </div>
+                                )}
+                                {parseFloat(item.deduction_amount) > 0 && (
+                                  <div className="text-[11px] font-bold text-rose-400">
+                                    -{formatRupiah(item.deduction_amount)}
+                                  </div>
+                                )}
+                                {parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 && (
+                                  <span className="text-slate-500">-</span>
+                                )}
+                              </td>
+
+                              {/* Final Amount & Copy */}
+                              <td className="py-3.5 px-4 text-right">
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className="font-extrabold text-sm text-white">
+                                    {formatRupiah(item.final_amount)}
+                                  </span>
                                   <button
-                                    onClick={() => copyToClipboard(item.bank_account_number, `acc-${item.id}`)}
-                                    title="Salin No Rekening"
-                                    className="p-1 rounded bg-dark-panel hover:bg-indigo-600 hover:text-white border border-slate-700 transition-all text-slate-400"
+                                    onClick={() => copyToClipboard(item.final_amount, `nom-${item.id}`)}
+                                    title="Salin Nominal Transfer"
+                                    className="p-1 rounded bg-dark-panel hover:bg-tactile-yellow hover:text-black border border-slate-700 transition-all text-slate-400"
                                   >
-                                    {copiedKey === `acc-${item.id}` ? (
+                                    {copiedKey === `nom-${item.id}` ? (
                                       <Check className="h-3 w-3 text-emerald-400" />
                                     ) : (
                                       <Copy className="h-3 w-3" />
                                     )}
                                   </button>
-                                )}
-                              </div>
-                              <div className="text-[10px] text-slate-400 truncate max-w-[160px]">
-                                a/n {item.bank_account_holder || item.recipient_name}
-                              </div>
-                            </td>
-
-                            {/* Base Amount */}
-                            <td className="py-3.5 px-4 text-right font-medium text-slate-300">
-                              {formatRupiah(item.base_amount)}
-                            </td>
-
-                            {/* Adjustments */}
-                            <td className="py-3.5 px-4 text-right">
-                              {parseFloat(item.bonus_amount) > 0 && (
-                                <div className="text-[11px] font-bold text-emerald-400">
-                                  +{formatRupiah(item.bonus_amount)}
                                 </div>
-                              )}
-                              {parseFloat(item.deduction_amount) > 0 && (
-                                <div className="text-[11px] font-bold text-rose-400">
-                                  -{formatRupiah(item.deduction_amount)}
+                              </td>
+
+                              {/* Status */}
+                              <td className="py-3.5 px-4 text-center">
+                                <button
+                                  onClick={() => handleToggleItemStatus(item)}
+                                  className={`px-3 py-1.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider border-2 transition-all shadow-tactile-sm ${isPaid
+                                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500 hover:text-black'
+                                    : 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-400 hover:text-black'
+                                    }`}
+                                >
+                                  {isPaid ? '✓ LUNAS (PAID)' : '⏳ PENDING'}
+                                </button>
+                              </td>
+
+                              {/* Quick Actions */}
+                              <td className="py-3.5 px-4 text-center">
+                                <div className="flex items-center justify-center gap-1.5">
+                                  <button
+                                    onClick={() => {
+                                      setEditingItem(item);
+                                      setItemEditForm({
+                                        base_amount: formatInputNominal(item.base_amount),
+                                        bonus_amount: formatInputNominal(item.bonus_amount),
+                                        deduction_amount: formatInputNominal(item.deduction_amount),
+                                        notes: item.notes || '',
+                                        bank_name: item.bank_name || 'BCA',
+                                        bank_account_number: item.bank_account_number || '',
+                                        bank_account_holder: item.bank_account_holder || item.recipient_name,
+                                      });
+                                    }}
+                                    title="Edit Bonus/Potongan/Rekening"
+                                    className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-all"
+                                  >
+                                    <Edit3 className="h-3.5 w-3.5" />
+                                  </button>
+
+                                  <button
+                                    onClick={() => generateWhatsAppSlip(item, currentPeriodDetail.period)}
+                                    title="Salin Slip WA Siap Kirim"
+                                    className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-emerald-400 hover:bg-emerald-500 hover:text-black transition-all"
+                                  >
+                                    {copiedKey === `wa-${item.id}` ? (
+                                      <Check className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <MessageSquare className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
                                 </div>
-                              )}
-                              {parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 && (
-                                <span className="text-slate-500">-</span>
-                              )}
-                            </td>
-
-                            {/* Final Amount & Copy */}
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <span className="font-extrabold text-sm text-white">
-                                  {formatRupiah(item.final_amount)}
-                                </span>
-                                <button
-                                  onClick={() => copyToClipboard(item.final_amount, `nom-${item.id}`)}
-                                  title="Salin Nominal Transfer"
-                                  className="p-1 rounded bg-dark-panel hover:bg-tactile-yellow hover:text-black border border-slate-700 transition-all text-slate-400"
-                                >
-                                  {copiedKey === `nom-${item.id}` ? (
-                                    <Check className="h-3 w-3 text-emerald-400" />
-                                  ) : (
-                                    <Copy className="h-3 w-3" />
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-
-                            {/* Status */}
-                            <td className="py-3.5 px-4 text-center">
-                              <button
-                                onClick={() => handleToggleItemStatus(item)}
-                                className={`px-3 py-1.5 rounded-xl font-extrabold text-[10px] uppercase tracking-wider border-2 transition-all shadow-tactile-sm ${isPaid
-                                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500 hover:text-black'
-                                  : 'bg-amber-500/20 text-amber-300 border-amber-500/50 hover:bg-amber-400 hover:text-black'
-                                  }`}
-                              >
-                                {isPaid ? '✓ LUNAS (PAID)' : '⏳ PENDING'}
-                              </button>
-                            </td>
-
-                            {/* Quick Actions */}
-                            <td className="py-3.5 px-4 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                <button
-                                  onClick={() => {
-                                    setEditingItem(item);
-                                    setItemEditForm({
-                                      base_amount: formatInputNominal(item.base_amount),
-                                      bonus_amount: formatInputNominal(item.bonus_amount),
-                                      deduction_amount: formatInputNominal(item.deduction_amount),
-                                      notes: item.notes || '',
-                                      bank_name: item.bank_name || 'BCA',
-                                      bank_account_number: item.bank_account_number || '',
-                                      bank_account_holder: item.bank_account_holder || item.recipient_name,
-                                    });
-                                  }}
-                                  title="Edit Bonus/Potongan/Rekening"
-                                  className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-all"
-                                >
-                                  <Edit3 className="h-3.5 w-3.5" />
-                                </button>
-
-                                <button
-                                  onClick={() => generateWhatsAppSlip(item, currentPeriodDetail.period)}
-                                  title="Salin Slip WA Siap Kirim"
-                                  className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-emerald-400 hover:bg-emerald-500 hover:text-black transition-all"
-                                >
-                                  {copiedKey === `wa-${item.id}` ? (
-                                    <Check className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <MessageSquare className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                              </td>
+                            </tr>
+                          );
+                        });
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -2239,6 +2683,15 @@ const Finance = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleExportCashPdf}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-indigo-300 bg-indigo-950/40 border-2 border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-sm transition-all"
+                title="Cetak / Download Laporan PDF Arus Uang Kas"
+              >
+                <Printer className="h-4 w-4" />
+                <span>Cetak / Export PDF</span>
+              </button>
+
               <button
                 onClick={() => handleOpenCashModal('Masuk')}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-emerald-300 bg-emerald-950/40 border-2 border-emerald-500/40 hover:bg-emerald-500 hover:text-black shadow-tactile-sm transition-all"
