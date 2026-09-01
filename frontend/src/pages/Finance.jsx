@@ -853,7 +853,7 @@ const Finance = () => {
             table { width: 100%; border-collapse: collapse; margin-top: 2px; }
             th { background: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
             @media print {
-              @page { size: A4 landscape; margin: 6mm 8mm; }
+              @page { size: A4 portrait; margin: 8mm 10mm; }
               body { padding: 0; margin: 0; }
             }
           </style>
@@ -1014,7 +1014,7 @@ const Finance = () => {
             table { width: 100%; border-collapse: collapse; margin-top: 2px; }
             th { background: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
             @media print {
-              @page { size: A4 landscape; margin: 6mm 8mm; }
+              @page { size: A4 portrait; margin: 8mm 10mm; }
               body { padding: 0; margin: 0; }
             }
           </style>
