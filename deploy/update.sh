@@ -43,6 +43,7 @@ node src/db/fix_anomalous_viewer_history.js 2>/dev/null || true
 node src/db/migrate_salary_adjustments.js 2>/dev/null || true
 node src/db/migrate_excuse_requests.js 2>/dev/null || true
 node src/db/fix_payroll_profiles_mapping.js 2>/dev/null || true
+node src/db/split_key_team_oky_pratama.js 2>/dev/null || true
 echo "✅ Dependencies & database migrations siap"
 
 # ── Rebuild frontend ──────────────────────────────────────────
