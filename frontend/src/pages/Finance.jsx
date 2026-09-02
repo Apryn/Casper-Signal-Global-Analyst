@@ -151,6 +151,7 @@ const Finance = () => {
   const [showNewPeriodModal, setShowNewPeriodModal] = useState(false);
   const [payrollFilterStatus, setPayrollFilterStatus] = useState('All'); // 'All', 'Paid', 'Pending'
   const [payrollSearch, setPayrollSearch] = useState('');
+  const [syncingAudit, setSyncingAudit] = useState(false);
   const [newPeriodForm, setNewPeriodForm] = useState({
     period_type: '15th',
     period_date: new Date().toISOString().split('T')[0],
@@ -1498,6 +1499,67 @@ const Finance = () => {
     }
   };
 
+  const handleSyncAuditToPayroll = async (periodId) => {
+    if (!periodId) return;
+    const period = periods.find((p) => p.id === periodId);
+    const periodTitle = period?.title || 'Periode Ini';
+
+    if (!window.confirm(`Tarik dan sinkronkan otomatis seluruh potongan denda streamer dari hasil Audit ke "${periodTitle}"?\n\nNominal denda, kekurangan jam, dan rincian denda akan otomatis masuk ke tabel penggajian.`)) {
+      return;
+    }
+
+    try {
+      setSyncingAudit(true);
+      const res = await api.post(`/finance/periods/${periodId}/sync-audit`, {
+        startDate: auditStartDate,
+        endDate: auditEndDate,
+        periodType: auditPeriodType,
+      });
+      alert(res.data.message || 'Berhasil mensinkronkan denda dari hasil audit!');
+      await fetchPeriodDetail(periodId);
+      await fetchPeriods();
+      await fetchCashSummary();
+    } catch (err) {
+      console.error('Failed to sync audit to payroll:', err);
+      alert(err.response?.data?.message || 'Gagal mensinkronkan denda dari audit');
+    } finally {
+      setSyncingAudit(false);
+    }
+  };
+
+  const handleApplyAuditToSelectedPayroll = async () => {
+    if (periods.length === 0) {
+      alert('Belum ada periode penggajian yang dibuat. Silakan buat periode penggajian terlebih dahulu di tab Penggajian.');
+      return;
+    }
+
+    const targetPeriod = selectedPeriodId ? periods.find((p) => p.id === selectedPeriodId) : periods[0];
+    if (!targetPeriod) return;
+
+    if (!window.confirm(`Terapkan hasil audit periode ${auditStartDate} s/d ${auditEndDate} ke siklus penggajian:\n"${targetPeriod.title}"?\n\nSeluruh potongan denda dan bonus streamer akan otomatis disinkronkan.`)) {
+      return;
+    }
+
+    try {
+      setSyncingAudit(true);
+      const res = await api.post(`/finance/periods/${targetPeriod.id}/sync-audit`, {
+        startDate: auditStartDate,
+        endDate: auditEndDate,
+        periodType: auditPeriodType,
+      });
+      alert(res.data.message || 'Hasil audit berhasil diterapkan ke siklus penggajian!');
+      await fetchPeriodDetail(targetPeriod.id);
+      await fetchPeriods();
+      await fetchCashSummary();
+      setActiveTab('payroll');
+    } catch (err) {
+      console.error('Failed to apply audit to payroll:', err);
+      alert(err.response?.data?.message || 'Gagal menerapkan audit ke penggajian');
+    } finally {
+      setSyncingAudit(false);
+    }
+  };
+
   const handleDeletePeriod = async (id) => {
     if (!window.confirm('Hapus periode gajian ini beserta seluruh catatannya?')) return;
     try {
@@ -1935,6 +1997,16 @@ const Finance = () => {
 
               {/* Action Buttons */}
               <div className="flex items-center gap-2">
+                <button
+                  onClick={handleApplyAuditToSelectedPayroll}
+                  disabled={!auditData || auditLoading || syncingAudit}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400 hover:-translate-y-0.5 active:translate-y-0.5 transition-all disabled:opacity-50"
+                  title="Terapkan dan kirim seluruh hasil potongan denda audit ini langsung ke siklus Penggajian"
+                >
+                  <Sparkles className={`h-4 w-4 ${syncingAudit ? 'animate-spin' : ''}`} />
+                  <span>{syncingAudit ? 'Menerapkan...' : 'Terapkan ke Payroll'}</span>
+                </button>
+
                 <button
                   onClick={() => fetchPenaltyAudit()}
                   disabled={auditLoading}
@@ -2420,6 +2492,18 @@ const Finance = () => {
             </div>
 
             <div className="flex items-center gap-2">
+              {currentPeriodDetail && (
+                <button
+                  onClick={() => handleSyncAuditToPayroll(currentPeriodDetail.period.id)}
+                  disabled={syncingAudit}
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-amber-300 bg-amber-950/40 border-2 border-amber-500/50 hover:bg-amber-400 hover:text-black shadow-tactile-sm transition-all disabled:opacity-50"
+                  title="Tarik & sinkronkan otomatis potongan denda streamer dari hasil Audit Denda"
+                >
+                  <Sparkles className={`h-4 w-4 ${syncingAudit ? 'animate-spin' : 'text-amber-400'}`} />
+                  <span>{syncingAudit ? 'Menyinkronkan...' : 'Sinkronkan Denda Audit'}</span>
+                </button>
+              )}
+
               {currentPeriodDetail && (
                 <button
                   onClick={handleExportPayrollPdf}

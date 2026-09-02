@@ -23,7 +23,8 @@ import {
   updateDailyLiveDuration,
   toggleStreamerVerification,
   getFinanceRules,
-  updateFinanceRules
+  updateFinanceRules,
+  syncAuditToPeriod
 } from '../controllers/finance.controller.js';
 
 const router = express.Router();
@@ -56,6 +57,7 @@ router.post('/profiles/sync', syncStreamersToProfiles);
 router.get('/periods', getPeriods);
 router.get('/periods/:id', getPeriodDetail);
 router.post('/periods', createPeriod);
+router.post('/periods/:id/sync-audit', syncAuditToPeriod);
 router.delete('/periods/:id', deletePeriod);
 router.put('/items/:id', updateItem);
 router.post('/periods/bulk-status', bulkUpdateStatus);

@@ -398,7 +398,291 @@ export const bulkUpdateStatus = async (req, res) => {
     res.json({ success: true, message: `Seluruh status berhasil diubah ke ${validStatus}` });
   } catch (err) {
     console.error('[Finance bulkUpdateStatus] Error:', err);
-    res.status(500).json({ message: err.message || 'Gagal mengubah status massal' });
+    res.status(500).json({ message: 'Gagal mengubah status massal' });
+  }
+};
+
+export const syncAuditToPeriod = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { startDate: customStart, endDate: customEnd, periodType: customPeriodType } = req.body || {};
+
+    const periodRes = await client.query('SELECT * FROM payroll_periods WHERE id = $1', [id]);
+    if (periodRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Periode penggajian tidak ditemukan' });
+    }
+    const period = periodRes.rows[0];
+
+    // Determine audit date range
+    let startDate = customStart;
+    let endDate = customEnd;
+    let periodType = customPeriodType || period.period_type;
+
+    if (!startDate || !endDate) {
+      const pDate = new Date(period.period_date);
+      const py = pDate.getFullYear();
+      const pm = pDate.getMonth(); // 0-indexed
+
+      if (period.period_type === '15th') {
+        const mStr = String(pm + 1).padStart(2, '0');
+        startDate = `${py}-${mStr}-01`;
+        endDate = `${py}-${mStr}-15`;
+        periodType = '15th';
+      } else {
+        // '1st' or monthly end
+        if (pDate.getDate() <= 10) {
+          const prevDate = new Date(py, pm - 1, 1);
+          const yStr = prevDate.getFullYear();
+          const mStr = String(prevDate.getMonth() + 1).padStart(2, '0');
+          const lastDay = new Date(yStr, prevDate.getMonth() + 1, 0).getDate();
+          startDate = `${yStr}-${mStr}-16`;
+          endDate = `${yStr}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+        } else {
+          const mStr = String(pm + 1).padStart(2, '0');
+          const lastDay = new Date(py, pm + 1, 0).getDate();
+          startDate = `${py}-${mStr}-16`;
+          endDate = `${py}-${mStr}-${String(lastDay).padStart(2, '0')}`;
+        }
+        periodType = '1st';
+      }
+    }
+
+    // Run audit logic for this date range
+    // 0. Rules
+    let rules = DEFAULT_FINANCE_RULES;
+    try {
+      const rulesRes = await client.query("SELECT value FROM config WHERE key = 'finance_rules'");
+      if (rulesRes.rows.length > 0 && rulesRes.rows[0].value) {
+        rules = { ...DEFAULT_FINANCE_RULES, ...JSON.parse(rulesRes.rows[0].value) };
+      }
+    } catch (e) {
+      console.warn('[syncAuditToPeriod] Failed to parse finance_rules, using default:', e.message);
+    }
+
+    // 1. Get streamers
+    const streamersRes = await client.query(`
+      SELECT 
+        s.id AS streamer_id,
+        s.nama,
+        s.platform,
+        p.id AS profile_id,
+        COALESCE(p.bank_name, 'BCA') AS bank_name,
+        p.bank_account_number,
+        p.bank_account_holder,
+        COALESCE(p.salary_15, 1000000.00) AS salary_15,
+        COALESCE(p.salary_1, 2000000.00) AS salary_1
+      FROM streamers s
+      LEFT JOIN LATERAL (
+        SELECT * FROM payroll_profiles p
+        WHERE p.streamer_id = s.id 
+           OR LOWER(TRIM(p.name)) = LOWER(TRIM(s.nama))
+           OR (LOWER(s.nama) = 'teizza' AND (LOWER(p.name) LIKE '%teizza%' OR LOWER(p.name) LIKE '%key team%'))
+        ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
+        LIMIT 1
+      ) p ON true
+      WHERE p.is_active IS TRUE OR p.is_active IS NULL
+      ORDER BY s.nama ASC
+    `);
+
+    // 2. Daily reports
+    const reportsRes = await client.query(`
+      SELECT 
+        id,
+        streamer_id,
+        TO_CHAR(tanggal, 'YYYY-MM-DD') AS tanggal,
+        kategori,
+        live_duration,
+        status_izin,
+        catatan_izin
+      FROM daily_reports
+      WHERE tanggal >= $1::date AND tanggal <= $2::date
+    `, [startDate, endDate]);
+
+    const reportMap = {};
+    for (const r of reportsRes.rows) {
+      reportMap[`${r.streamer_id}_${r.tanggal}`] = r;
+    }
+
+    // 3. Adjustments
+    const pKey = `${startDate.slice(0, 7)}_${periodType}`;
+    const adjustmentsRes = await client.query(`
+      SELECT * FROM streamer_salary_adjustments 
+      WHERE period_key = $1
+    `, [pKey]);
+
+    const adjMap = {};
+    for (const a of adjustmentsRes.rows) {
+      adjMap[a.streamer_id] = a;
+    }
+
+    // Date range
+    const allDates = [];
+    let curr = new Date(startDate + 'T12:00:00');
+    const end = new Date(endDate + 'T12:00:00');
+    while (curr <= end) {
+      const y = curr.getFullYear();
+      const m = String(curr.getMonth() + 1).padStart(2, '0');
+      const d = String(curr.getDate()).padStart(2, '0');
+      allDates.push({
+        dateStr: `${y}-${m}-${d}`,
+        dayOfWeek: curr.getDay()
+      });
+      curr.setDate(curr.getDate() + 1);
+    }
+
+    const auditResultsMap = {};
+
+    for (const streamer of streamersRes.rows) {
+      const sId = streamer.streamer_id;
+      let baseSalary = periodType === '15th' ? parseFloat(streamer.salary_15 || rules.baseSalary15th) : parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd);
+
+      let totalLiveDuration = 0;
+      let liveDaysCount = 0;
+      let under4hCount = 0;
+      let totalShortageHours = 0;
+      let shortagePenalty = 0;
+      let noReportDaysCount = 0;
+      let noReportPenalty = 0;
+      let absentDaysCount = 0;
+      let absentPenalty = 0;
+      let offDaysCount = 0;
+      let excusedDaysCount = 0;
+
+      for (const d of allDates) {
+        const key = `${sId}_${d.dateStr}`;
+        const rep = reportMap[key];
+        const isSunday = d.dayOfWeek === 0;
+        const isExcused = (rep && (rep.status_izin === 'Izin' || rep.status_izin === 'Kompensasi')) || isSunday;
+
+        if (isExcused) {
+          excusedDaysCount++;
+        } else if (rep) {
+          if (rep.kategori === 'Non Streaming') {
+            offDaysCount++;
+          } else {
+            liveDaysCount++;
+            const duration = parseFloat(rep.live_duration || 0);
+            totalLiveDuration += duration;
+            if (duration < rules.standardLiveDurationHours) {
+              const shortage = parseFloat((rules.standardLiveDurationHours - duration).toFixed(2));
+              under4hCount++;
+              const pAmount = Math.round(shortage * rules.durationShortagePenaltyPerHour);
+              totalShortageHours += shortage;
+              shortagePenalty += pAmount;
+            }
+          }
+        } else {
+          absentDaysCount++;
+          const dailyAbsentCost = rules.absentPenaltyPerSession * rules.sessionsPerDay;
+          absentPenalty += dailyAbsentCost;
+        }
+      }
+
+      const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
+      const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
+      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * rules.signalCutPenaltyPerEvent));
+      const customBonus = parseFloat(adj.custom_bonus || 0);
+      const customDeduction = parseFloat(adj.custom_deduction || 0);
+
+      const totalPenalties = shortagePenalty + noReportPenalty + absentPenalty + signalCutAmount + customDeduction;
+      const netSalary = Math.max(0, baseSalary + customBonus - totalPenalties);
+
+      // Build readable notes
+      const noteParts = [];
+      if (shortagePenalty > 0) noteParts.push(`Kurang Jam: -Rp ${shortagePenalty.toLocaleString('id-ID')} (${totalShortageHours.toFixed(1)}h)`);
+      if (absentPenalty > 0) noteParts.push(`Absen: -Rp ${absentPenalty.toLocaleString('id-ID')} (${absentDaysCount} hari)`);
+      if (noReportPenalty > 0) noteParts.push(`Telat Rekap: -Rp ${noReportPenalty.toLocaleString('id-ID')}`);
+      if (signalCutAmount > 0) noteParts.push(`Potong Sinyal: -Rp ${signalCutAmount.toLocaleString('id-ID')} (${signalCutCount}x)`);
+      if (customDeduction > 0) noteParts.push(`Kasbon/Potongan: -Rp ${customDeduction.toLocaleString('id-ID')}`);
+      if (customBonus > 0) noteParts.push(`Bonus: +Rp ${customBonus.toLocaleString('id-ID')}`);
+
+      auditResultsMap[streamer.nama.toLowerCase()] = {
+        streamerId: sId,
+        profileId: streamer.profile_id,
+        nama: streamer.nama,
+        baseSalary,
+        totalPenalties,
+        customBonus,
+        netSalary,
+        notes: noteParts.join(' • ') || (totalPenalties === 0 ? 'SOP Terpenuhi (Bebas Denda)' : '')
+      };
+    }
+
+    await client.query('BEGIN');
+
+    // Update payroll_items for period
+    const itemsRes = await client.query('SELECT * FROM payroll_items WHERE period_id = $1', [id]);
+    let updatedCount = 0;
+
+    for (const item of itemsRes.rows) {
+      let audit = auditResultsMap[item.recipient_name.toLowerCase()];
+      if (!audit && (item.recipient_name.toLowerCase().includes('key team') || item.recipient_name.toLowerCase().includes('teizza'))) {
+        audit = auditResultsMap['teizza'] || auditResultsMap['key team'];
+      }
+
+      if (audit) {
+        const base = parseFloat(item.base_amount) || audit.baseSalary;
+        const bonus = audit.customBonus > 0 ? audit.customBonus : (parseFloat(item.bonus_amount) || 0);
+        const deduction = audit.totalPenalties;
+        const finalAmt = Math.max(0, base + bonus - deduction);
+        const notes = audit.notes || item.notes || '';
+
+        await client.query(`
+          UPDATE payroll_items
+          SET bonus_amount = $1,
+              deduction_amount = $2,
+              final_amount = $3,
+              notes = $4
+          WHERE id = $5
+        `, [bonus, deduction, finalAmt, notes, item.id]);
+        updatedCount++;
+      }
+    }
+
+    // Recalculate total_amount and paid_amount on period
+    const sumRes = await client.query(`
+      SELECT 
+        COALESCE(SUM(final_amount), 0) as total,
+        COALESCE(SUM(CASE WHEN status = 'Paid' THEN final_amount ELSE 0 END), 0) as paid_total,
+        COUNT(id) as count 
+      FROM payroll_items WHERE period_id = $1
+    `, [id]);
+
+    const newTotal = parseFloat(sumRes.rows[0].total || 0);
+    const newPaidTotal = parseFloat(sumRes.rows[0].paid_total || 0);
+    const count = parseInt(sumRes.rows[0].count || 0, 10);
+
+    await client.query(`
+      UPDATE payroll_periods 
+      SET total_amount = $1, 
+          paid_amount = $2,
+          total_recipients = $3 
+      WHERE id = $4
+    `, [newTotal, newPaidTotal, count, id]);
+
+    await client.query('COMMIT');
+
+    // Fetch updated items
+    const updatedItems = await pool.query(`
+      SELECT * FROM payroll_items WHERE period_id = $1 ORDER BY role ASC, recipient_name ASC
+    `, [id]);
+
+    res.json({
+      success: true,
+      message: `Berhasil mensinkronkan denda & potongan untuk ${updatedCount} streamer dari audit (${startDate} s/d ${endDate})`,
+      updatedCount,
+      startDate,
+      endDate,
+      totalAmount: newTotal,
+      items: updatedItems.rows
+    });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[Finance syncAuditToPeriod] Error:', err);
+    res.status(500).json({ message: 'Gagal mensinkronkan audit ke penggajian', error: err.message });
+  } finally {
+    client.release();
   }
 };
 
