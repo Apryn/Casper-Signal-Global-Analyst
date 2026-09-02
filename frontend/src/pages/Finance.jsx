@@ -411,9 +411,8 @@ const Finance = () => {
       const updatedResults = prev.auditResults.map(s => {
         if (s.streamerId === sId) {
           const cutAmount = newCount * 30000;
-          const totalPenalties = cutAmount + (s.customDeduction || 0);
-          const earned = s.earnedSalary !== undefined ? s.earnedSalary : s.baseSalary;
-          const netSalary = Math.max(0, earned + (s.customBonus || 0) - totalPenalties);
+          const totalPenalties = s.shortagePenalty + s.noReportPenalty + s.absentPenalty + cutAmount + s.customDeduction;
+          const netSalary = Math.max(0, s.baseSalary + s.customBonus - totalPenalties);
           return {
             ...s,
             signalCutCount: newCount,
@@ -431,9 +430,8 @@ const Finance = () => {
       setDrilldownStreamer(prev => {
         if (!prev) return prev;
         const cutAmount = newCount * 30000;
-        const totalPenalties = cutAmount + (prev.customDeduction || 0);
-        const earned = prev.earnedSalary !== undefined ? prev.earnedSalary : prev.baseSalary;
-        const netSalary = Math.max(0, earned + (prev.customBonus || 0) - totalPenalties);
+        const totalPenalties = prev.shortagePenalty + prev.noReportPenalty + prev.absentPenalty + cutAmount + prev.customDeduction;
+        const netSalary = Math.max(0, prev.baseSalary + prev.customBonus - totalPenalties);
         return {
           ...prev,
           signalCutCount: newCount,
@@ -602,64 +600,90 @@ const Finance = () => {
   };
 
   const generateStreamerAuditWaSlip = (s) => {
-    let text = `📄 *SLIP GAJI & REKAP KEHADIRAN STREAMER*\n`;
+    let text = `📄 *SLIP GAJI & AUDIT KEDISIPLINAN STREAMER*\n`;
     text += `*CASPER SIGNAL GLOBAL ANALYST*\n`;
     text += `------------------------------------\n`;
     text += `👤 *Nama:* ${s.nama}\n`;
     text += `🏦 *Rekening:* ${s.bankName} - ${s.bankAccountNumber} (a.n ${s.bankAccountHolder})\n`;
     text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bulan)' : 'Full 1 Bulan'})\n`;
     text += `------------------------------------\n`;
-    text += `💵 *Gaji Pokok Periode:* ${formatRupiah(s.baseSalary)}\n`;
-    text += `📊 *Kehadiran:* ${s.paidDaysCount || (s.liveDaysCount + s.excusedDaysCount)} / ${s.totalPeriodDays || 15} Hari\n`;
-    text += `  • Live Streaming: ${s.liveDaysCount} Hari (${s.totalLiveDuration} Jam)\n`;
-    text += `  • Izin Sah & Libur Rutin: ${s.excusedDaysCount} Hari (Paid Leave)\n`;
-    if (s.absentDaysCount > 0) {
-      text += `  • Absen (Tidak Live): ${s.absentDaysCount} Hari (Tanpa Gaji Harian)\n`;
+    text += `💵 *Gaji Pokok:* ${formatRupiah(s.baseSalary)}\n\n`;
+    text += `*Ringkasan Denda & Potongan:*\n`;
+    
+    if (s.shortagePenalty > 0) {
+      text += `• Denda Durasi Kurang (${s.totalShortageHours}h / ${s.under4hCount}x): -${formatRupiah(s.shortagePenalty)}\n`;
+    } else {
+      text += `• Denda Durasi Kurang: Rp 0 (SOP Terpenuhi)\n`;
     }
-    text += `\n💵 *Gaji Pokok Diperoleh:* ${formatRupiah(s.earnedSalary || s.baseSalary)}\n`;
 
-    const hasDeductions = (s.signalCutAmount > 0) || (s.customDeduction > 0) || (s.customBonus > 0);
-    if (hasDeductions) {
-      text += `\n*Penyesuaian & Potongan:*\n`;
-      if (s.signalCutAmount > 0) {
-        text += `• Potongan Pembagian Sinyal (${s.signalCutCount}x): -${formatRupiah(s.signalCutAmount)}\n`;
-      }
-      if (s.customDeduction > 0) {
-        text += `• Potongan Kasbon/Lainnya: -${formatRupiah(s.customDeduction)}\n`;
-      }
-      if (s.customBonus > 0) {
-        text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
-      }
+    if (s.noReportPenalty > 0) {
+      text += `• Denda Lupa/Telat Rekap (${s.noReportDaysCount} hari): -${formatRupiah(s.noReportPenalty)}\n`;
+    } else {
+      text += `• Denda Lupa/Telat Rekap: Rp 0 (Lengkap)\n`;
+    }
+
+    if (s.absentPenalty > 0) {
+      text += `• Denda Absen/Tidak Live (${s.absentDaysCount} hari): -${formatRupiah(s.absentPenalty)}\n`;
+    }
+
+    if (s.signalCutAmount > 0) {
+      text += `• Potongan Pembagian Sinyal (${s.signalCutCount}x): -${formatRupiah(s.signalCutAmount)}\n`;
+    }
+
+    if (s.customDeduction > 0) {
+      text += `• Potongan Tambahan/Kasbon: -${formatRupiah(s.customDeduction)}\n`;
+    }
+
+    if (s.customBonus > 0) {
+      text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
     }
 
     // Detail Per Tanggal (Rincian untuk cross-check streamer)
-    const absentDates = s.dailyBreakdown?.filter(d => !d.isPaidDay) || [];
+    const absentDates = s.dailyBreakdown?.filter(d => d.absentPenalty > 0) || [];
+    const shortageDates = s.dailyBreakdown?.filter(d => d.shortagePenalty > 0) || [];
+    const noReportDates = s.dailyBreakdown?.filter(d => d.noReportPenalty > 0) || [];
     const excuseDates = s.dailyBreakdown?.filter(d => !d.isSunday && (d.isExcused || d.isCompensated)) || [];
 
-    if (absentDates.length > 0) {
-      text += `\n📋 *TANGGAL TIDAK LIVE / ABSEN (${absentDates.length} Hari):*\n`;
-      absentDates.forEach(d => {
-        text += `  - ${d.shortDate} (Tidak dapat gaji harian)\n`;
-      });
+    if (absentDates.length > 0 || shortageDates.length > 0 || noReportDates.length > 0) {
+      text += `\n📋 *RINCIAN TANGGAL PELANGGARAN:*\n`;
+      
+      if (absentDates.length > 0) {
+        text += `🔴 *Absen / Tidak Live (${absentDates.length} Hari):*\n`;
+        absentDates.forEach(d => {
+          text += `  - ${d.shortDate} (-${formatRupiah(d.absentPenalty)})\n`;
+        });
+      }
+
+      if (shortageDates.length > 0) {
+        text += `⏱️ *Durasi Kurang (${shortageDates.length} Hari):*\n`;
+        shortageDates.forEach(d => {
+          text += `  - ${d.shortDate}: Live ${d.liveDuration}h (Kurang -${d.shortageHours}h -> -${formatRupiah(d.shortagePenalty)})\n`;
+        });
+      }
+
+      if (noReportDates.length > 0) {
+        text += `📝 *Telat / Tidak Rekap (${noReportDates.length} Hari):*\n`;
+        noReportDates.forEach(d => {
+          text += `  - ${d.shortDate} (-${formatRupiah(d.noReportPenalty)})\n`;
+        });
+      }
     }
 
     if (excuseDates.length > 0) {
-      text += `\n📌 *IZIN & KOMPENSASI DISETUJUI (PAID LEAVE):*\n`;
+      text += `\n📌 *IZIN & KOMPENSASI DISETUJUI:*\n`;
       excuseDates.forEach(d => {
-        text += `  - ${d.shortDate}: ${d.statusLabel || d.catatanIzin || 'Izin Sah'} (Tetap Dapat Gaji)\n`;
+        text += `  - ${d.shortDate}: ${d.statusLabel || d.catatanIzin || 'Izin Sah'} (Bebas Denda)\n`;
       });
     }
 
     text += `------------------------------------\n`;
-    if (s.totalPenalties > 0) {
-      text += `🔴 *Total Potongan:* -${formatRupiah(s.totalPenalties)}\n`;
-    }
+    text += `🔴 *Total Potongan:* -${formatRupiah(s.totalPenalties)}\n`;
     text += `💰 *GAJI BERSIH (TAKE HOME PAY): ${formatRupiah(s.netSalary)}*\n\n`;
-    text += `_Mohon dicek kembali rincian kehadiran di atas. Jika ada kendala/sanggahan, silakan hubungi admin. Tetap semangat & salam profit! 🚀_`;
+    text += `_Mohon dicek kembali rincian tanggal di atas. Jika ada kendala/sanggahan, silakan hubungi admin. Tetap semangat & salam profit! 🚀_`;
 
     copyToClipboard(text, `audit-wa-${s.streamerId}`);
     setPreviewWaSlip({
-      title: 'Slip Gaji & Rekap Kehadiran',
+      title: 'Slip Gaji & Audit Kedisiplinan',
       recipient: s.nama,
       text,
       key: `audit-wa-${s.streamerId}`
@@ -684,8 +708,9 @@ const Finance = () => {
     });
 
     const totalBase = auditData.auditResults.reduce((acc, s) => acc + s.baseSalary, 0);
-    const totalEarned = auditData.auditResults.reduce((acc, s) => acc + (s.earnedSalary || s.baseSalary), 0);
-    const totalUnearned = auditData.auditResults.reduce((acc, s) => acc + (s.unearnedSalary || 0), 0);
+    const totalShortage = auditData.auditResults.reduce((acc, s) => acc + s.shortagePenalty, 0);
+    const totalNoReport = auditData.auditResults.reduce((acc, s) => acc + s.noReportPenalty, 0);
+    const totalAbsent = auditData.auditResults.reduce((acc, s) => acc + s.absentPenalty, 0);
     const totalSignal = auditData.auditResults.reduce((acc, s) => acc + s.signalCutAmount, 0);
     const totalPenaltiesAll = auditData.auditResults.reduce((acc, s) => acc + s.totalPenalties, 0);
     const totalNet = auditData.auditResults.reduce((acc, s) => acc + s.netSalary, 0);
@@ -698,16 +723,14 @@ const Finance = () => {
           <div style="font-size: 8px; color: #64748b; font-weight: normal;">${s.bankName} - ${s.bankAccountNumber} (${s.bankAccountHolder})</div>
         </td>
         <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; font-weight: 600;">${formatRupiah(s.baseSalary)}</td>
-        <td style="text-align: center; padding: 3.5px 6px; font-size: 9px; font-weight: 700; color: ${s.paidDaysCount < s.totalPeriodDays ? '#d97706' : '#059669'};">
-          ${s.paidDaysCount || (s.liveDaysCount + s.excusedDaysCount)} / ${s.totalPeriodDays || 15} Hari
-          <div style="font-size: 7.5px; color: #64748b; font-weight: normal;">${s.liveDaysCount}x Live • ${s.excusedDaysCount}x Izin</div>
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.shortagePenalty > 0 ? '#be123c' : '#64748b'};">
+          ${s.shortagePenalty > 0 ? `-${formatRupiah(s.shortagePenalty)}<br/><span style="font-size: 7.5px;">(${s.totalShortageHours}h)</span>` : '-'}
         </td>
-        <td style="text-align: center; padding: 3.5px 6px; font-size: 9px; color: #334155;">
-          ${s.totalLiveDuration}h
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.noReportPenalty > 0 ? '#be123c' : '#64748b'};">
+          ${s.noReportPenalty > 0 ? `-${formatRupiah(s.noReportPenalty)}<br/><span style="font-size: 7.5px;">(${s.noReportDaysCount}x)</span>` : '-'}
         </td>
-        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; font-weight: 700; color: #0f172a;">
-          ${formatRupiah(s.earnedSalary || s.baseSalary)}
-          ${s.unearnedSalary > 0 ? `<div style="font-size: 7.5px; color: #be123c;">-${formatRupiah(s.unearnedSalary)} (Absen)</div>` : ''}
+        <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.absentPenalty > 0 ? '#be123c' : '#64748b'};">
+          ${s.absentPenalty > 0 ? `-${formatRupiah(s.absentPenalty)}<br/><span style="font-size: 7.5px;">(${s.absentDaysCount}d)</span>` : '-'}
         </td>
         <td style="text-align: right; padding: 3.5px 6px; font-size: 9px; color: ${s.signalCutAmount > 0 ? '#be123c' : '#64748b'};">
           ${s.signalCutAmount > 0 ? `-${formatRupiah(s.signalCutAmount)}<br/><span style="font-size: 7.5px;">(${s.signalCutCount}x)</span>` : '-'}
@@ -724,7 +747,7 @@ const Finance = () => {
     const html = `
       <html>
         <head>
-          <title>Casper Signal — Rekap Gaji & Kehadiran Streamer</title>
+          <title>Casper Signal — Rekap Audit Gaji & Denda Streamer</title>
           <style>
             * { box-sizing: border-box; }
             body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #334155; padding: 12px 16px; margin: 0; line-height: 1.25; }
@@ -737,7 +760,7 @@ const Finance = () => {
             .card-val { font-size: 11px; font-weight: 800; margin-top: 1px; }
             table { width: 100%; border-collapse: collapse; margin-top: 2px; }
             th { background-color: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
-            .rules { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 4px; padding: 5px 8px; font-size: 8px; color: #166534; margin-top: 8px; line-height: 1.35; page-break-inside: avoid; }
+            .rules { background: #fffbeb; border: 1px solid #fde68a; border-radius: 4px; padding: 5px 8px; font-size: 8px; color: #92400e; margin-top: 8px; line-height: 1.35; page-break-inside: avoid; }
             .rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px 16px; margin-top: 2px; }
             @media print {
               @page { size: A4 landscape; margin: 5mm 6mm; }
@@ -748,34 +771,34 @@ const Finance = () => {
         <body>
           <div class="header">
             <div>
-              <h1>Casper Signal BI — Rekap Gaji &amp; Kehadiran Streamer</h1>
-              <span style="font-size: 9px; color: #64748b;">Perhitungan Gaji Harian Proporsional Live Streaming &amp; Izin Sah (Paid Leave)</span>
+              <h1>Casper Signal BI — Rekap Audit Gaji &amp; Denda Streamer</h1>
+              <span style="font-size: 9px; color: #64748b;">Perhitungan Gaji Pokok, SOP Durasi (4h), Denda Rekap/Absen, &amp; Potongan Sinyal</span>
             </div>
             <div class="meta">
               <strong>Tanggal Cetak:</strong> ${todayStr}<br/>
-              <strong>Periode:</strong> ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bln)' : 'Full 1 Bulan'}) | <strong>Total:</strong> ${auditData.auditResults.length} Streamer
+              <strong>Periode Audit:</strong> ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bln)' : 'Full 1 Bulan'}) | <strong>Total:</strong> ${auditData.auditResults.length} Streamer
             </div>
           </div>
 
           <div class="summary-box">
             <div class="card">
-              <div class="card-title">Total Gaji Pokok Periode</div>
+              <div class="card-title">Total Gaji Pokok Kotor</div>
               <div class="card-val" style="color: #0f172a;">${formatRupiah(totalBase)}</div>
             </div>
             <div class="card">
-              <div class="card-title">Total Gaji Diperoleh (Live &amp; Izin)</div>
-              <div class="card-val" style="color: #047857;">${formatRupiah(totalEarned)}</div>
+              <div class="card-title">Denda Durasi Kurang</div>
+              <div class="card-val" style="color: #be123c;">${formatRupiah(totalShortage)}</div>
             </div>
             <div class="card">
-              <div class="card-title">Selisih Absen / Tidak Live</div>
-              <div class="card-val" style="color: #be123c;">-${formatRupiah(totalUnearned)}</div>
+              <div class="card-title">Denda Rekap &amp; Absen</div>
+              <div class="card-val" style="color: #be123c;">${formatRupiah(totalNoReport + totalAbsent)}</div>
             </div>
             <div class="card">
-              <div class="card-title">Potongan Sinyal &amp; Kasbon</div>
-              <div class="card-val" style="color: #d97706;">-${formatRupiah(totalPenaltiesAll)}</div>
+              <div class="card-title">Potongan Sinyal</div>
+              <div class="card-val" style="color: #d97706;">${formatRupiah(totalSignal)}</div>
             </div>
             <div class="card" style="background: #ecfdf5; border-color: #a7f3d0;">
-              <div class="card-title" style="color: #047857;">Total Bersih Siap Transfer</div>
+              <div class="card-title" style="color: #047857;">Total Gaji Bersih (Siap Transfer)</div>
               <div class="card-val" style="color: #047857;">${formatRupiah(totalNet)}</div>
             </div>
           </div>
@@ -786,11 +809,11 @@ const Finance = () => {
                 <th style="text-align: center; width: 22px;">No</th>
                 <th>Nama Streamer &amp; Rekening</th>
                 <th style="text-align: right;">Gaji Pokok</th>
-                <th style="text-align: center;">Kehadiran</th>
-                <th style="text-align: center;">Jam Live</th>
-                <th style="text-align: right;">Gaji Diperoleh</th>
-                <th style="text-align: right;">Sinyal</th>
-                <th style="text-align: right;">Potongan</th>
+                <th style="text-align: right;">Kurang Jam (30k)</th>
+                <th style="text-align: right;">Telat Rekap (150k)</th>
+                <th style="text-align: right;">Absen (60k/sesi)</th>
+                <th style="text-align: right;">Sinyal (30k)</th>
+                <th style="text-align: right;">Total Denda</th>
                 <th style="text-align: right; background: #e2e8f0;">Gaji Bersih</th>
               </tr>
             </thead>
@@ -801,9 +824,9 @@ const Finance = () => {
               <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #cbd5e1;">
                 <td colspan="2" style="padding: 5px; font-size: 8.5px; text-transform: uppercase;">TOTAL KESELURUHAN</td>
                 <td style="text-align: right; padding: 5px; font-size: 8.5px;">${formatRupiah(totalBase)}</td>
-                <td style="text-align: center; padding: 5px; font-size: 8.5px;">-</td>
-                <td style="text-align: center; padding: 5px; font-size: 8.5px;">-</td>
-                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #047857;">${formatRupiah(totalEarned)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalShortage)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalNoReport)}</td>
+                <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalAbsent)}</td>
                 <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">${formatRupiah(totalSignal)}</td>
                 <td style="text-align: right; padding: 5px; font-size: 8.5px; color: #be123c;">-${formatRupiah(totalPenaltiesAll)}</td>
                 <td style="text-align: right; padding: 5px; font-size: 9.5px; color: #047857; background: #dcfce7;">${formatRupiah(totalNet)}</td>
@@ -816,13 +839,13 @@ const Finance = () => {
             <div class="rules-grid">
               <div>
                 1. <strong>Gaji Pokok:</strong> Rp 3.000.000 / bulan (Termin 1: Rp 1.000.000, Termin 2: Rp 2.000.000).<br/>
-                2. <strong>Sistem Gaji Live:</strong> Gaji diperoleh proporsional untuk setiap hari live streaming yang dijalankan.<br/>
-                3. <strong>Izin Sah (Paid Leave):</strong> Hari izin yang telah disetujui admin dan libur rutin (Minggu) tetap mendapatkan gaji harian.
+                2. <strong>SOP Live:</strong> 4 Jam / hari. Denda Durasi Kurang = Rp 30.000 / Jam kekurangan.<br/>
+                3. <strong>Batas Rekap:</strong> Maksimal Jam 08:00 Pagi. Lupa / Telat Rekap = Denda Rp 150.000 / Hari.
               </div>
               <div>
-                4. <strong>Absen / Tidak Live:</strong> Hari tanpa live dan tanpa izin sah tidak mendapatkan porsi gaji harian.<br/>
-                5. <strong>Pembagian Sinyal:</strong> Potongan Rp 30.000 / kejadian kendala sinyal.<br/>
-                6. <strong>Transparansi:</strong> Rincian harian dapat dicek langsung melalui dashboard dan slip gaji.
+                4. <strong>Absen / Tidak Live:</strong> Denda Rp 60.000 / Sesi (1 Hari 2 Sesi = Rp 120.000).<br/>
+                5. <strong>Pembagian Sinyal:</strong> Potongan Rp 30.000 / kejadian.<br/>
+                6. <strong>Izin Sah:</strong> Streamer dengan izin sah yang telah disetujui dibebaskan dari denda (Rp 0).
               </div>
             </div>
           </div>
@@ -1992,16 +2015,16 @@ const Finance = () => {
                 <div className="text-[10px] text-slate-400">Tgl 15: {formatRupiah(financeRules.baseSalary15th)} • Akhir Bln: {formatRupiah(financeRules.baseSalaryMonthEnd)}</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-emerald-300 mb-0.5">🎥 Sistem Gaji Live</div>
-                <div className="text-[10px] text-slate-400">Gaji harian diperoleh saat live streaming</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">⏱️ Durasi SOP {financeRules.standardLiveDurationHours} Jam</div>
+                <div className="text-[10px] text-slate-400">Kurang durasi: -{formatRupiah(financeRules.durationShortagePenaltyPerHour)} / Jam</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-amber-300 mb-0.5">📝 Izin Sah &amp; Libur</div>
-                <div className="text-[10px] text-slate-400">Izin ACC &amp; Libur Minggu = Paid Leave (Tetap Berbayar)</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
+                <div className="text-[10px] text-slate-400">Telat: -{formatRupiah(financeRules.noReportPenaltyPerDay)} (Bebas denda durasi)</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">🚫 Absen / Tidak Live</div>
-                <div className="text-[10px] text-slate-400">Tanpa izin = Tidak dapat porsi gaji harian</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">🚫 Absen / Bolos</div>
+                <div className="text-[10px] text-slate-400">Tidak live: -{formatRupiah(financeRules.absentPenaltyPerSession)} / Sesi ({financeRules.sessionsPerDay} sesi = -{formatRupiah(financeRules.absentPenaltyPerSession * financeRules.sessionsPerDay)})</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-amber-300 mb-0.5">📉 Pembagian Sinyal</div>
@@ -2016,7 +2039,7 @@ const Finance = () => {
               {/* 1. Total Gaji Pokok */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-                  Total Gaji Pokok Periode
+                  Total Gaji Pokok Kotor
                 </span>
                 <div className="text-xl font-black text-white tracking-tight">
                   {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.baseSalary, 0))}
@@ -2026,42 +2049,42 @@ const Finance = () => {
                 </div>
               </div>
 
-              {/* 2. Total Gaji Diperoleh */}
-              <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
-                <span className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider block mb-1">
-                  Total Gaji Diperoleh
-                </span>
-                <div className="text-xl font-black text-emerald-400 tracking-tight">
-                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + (s.earnedSalary || s.baseSalary), 0))}
-                </div>
-                <div className="text-[10px] text-slate-500 mt-1">
-                  {auditData.auditResults.reduce((acc, s) => acc + s.liveDaysCount, 0)} Hari Live Terlaksana
-                </div>
-              </div>
-
-              {/* 3. Selisih Absen / Tidak Live */}
+              {/* 2. Total Denda Durasi */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
                 <span className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider block mb-1">
-                  Selisih Hari Absen
+                  Denda Durasi Kurang
                 </span>
                 <div className="text-xl font-black text-rose-400 tracking-tight">
-                  -{formatRupiah(auditData.auditResults.reduce((acc, s) => acc + (s.unearnedSalary || 0), 0))}
+                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.shortagePenalty, 0))}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
-                  {auditData.auditResults.reduce((acc, s) => acc + s.absentDaysCount, 0)} Hari Tanpa Gaji
+                  {auditData.auditResults.reduce((acc, s) => acc + s.totalShortageHours, 0).toFixed(1)} Jam Kekurangan
                 </div>
               </div>
 
-              {/* 4. Total Potongan Sinyal & Kasbon */}
+              {/* 3. Total Denda Rekap & Absen */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
-                <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block mb-1">
-                  Potongan Sinyal &amp; Kasbon
+                <span className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider block mb-1">
+                  Denda Rekap &amp; Absen
                 </span>
-                <div className="text-xl font-black text-amber-400 tracking-tight">
-                  -{formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.totalPenalties, 0))}
+                <div className="text-xl font-black text-rose-400 tracking-tight">
+                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.noReportPenalty + s.absentPenalty, 0))}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
-                  {auditData.auditResults.reduce((acc, s) => acc + s.signalCutCount, 0)}x Potongan Sinyal
+                  {auditData.auditResults.reduce((acc, s) => acc + s.noReportDaysCount, 0)}x Telat/No Rekap
+                </div>
+              </div>
+
+              {/* 4. Total Potongan Sinyal */}
+              <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+                <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block mb-1">
+                  Potongan Sinyal
+                </span>
+                <div className="text-xl font-black text-amber-400 tracking-tight">
+                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.signalCutAmount, 0))}
+                </div>
+                <div className="text-[10px] text-slate-500 mt-1">
+                  {auditData.auditResults.reduce((acc, s) => acc + s.signalCutCount, 0)}x Kejadian
                 </div>
               </div>
 
@@ -2074,7 +2097,7 @@ const Finance = () => {
                   {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.netSalary, 0))}
                 </div>
                 <div className="text-[10px] text-emerald-300/70 mt-1">
-                  Take Home Pay Streamer
+                  Total Potongan: -{formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.totalPenalties, 0))}
                 </div>
               </div>
             </div>
@@ -2139,7 +2162,7 @@ const Finance = () => {
                   onChange={(e) => setAuditFilterPenaltyOnly(e.target.checked)}
                   className="rounded text-indigo-600 focus:ring-0 focus:outline-none cursor-pointer"
                 />
-                <span>Hanya yang Ada Potongan/Absen</span>
+                <span>Hanya yang Ada Denda</span>
               </label>
             </div>
           </div>
@@ -2154,26 +2177,27 @@ const Finance = () => {
                     <th className="py-3 px-4">Streamer &amp; Rekening</th>
                     <th className="py-3 px-3 text-center">Status Audit</th>
                     <th className="py-3 px-3 text-right">Gaji Pokok</th>
-                    <th className="py-3 px-3 text-center">Kehadiran (Live &amp; Izin)</th>
-                    <th className="py-3 px-3 text-center">Durasi Live</th>
-                    <th className="py-3 px-3 text-right">Gaji Diperoleh</th>
+                    <th className="py-3 px-3 text-center">Hari Live</th>
+                    <th className="py-3 px-3 text-right">Kurang Jam</th>
+                    <th className="py-3 px-3 text-right">Telat Rekap</th>
+                    <th className="py-3 px-3 text-right">Absen Live</th>
                     <th className="py-3 px-3 text-center">Potong Sinyal</th>
-                    <th className="py-3 px-3 text-right">Kasbon/Bonus</th>
-                    <th className="py-3 px-4 text-right bg-emerald-950/20 text-emerald-400">Gaji Bersih (THP)</th>
+                    <th className="py-3 px-3 text-right">Total Denda</th>
+                    <th className="py-3 px-4 text-right bg-emerald-950/20 text-emerald-400">Gaji Bersih</th>
                     <th className="py-3 px-4 text-center">Aksi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800/80 text-xs">
                   {auditLoading ? (
                     <tr>
-                      <td colSpan={11} className="py-12 text-center text-slate-400">
+                      <td colSpan={12} className="py-12 text-center text-slate-400">
                         <RefreshCw className="h-6 w-6 animate-spin mx-auto text-indigo-400 mb-2" />
-                        <span>Menghitung kehadiran &amp; audit gaji streamer...</span>
+                        <span>Menghitung denda &amp; audit gaji streamer...</span>
                       </td>
                     </tr>
                   ) : !auditData || auditData.auditResults.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-slate-400">
+                      <td colSpan={12} className="py-8 text-center text-slate-400">
                         Tidak ada data streamer pada periode ini.
                       </td>
                     </tr>
@@ -2181,8 +2205,7 @@ const Finance = () => {
                     auditData.auditResults
                       .filter((s) => {
                         const matchName = s.nama.toLowerCase().includes(auditSearch.toLowerCase());
-                        const hasDeductionOrAbsent = s.totalPenalties > 0 || (s.unearnedSalary || 0) > 0 || s.absentDaysCount > 0;
-                        const matchPenalty = !auditFilterPenaltyOnly || hasDeductionOrAbsent;
+                        const matchPenalty = !auditFilterPenaltyOnly || s.totalPenalties > 0;
                         const matchStatus =
                           auditFilterStatus === 'All' ||
                           (auditFilterStatus === 'Verified' && s.isVerified) ||
@@ -2237,40 +2260,54 @@ const Finance = () => {
                               )}
                             </button>
                           </td>
-                          {/* Gaji Pokok Base */}
                           <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-200">
                             {formatRupiah(s.baseSalary)}
                           </td>
-                          {/* Kehadiran Live & Izin */}
-                          <td className="py-3.5 px-3 text-center">
-                            <div className={`font-bold ${s.paidDaysCount < s.totalPeriodDays ? 'text-amber-400' : 'text-emerald-400'}`}>
-                              {s.paidDaysCount || (s.liveDaysCount + s.excusedDaysCount)} / {s.totalPeriodDays || 15} Hari
-                            </div>
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              {s.liveDaysCount}x Live • {s.excusedDaysCount}x Izin
-                              {s.absentDaysCount > 0 && (
-                                <span className="text-rose-400 ml-1">({s.absentDaysCount}x Absen)</span>
-                              )}
-                            </div>
-                          </td>
-                          {/* Durasi Live */}
                           <td className="py-3.5 px-3 text-center">
                             <span className="font-bold text-slate-300">
-                              {s.totalLiveDuration} Jam
+                              {s.liveDaysCount} hari
                             </span>
                             <div className="text-[10px] text-slate-500 font-mono">
-                              {s.under4hCount > 0 ? `${s.under4hCount}x < 4h` : 'SOP Lengkap'}
+                              ({s.totalLiveDuration}h)
                             </div>
                           </td>
-                          {/* Gaji Diperoleh (Earned) */}
+                          {/* Kurang Jam */}
                           <td className="py-3.5 px-3 text-right font-mono">
-                            <div className="font-bold text-slate-100">
-                              {formatRupiah(s.earnedSalary || s.baseSalary)}
-                            </div>
-                            {s.unearnedSalary > 0 && (
-                              <div className="text-[9.5px] text-rose-400 font-normal">
-                                -{formatRupiah(s.unearnedSalary)} (Absen)
+                            {s.shortagePenalty > 0 ? (
+                              <div className="text-rose-400 font-bold">
+                                -{formatRupiah(s.shortagePenalty)}
+                                <div className="text-[9.5px] text-rose-300/70 font-normal">
+                                  {s.totalShortageHours}h ({s.under4hCount}x)
+                                </div>
                               </div>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </td>
+                          {/* Telat Rekap */}
+                          <td className="py-3.5 px-3 text-right font-mono">
+                            {s.noReportPenalty > 0 ? (
+                              <div className="text-rose-400 font-bold">
+                                -{formatRupiah(s.noReportPenalty)}
+                                <div className="text-[9.5px] text-rose-300/70 font-normal">
+                                  {s.noReportDaysCount} hari
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500">-</span>
+                            )}
+                          </td>
+                          {/* Absen */}
+                          <td className="py-3.5 px-3 text-right font-mono">
+                            {s.absentPenalty > 0 ? (
+                              <div className="text-rose-400 font-bold">
+                                -{formatRupiah(s.absentPenalty)}
+                                <div className="text-[9.5px] text-rose-300/70 font-normal">
+                                  {s.absentDaysCount} hari
+                                </div>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500">-</span>
                             )}
                           </td>
                           {/* Potongan Sinyal (Interactive Counter) */}
@@ -2300,16 +2337,12 @@ const Finance = () => {
                               </div>
                             )}
                           </td>
-                          {/* Kasbon / Bonus */}
-                          <td className="py-3.5 px-3 text-right font-mono text-[11px]">
-                            {s.customDeduction > 0 && (
-                              <div className="text-rose-400">-{formatRupiah(s.customDeduction)}</div>
-                            )}
-                            {s.customBonus > 0 && (
-                              <div className="text-emerald-400">+{formatRupiah(s.customBonus)}</div>
-                            )}
-                            {!s.customDeduction && !s.customBonus && (
-                              <span className="text-slate-600">-</span>
+                          {/* Total Denda */}
+                          <td className="py-3.5 px-3 text-right font-mono font-black">
+                            {s.totalPenalties > 0 ? (
+                              <span className="text-rose-400">-{formatRupiah(s.totalPenalties)}</span>
+                            ) : (
+                              <span className="text-emerald-400">Rp 0</span>
                             )}
                           </td>
                           {/* Gaji Bersih */}
@@ -3836,37 +3869,22 @@ const Finance = () => {
             {/* Clean KPI Metrics Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 py-3.5 bg-slate-900/20 border-b border-slate-800/80 text-xs">
               <div className="flex flex-col">
-                <span className="text-[11px] text-slate-400 mb-0.5">Gaji Pokok Periode</span>
+                <span className="text-[11px] text-slate-400 mb-0.5">Gaji Pokok</span>
                 <span className="text-sm font-bold text-white font-mono">{formatRupiah(drilldownStreamer.baseSalary)}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] text-slate-400 mb-0.5">Kehadiran (Live &amp; Izin)</span>
-                <span className="text-sm font-bold text-amber-400 font-mono">
-                  {drilldownStreamer.paidDaysCount || (drilldownStreamer.liveDaysCount + drilldownStreamer.excusedDaysCount)} / {drilldownStreamer.totalPeriodDays || 15} Hari
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  {drilldownStreamer.liveDaysCount}x Live • {drilldownStreamer.excusedDaysCount}x Izin
+                <span className="text-[11px] text-slate-400 mb-0.5">Total Denda Disiplin</span>
+                <span className="text-sm font-bold text-rose-400 font-mono">
+                  -{formatRupiah(drilldownStreamer.shortagePenalty + drilldownStreamer.noReportPenalty + drilldownStreamer.absentPenalty)}
                 </span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] text-slate-400 mb-0.5">Gaji Diperoleh</span>
-                <span className="text-sm font-bold text-white font-mono">
-                  {formatRupiah(drilldownStreamer.earnedSalary || drilldownStreamer.baseSalary)}
-                </span>
-                {drilldownStreamer.unearnedSalary > 0 && (
-                  <span className="text-[10px] text-rose-400">
-                    -{formatRupiah(drilldownStreamer.unearnedSalary)} (Absen {drilldownStreamer.absentDaysCount}d)
-                  </span>
-                )}
+                <span className="text-[11px] text-slate-400 mb-0.5">Potongan Sinyal ({drilldownStreamer.signalCutCount}x)</span>
+                <span className="text-sm font-bold text-slate-300 font-mono">-{formatRupiah(drilldownStreamer.signalCutAmount)}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] text-emerald-400 font-semibold mb-0.5">Gaji Bersih (THP)</span>
+                <span className="text-[11px] text-emerald-400 font-semibold mb-0.5">Gaji Bersih Diterima</span>
                 <span className="text-base font-extrabold text-emerald-400 font-mono">{formatRupiah(drilldownStreamer.netSalary)}</span>
-                {drilldownStreamer.totalPenalties > 0 && (
-                  <span className="text-[10px] text-amber-400">
-                    Potongan: -{formatRupiah(drilldownStreamer.totalPenalties)}
-                  </span>
-                )}
               </div>
             </div>
 
@@ -3877,20 +3895,21 @@ const Finance = () => {
                   <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-[#0c101d] z-10">
                     <th className="py-3 px-3 w-28">Tanggal</th>
                     <th className="py-3 px-3">Aktivitas &amp; Durasi</th>
-                    <th className="py-3 px-3">Status Kehadiran</th>
-                    <th className="py-3 px-3 text-right w-32">Gaji Harian</th>
-                    <th className="py-3 px-3 text-center w-36">Dispensasi Izin</th>
+                    <th className="py-3 px-3">Keterangan Denda</th>
+                    <th className="py-3 px-3 text-right w-36">Total Denda</th>
+                    <th className="py-3 px-3 text-center w-36">Dispensasi</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-850/60 font-sans">
                   {drilldownStreamer.dailyBreakdown?.map((day) => {
+                    const hasPenalty = day.totalDayPenalty > 0;
                     return (
                       <tr
                         key={day.dateStr}
                         className={`transition-colors ${
                           day.isSunday
                             ? 'bg-slate-900/10 text-slate-500'
-                            : !day.isPaidDay
+                            : hasPenalty
                             ? 'bg-rose-950/10 hover:bg-rose-950/20'
                             : 'hover:bg-slate-800/20'
                         }`}
@@ -3916,16 +3935,12 @@ const Finance = () => {
                                   <span>{day.liveDuration} Jam Live</span>
                                 </span>
                               ) : day.liveDuration > 0 ? (
-                                <span className="inline-flex items-center gap-1 text-sky-400 font-medium text-xs">
+                                <span className="inline-flex items-center gap-1 text-amber-400 font-medium text-xs">
                                   <Clock className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{day.liveDuration} Jam Live</span>
-                                </span>
-                              ) : day.isExcused ? (
-                                <span className="text-amber-300 text-xs font-medium">
-                                  {day.catatanIzin || 'Izin Sah'}
+                                  <span>{day.liveDuration} Jam Live (Kurang {(4.0 - day.liveDuration).toFixed(1)}h)</span>
                                 </span>
                               ) : (
-                                <span className="text-rose-400 text-xs font-semibold">Tidak Live / Absen</span>
+                                <span className="text-slate-400 text-xs">Tidak Live / Absen</span>
                               )}
 
                               {/* Quick Edit Durasi Link */}
@@ -3959,31 +3974,31 @@ const Finance = () => {
                           )}
                         </td>
 
-                        {/* 3. Status Kehadiran */}
+                        {/* 3. Keterangan Denda */}
                         <td className="py-2.5 px-3">
                           {day.isSunday ? (
-                            <span className="text-slate-500 text-xs">Libur Rutin (Minggu)</span>
-                          ) : day.isCompensated ? (
-                            <span className="text-cyan-400 font-medium text-xs">🔄 Kompensasi Jam</span>
-                          ) : day.isExcused ? (
-                            <span className="text-amber-400 font-medium text-xs">✅ Izin Sah (Paid Leave)</span>
-                          ) : day.liveDuration > 0 ? (
-                            <span className="text-emerald-400 font-medium text-xs">🎥 Live Terverifikasi</span>
+                            <span className="text-slate-600">-</span>
+                          ) : hasPenalty ? (
+                            <div className="text-xs text-rose-400/90 font-mono flex items-center gap-1.5 flex-wrap">
+                              {day.shortagePenalty > 0 && <span>Durasi Kurang (-{formatRupiah(day.shortagePenalty)})</span>}
+                              {day.noReportPenalty > 0 && <span>• Telat/Lupa Rekap (-{formatRupiah(day.noReportPenalty)})</span>}
+                              {day.absentPenalty > 0 && <span>• Absen (-{formatRupiah(day.absentPenalty)})</span>}
+                            </div>
                           ) : (
-                            <span className="text-rose-400 font-medium text-xs">❌ Absen (Tanpa Gaji)</span>
+                            <span className="text-slate-500 text-xs">SOP Terpenuhi (Rp 0)</span>
                           )}
                         </td>
 
-                        {/* 4. Gaji Harian */}
+                        {/* 4. Total Denda (Single line nowrap) */}
                         <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
-                          {day.isPaidDay ? (
-                            <span className="font-bold text-emerald-400">+{formatRupiah(day.dailyEarned)}</span>
+                          {hasPenalty ? (
+                            <span className="font-bold text-rose-400">-{formatRupiah(day.totalDayPenalty)}</span>
                           ) : (
-                            <span className="font-semibold text-rose-400">Rp 0 (Absen)</span>
+                            <span className="text-slate-500">Rp 0</span>
                           )}
                         </td>
 
-                        {/* 5. Dispensasi Izin / Aksi */}
+                        {/* 5. Dispensasi / Aksi */}
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {day.isSunday ? (
                             <span className="text-slate-600 text-xs">-</span>
@@ -4000,7 +4015,7 @@ const Finance = () => {
                             </span>
                           ) : day.isExcused ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300 text-[11px] font-medium border border-amber-500/20">
-                              <span>✅ Izin ACC</span>
+                              <span>✅ Izin Bebas Denda</span>
                               <button
                                 onClick={() => handleToggleDailyExcuse(day)}
                                 className="text-slate-400 hover:text-rose-400 ml-1 font-bold text-xs"
@@ -4009,19 +4024,20 @@ const Finance = () => {
                                 ×
                               </button>
                             </span>
-                          ) : !day.isPaidDay ? (
+                          ) : hasPenalty ? (
                             <div className="inline-flex items-center gap-1">
                               <button
                                 onClick={() => handleToggleDailyExcuse(day)}
-                                className="px-2 py-0.5 rounded text-[11px] font-bold text-amber-400 bg-amber-950/40 hover:bg-amber-500 hover:text-black border border-amber-500/30 transition-all shadow-tactile-xs"
-                                title="Tandai izin sah via WA agar dapat gaji harian"
+                                className="px-2 py-0.5 rounded text-[11px] text-amber-400 hover:bg-amber-950/40 hover:text-amber-300 transition-colors"
+                                title="Tandai izin sah via WA agar bebas denda"
                               >
-                                + Izin (Paid)
+                                + Izin
                               </button>
+                              <span className="text-slate-700">|</span>
                               <button
                                 onClick={() => handleSetDailyCompensation(day)}
-                                className="px-2 py-0.5 rounded text-[11px] font-bold text-cyan-400 bg-cyan-950/40 hover:bg-cyan-500 hover:text-black border border-cyan-500/30 transition-all shadow-tactile-xs"
-                                title="Tandai hutang kompensasi jam"
+                                className="px-2 py-0.5 rounded text-[11px] text-cyan-400 hover:bg-cyan-950/40 hover:text-cyan-300 transition-colors"
+                                title="Tandai janji ganti jam live"
                               >
                                 Kompensasi
                               </button>

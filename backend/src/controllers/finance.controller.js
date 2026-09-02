@@ -729,9 +729,6 @@ export const getPenaltyAudit = async (req, res) => {
       let offDaysCount = 0;
       let excusedDaysCount = 0;
 
-      const totalPeriodDays = allDates.length || 1;
-      const dailySalaryRate = baseSalary / totalPeriodDays;
-
       const dailyBreakdown = [];
 
       for (const d of allDates) {
@@ -757,8 +754,6 @@ export const getPenaltyAudit = async (req, res) => {
           catatanIzin: rep?.catatan_izin || (isSunday ? 'Libur Minggu' : ''),
           isExcused,
           isCompensated,
-          isPaidDay: false,
-          dailyEarned: 0,
           shortageHours: 0,
           shortagePenalty: 0,
           noReportPenalty: 0,
@@ -770,63 +765,59 @@ export const getPenaltyAudit = async (req, res) => {
 
         if (dayItem.isExcused) {
           excusedDaysCount++;
-          dayItem.isPaidDay = true;
-          dayItem.dailyEarned = Math.round(dailySalaryRate);
           if (isSunday) {
-            dayItem.statusLabel = 'Libur Rutin (Minggu)';
+            dayItem.statusLabel = 'Libur Minggu';
             dayItem.statusColor = 'amber';
           } else if (isCompensated) {
             dayItem.statusLabel = rep?.catatan_izin ? `🔄 Kompensasi: ${rep.catatan_izin}` : '🔄 Kompensasi Jam';
             dayItem.statusColor = 'cyan';
           } else {
-            dayItem.statusLabel = rep?.catatan_izin ? `Izin Sah: ${rep.catatan_izin}` : 'Izin Sah (ACC)';
+            dayItem.statusLabel = rep?.catatan_izin ? `Izin: ${rep.catatan_izin}` : 'Izin Sah (ACC)';
             dayItem.statusColor = 'amber';
           }
         } else if (rep) {
           if (rep.kategori === 'Non Streaming') {
             offDaysCount++;
-            dayItem.isPaidDay = true;
-            dayItem.dailyEarned = Math.round(dailySalaryRate);
-            dayItem.statusLabel = 'Hari Off / Konten';
+            dayItem.statusLabel = 'Hari Off';
             dayItem.statusColor = 'blue';
           } else {
             // Streaming
             liveDaysCount++;
-            dayItem.isPaidDay = true;
-            dayItem.dailyEarned = Math.round(dailySalaryRate);
             const duration = parseFloat(rep.live_duration || 0);
             totalLiveDuration += duration;
 
+            // SOP Durasi (< standardLiveDurationHours Jam)
             if (duration < rules.standardLiveDurationHours) {
               const shortage = parseFloat((rules.standardLiveDurationHours - duration).toFixed(2));
               dayItem.shortageHours = shortage;
               under4hCount++;
+              dayItem.shortagePenalty = Math.round(shortage * rules.durationShortagePenaltyPerHour);
               totalShortageHours += shortage;
-              dayItem.statusLabel = `Live ${duration}h (Kurang -${shortage}h)`;
-              dayItem.statusColor = 'blue';
+              shortagePenalty += dayItem.shortagePenalty;
+              dayItem.statusLabel = `Durasi Kurang (${duration}h / -${shortage}h)`;
+              dayItem.statusColor = 'rose';
             } else {
-              dayItem.statusLabel = `Live ${duration}h (SOP OK)`;
-              dayItem.statusColor = 'emerald';
+              dayItem.statusLabel = 'OK';
+              dayItem.statusColor = 'green';
             }
           }
         } else {
-          // Streamer Absen / Tidak Live tanpa izin
+          // Missing report on non-Sunday (Streamer Absen / Tidak Live)
           absentDaysCount++;
-          dayItem.isPaidDay = false;
-          dayItem.dailyEarned = 0;
+          
+          const dailyAbsentCost = rules.absentPenaltyPerSession * rules.sessionsPerDay;
+          dayItem.absentPenalty = dailyAbsentCost;
+          dayItem.noReportPenalty = 0; // Tidak didenda ganda jika sudah kena denda absen
+          
+          absentPenalty += dailyAbsentCost;
+
           dayItem.statusLabel = 'Absen (Tidak Live)';
-          dayItem.statusColor = 'rose';
+          dayItem.statusColor = 'red';
         }
 
+        dayItem.totalDayPenalty = dayItem.shortagePenalty + dayItem.noReportPenalty + dayItem.absentPenalty;
         dailyBreakdown.push(dayItem);
       }
-
-      // Calculate Earned Base Salary based on Paid Days vs Total Days
-      const paidDaysCount = liveDaysCount + excusedDaysCount + offDaysCount;
-      const earnedSalary = paidDaysCount >= totalPeriodDays 
-        ? baseSalary 
-        : Math.min(baseSalary, Math.round(dailySalaryRate * paidDaysCount));
-      const unearnedSalary = Math.max(0, baseSalary - earnedSalary);
 
       // Adjustments (Signal cut, custom bonus/deduction)
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
@@ -835,8 +826,8 @@ export const getPenaltyAudit = async (req, res) => {
       const customBonus = parseFloat(adj.custom_bonus || 0);
       const customDeduction = parseFloat(adj.custom_deduction || 0);
 
-      const totalPenalties = signalCutAmount + customDeduction;
-      const netSalary = Math.max(0, earnedSalary + customBonus - totalPenalties);
+      const totalPenalties = shortagePenalty + noReportPenalty + absentPenalty + signalCutAmount + customDeduction;
+      const netSalary = Math.max(0, baseSalary + customBonus - totalPenalties);
 
       auditResults.push({
         streamerId: sId,
@@ -847,20 +838,15 @@ export const getPenaltyAudit = async (req, res) => {
         bankAccountNumber: streamer.bank_account_number || '-',
         bankAccountHolder: streamer.bank_account_holder || streamer.nama,
         baseSalary,
-        totalPeriodDays,
-        dailySalaryRate: Math.round(dailySalaryRate),
-        paidDaysCount,
-        earnedSalary,
-        unearnedSalary,
         totalLiveDuration: parseFloat(totalLiveDuration.toFixed(2)),
         liveDaysCount,
         under4hCount,
         totalShortageHours: parseFloat(totalShortageHours.toFixed(2)),
-        shortagePenalty: 0,
+        shortagePenalty,
         noReportDaysCount,
-        noReportPenalty: 0,
+        noReportPenalty,
         absentDaysCount,
-        absentPenalty: 0,
+        absentPenalty,
         offDaysCount,
         excusedDaysCount,
         signalCutCount,
