@@ -49,8 +49,8 @@ export const getDashboardSummary = async (req, res) => {
   const { start, end } = getDateRangeFilter(range);
 
   try {
-    // 1. Total Streamers Count
-    const streamersCountRes = await query('SELECT COUNT(*) as count FROM streamers');
+    // 1. Total Streamers Count (Active only)
+    const streamersCountRes = await query("SELECT COUNT(*) as count FROM streamers WHERE COALESCE(status, 'active') = 'active' AND COALESCE(is_active, TRUE) = TRUE");
     const totalStreamers = parseInt(streamersCountRes.rows[0].count, 10);
 
     // 2. Active Streamers Count (submitted at least one report in range)
@@ -148,6 +148,7 @@ export const getDashboardSummary = async (req, res) => {
         ) as live_link
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal = $1
+       WHERE COALESCE(s.status, 'active') = 'active' AND COALESCE(s.is_active, TRUE) = TRUE
        ORDER BY s.nama ASC`,
       [todayStr]
     );
@@ -334,6 +335,7 @@ export const getLeaderboard = async (req, res) => {
         COALESCE(SUM(r.ftd_count), 0) as total_ftds
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal >= $1 AND r.tanggal <= $2
+       WHERE COALESCE(s.status, 'active') = 'active' AND COALESCE(s.is_active, TRUE) = TRUE
        GROUP BY s.id
        ORDER BY total_ftds DESC, total_registrations DESC, total_live_hours DESC
        LIMIT $3`,

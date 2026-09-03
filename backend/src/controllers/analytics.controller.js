@@ -171,6 +171,7 @@ export const getLeaderboardWithScores = async (req, res) => {
         COALESCE(SUM(r.ftd_count), 0) as ftds
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id AND r.tanggal >= $1 AND r.tanggal <= $2
+       WHERE COALESCE(s.status, 'active') = 'active' AND COALESCE(s.is_active, TRUE) = TRUE
        GROUP BY s.id
        ORDER BY ftds DESC`,
       [startStr, endStr]

@@ -8,7 +8,7 @@ export const getTargets = async (req, res) => {
       `SELECT t.*, s.nama as streamer_name, s.platform as streamer_platform
        FROM targets t
        JOIN streamers s ON t.streamer_id = s.id
-       WHERE t.period = $1
+       WHERE t.period = $1 AND COALESCE(s.status, 'active') = 'active' AND COALESCE(s.is_active, TRUE) = TRUE
        ORDER BY s.nama ASC, t.target_type ASC`,
       [period]
     );
