@@ -97,9 +97,7 @@ const Finance = () => {
   const getInitialAuditConfig = () => {
     const d = new Date();
     const currentYearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const day = d.getDate();
-    // In day 1-15, default to '15th' (Termin 1: 1-15). In day 16+, default to '1st' (Termin 2: 16-akhir).
-    const defaultPeriodType = day <= 15 ? '15th' : '1st';
+    const defaultPeriodType = 'full';
     const dates = getDatesForPeriod(currentYearMonth, defaultPeriodType);
     return {
       month: currentYearMonth,
@@ -198,7 +196,7 @@ const Finance = () => {
   const [payrollSearch, setPayrollSearch] = useState('');
   const [syncingAudit, setSyncingAudit] = useState(false);
   const [newPeriodForm, setNewPeriodForm] = useState({
-    period_type: '15th',
+    period_type: 'full',
     period_date: new Date().toISOString().split('T')[0],
     title: '',
     notes: '',
@@ -656,16 +654,15 @@ const Finance = () => {
 
   const generateStreamerAuditWaSlip = (s) => {
     const rate = s.hourlyRate || financeRules.hourlyRate || 30000;
-    const isMonthEnd = auditPeriodType === '1st' || auditPeriodType === 'full';
-    let text = `💰 *SLIP GAJI STREAMER — CASPER SIGNAL*\n`;
+    let text = `💰 *SLIP GAJI BULANAN STREAMER — CASPER SIGNAL*\n`;
     text += `*CASPER SIGNAL GLOBAL ANALYST*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `👤 *Nama:* ${s.nama}\n`;
     text += `🏦 *Rekening:* ${s.bankName} - ${s.bankAccountNumber} (a.n ${s.bankAccountHolder})\n`;
-    text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 1-15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bulan)' : 'Full 1 Bulan'})\n`;
+    text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (Gaji Bulanan Full)\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `⏱️ *Total Jam Live Valid:* ${s.totalLiveDuration} Jam (Max 4 Jam/Hari)\n`;
-    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam (Seragam)\n`;
+    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam\n`;
     text += `💰 *Gaji Jam Live:* ${formatRupiah(s.totalEarnedSalary || s.baseSalary)}\n`;
     
     if (s.signalCutAmount > 0) {
@@ -677,18 +674,15 @@ const Finance = () => {
     if (s.customBonus > 0) {
       text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
     }
-    if (!isMonthEnd && (s.signalCutCount > 0)) {
-      text += `_ℹ️ Potongan sinyal/kasbon akan dieksekusi pada gaji akhir bulan._\n`;
-    }
     
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `💳 *TOTAL DITERIMA:* *${formatRupiah(s.netSalary)}*\n`;
+    text += `💳 *TOTAL GAJI DITERIMA:* *${formatRupiah(s.netSalary)}*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
-    text += `_Terima kasih atas dedikasi dan performa live terbaikmu! Tetap semangat._ 🚀`;
+    text += `_Terima kasih atas kerja keras dan konsistensi live terbaikmu selama sebulan ini! Tetap semangat._ 🚀`;
 
     copyToClipboard(text, `audit-wa-${s.streamerId}`);
     setPreviewWaSlip({
-      title: 'Slip Gaji Streamer',
+      title: 'Slip Gaji Bulanan Streamer',
       recipient: s.nama,
       text,
       key: `audit-wa-${s.streamerId}`
@@ -1989,36 +1983,14 @@ const Finance = () => {
 
                 <div className="flex items-center gap-1.5 bg-dark-panel border-2 border-black p-1 rounded-xl">
                   <button
-                    onClick={() => handlePeriodTypeChange('15th')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                      auditPeriodType === '15th'
-                        ? 'bg-tactile-yellow text-black shadow-tactile-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Termin 1 (Tgl 1 - 15) • Rp 1 Jt
-                  </button>
-
-                  <button
-                    onClick={() => handlePeriodTypeChange('1st')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
-                      auditPeriodType === '1st'
-                        ? 'bg-tactile-yellow text-black shadow-tactile-sm'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    Termin 2 (Tgl 16 - Akhir) • Rp 2 Jt
-                  </button>
-
-                  <button
                     onClick={() => handlePeriodTypeChange('full')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-extrabold transition-all flex items-center gap-1.5 ${
                       auditPeriodType === 'full'
                         ? 'bg-tactile-yellow text-black shadow-tactile-sm'
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Full 1 Bulan • Rp 3 Jt
+                    <span>📅 Gaji Bulanan Full (Tgl 1 - Akhir) • Rp 3 Jt</span>
                   </button>
 
                   <button
@@ -2029,7 +2001,7 @@ const Finance = () => {
                         : 'text-slate-400 hover:text-white'
                     }`}
                   >
-                    Custom
+                    Custom Tanggal
                   </button>
                 </div>
               </div>
@@ -2099,11 +2071,11 @@ const Finance = () => {
             <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
               <div className="flex items-center gap-2 text-xs font-extrabold text-amber-400 uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Ketentuan Skema Gaji 3 Juta • Tarif Seragam Rp 30.000 / Jam</span>
+                <span>Ketentuan Skema Gaji Bulanan • Rp 3.000.000 (Tarif Rp 30.000 / Jam)</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] bg-emerald-400/20 text-emerald-300 font-bold px-2 py-0.5 rounded-md border border-emerald-400/30">
-                  Tarif Seragam Rp 30.000/Jam
+                  Gaji Bulanan Full
                 </span>
                 <button
                   onClick={() => {
@@ -2119,24 +2091,24 @@ const Finance = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-[11px] text-slate-300 pt-1">
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-amber-300 mb-0.5">💰 Tarif Jam Seragam</div>
-                <div className="text-[10px] text-slate-400">{formatRupiah(financeRules.hourlyRate || 30000)} / Jam • Total 1 Bulan: {formatRupiah((financeRules.baseSalary15th || 1000000) + (financeRules.baseSalaryMonthEnd || 2000000))}</div>
+                <div className="font-extrabold text-amber-300 mb-0.5">💰 Gaji Pokok Bulanan</div>
+                <div className="text-[10px] text-slate-400">Plafon Maks: Rp 3.000.000 / Bulan</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-indigo-300 mb-0.5">📅 Termin 1 (Tgl 1-15)</div>
-                <div className="text-[10px] text-slate-400">Max {formatRupiah(financeRules.baseSalary15th)} • Bebas Potongan</div>
-              </div>
-              <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-indigo-300 mb-0.5">📅 Termin 2 (Tgl 16-Akhir)</div>
-                <div className="text-[10px] text-slate-400">Max {formatRupiah(financeRules.baseSalaryMonthEnd)} • Eksekusi Potongan</div>
+                <div className="font-extrabold text-indigo-300 mb-0.5">⏱️ Tarif per Jam</div>
+                <div className="text-[10px] text-slate-400">Rp 30.000 / Jam Live Valid</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-emerald-300 mb-0.5">⏱️ Batas Jam Harian</div>
-                <div className="text-[10px] text-slate-400">Max 2 Sesi ({financeRules.maxDailyValidHours || 4} Jam / Hari)</div>
+                <div className="text-[10px] text-slate-400">Max 2 Sesi (4 Jam / Hari)</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">📉 Potongan di Akhir Bulan</div>
-                <div className="text-[10px] text-slate-400">Sinyal/Kasbon dipotong di Termin 2</div>
+                <div className="font-extrabold text-slate-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
+                <div className="text-[10px] text-slate-400">Rekapan harian via Bot/Grup</div>
+              </div>
+              <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
+                <div className="font-extrabold text-rose-300 mb-0.5">📉 Potongan Sinyal</div>
+                <div className="text-[10px] text-slate-400">-Rp 30.000 / kejadian kendala</div>
               </div>
             </div>
           </div>

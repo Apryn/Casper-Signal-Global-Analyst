@@ -537,7 +537,14 @@ export const syncAuditToPeriod = async (req, res) => {
 
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
-      let baseSalary = periodType === '15th' ? parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000) : parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
+      let baseSalary = 3000000;
+      if (periodType === '15th') {
+        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000);
+      } else if (periodType === '1st') {
+        baseSalary = parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
+      } else {
+        baseSalary = parseFloat(streamer.salary_15 || 1000000) + parseFloat(streamer.salary_1 || 2000000);
+      }
       let hourlyRate = rules.hourlyRate || 30000;
 
       let totalRawLiveDuration = 0;
@@ -928,7 +935,7 @@ export const updateFinanceRules = async (req, res) => {
 // ── 5. PENALTY & SALARY AUTOMATED AUDIT ──────────────────────────────────────────
 export const getPenaltyAudit = async (req, res) => {
   try {
-    const { startDate, endDate, periodType = '15th', periodKey } = req.query;
+    const { startDate, endDate, periodType = 'full', periodKey } = req.query;
 
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'startDate dan endDate wajib diisi' });
@@ -1031,15 +1038,15 @@ export const getPenaltyAudit = async (req, res) => {
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
       
-      // Determine Base Salary & Hourly Rate (Uniform Rp 30.000 / Jam)
-      let baseSalary = rules.baseSalary15th;
+      // Determine Base Salary & Hourly Rate (Default Full 1 Bulan = Rp 3.000.000)
+      let baseSalary = 3000000;
       let hourlyRate = rules.hourlyRate || 30000;
       if (periodType === '15th') {
         baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000);
       } else if (periodType === '1st') {
         baseSalary = parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
-      } else if (periodType === 'full') {
-        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000) + parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
+      } else {
+        baseSalary = parseFloat(streamer.salary_15 || 1000000) + parseFloat(streamer.salary_1 || 2000000);
       }
 
       let totalRawLiveDuration = 0;
