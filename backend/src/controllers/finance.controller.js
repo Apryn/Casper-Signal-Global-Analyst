@@ -537,64 +537,39 @@ export const syncAuditToPeriod = async (req, res) => {
 
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
-      let baseSalary = periodType === '15th' ? parseFloat(streamer.salary_15 || rules.baseSalary15th) : parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd);
+      let baseSalary = periodType === '15th' ? parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000) : parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
+      let hourlyRate = periodType === '15th' ? (rules.hourlyRate15th || 20000) : (rules.hourlyRateMonthEnd || 40000);
 
-      let totalLiveDuration = 0;
+      let totalRawLiveDuration = 0;
+      let totalValidLiveHours = 0;
       let liveDaysCount = 0;
-      let under4hCount = 0;
-      let totalShortageHours = 0;
-      let shortagePenalty = 0;
-      let noReportDaysCount = 0;
-      let noReportPenalty = 0;
-      let absentDaysCount = 0;
-      let absentPenalty = 0;
-      let offDaysCount = 0;
-      let excusedDaysCount = 0;
 
       for (const d of allDates) {
         const key = `${sId}_${d.dateStr}`;
         const rep = reportMap[key];
-        const isSunday = d.dayOfWeek === 0;
-        const isExcused = (rep && (rep.status_izin === 'Izin' || rep.status_izin === 'Kompensasi')) || isSunday;
+        const rawDuration = rep ? parseFloat(rep.live_duration || 0) : 0;
+        const validHours = Math.min(rules.maxDailyValidHours || 4.0, rawDuration);
 
-        if (isExcused) {
-          excusedDaysCount++;
-        } else if (rep) {
-          if (rep.kategori === 'Non Streaming') {
-            offDaysCount++;
-          } else {
-            liveDaysCount++;
-            const duration = parseFloat(rep.live_duration || 0);
-            totalLiveDuration += duration;
-            if (duration < rules.standardLiveDurationHours) {
-              const shortage = parseFloat((rules.standardLiveDurationHours - duration).toFixed(2));
-              under4hCount++;
-              const pAmount = Math.round(shortage * rules.durationShortagePenaltyPerHour);
-              totalShortageHours += shortage;
-              shortagePenalty += pAmount;
-            }
-          }
-        } else {
-          absentDaysCount++;
-          const dailyAbsentCost = rules.absentPenaltyPerSession * rules.sessionsPerDay;
-          absentPenalty += dailyAbsentCost;
-        }
+        totalRawLiveDuration += rawDuration;
+        totalValidLiveHours += validHours;
+        if (rawDuration > 0) liveDaysCount++;
       }
+
+      const earnedFromHours = Math.min(baseSalary, Math.round(totalValidLiveHours * hourlyRate));
+      const totalEarnedSalary = Math.round(earnedFromHours / 1000) * 1000;
 
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
       const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
-      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * rules.signalCutPenaltyPerEvent));
-      const customBonus = parseFloat(adj.custom_bonus || 0);
-      const customDeduction = parseFloat(adj.custom_deduction || 0);
+      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+      const customBonus = Math.round(parseFloat(adj.custom_bonus || 0) / 1000) * 1000;
+      const customDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
 
-      const totalPenalties = shortagePenalty + noReportPenalty + absentPenalty + signalCutAmount + customDeduction;
-      const netSalary = Math.max(0, baseSalary + customBonus - totalPenalties);
+      const totalDeductions = signalCutAmount + customDeduction;
+      const netSalary = Math.max(0, totalEarnedSalary + customBonus - totalDeductions);
 
       // Build readable notes
       const noteParts = [];
-      if (shortagePenalty > 0) noteParts.push(`Kurang Jam: -Rp ${shortagePenalty.toLocaleString('id-ID')} (${totalShortageHours.toFixed(1)}h)`);
-      if (absentPenalty > 0) noteParts.push(`Absen: -Rp ${absentPenalty.toLocaleString('id-ID')} (${absentDaysCount} hari)`);
-      if (noReportPenalty > 0) noteParts.push(`Telat Rekap: -Rp ${noReportPenalty.toLocaleString('id-ID')}`);
+      noteParts.push(`Live Valid: ${totalValidLiveHours.toFixed(1)}h × Rp ${hourlyRate.toLocaleString('id-ID')}/h = Rp ${totalEarnedSalary.toLocaleString('id-ID')}`);
       if (signalCutAmount > 0) noteParts.push(`Potong Sinyal: -Rp ${signalCutAmount.toLocaleString('id-ID')} (${signalCutCount}x)`);
       if (customDeduction > 0) noteParts.push(`Kasbon/Potongan: -Rp ${customDeduction.toLocaleString('id-ID')}`);
       if (customBonus > 0) noteParts.push(`Bonus: +Rp ${customBonus.toLocaleString('id-ID')}`);
@@ -603,11 +578,11 @@ export const syncAuditToPeriod = async (req, res) => {
         streamerId: sId,
         profileId: streamer.profile_id,
         nama: streamer.nama,
-        baseSalary,
-        totalPenalties,
+        baseSalary: totalEarnedSalary,
+        totalPenalties: totalDeductions,
         customBonus,
         netSalary,
-        notes: noteParts.join(' • ') || (totalPenalties === 0 ? 'SOP Terpenuhi (Bebas Denda)' : '')
+        notes: noteParts.join(' • ')
       };
     }
 
@@ -879,6 +854,11 @@ export const deleteTransaction = async (req, res) => {
 export const DEFAULT_FINANCE_RULES = {
   baseSalary15th: 1000000,
   baseSalaryMonthEnd: 2000000,
+  hourlyRate15th: 20000,
+  hourlyRateMonthEnd: 40000,
+  maxDailyValidHours: 4.0,
+  maxHoursPerSession: 2.0,
+  maxSessionsPerDay: 2,
   standardLiveDurationHours: 4.0,
   durationShortagePenaltyPerHour: 30000,
   recapDeadlineTime: '08:00',
@@ -910,6 +890,9 @@ export const updateFinanceRules = async (req, res) => {
     const newRules = {
       baseSalary15th: parseFloat(incoming.baseSalary15th) >= 0 ? parseFloat(incoming.baseSalary15th) : DEFAULT_FINANCE_RULES.baseSalary15th,
       baseSalaryMonthEnd: parseFloat(incoming.baseSalaryMonthEnd) >= 0 ? parseFloat(incoming.baseSalaryMonthEnd) : DEFAULT_FINANCE_RULES.baseSalaryMonthEnd,
+      hourlyRate15th: parseFloat(incoming.hourlyRate15th) >= 0 ? parseFloat(incoming.hourlyRate15th) : DEFAULT_FINANCE_RULES.hourlyRate15th,
+      hourlyRateMonthEnd: parseFloat(incoming.hourlyRateMonthEnd) >= 0 ? parseFloat(incoming.hourlyRateMonthEnd) : DEFAULT_FINANCE_RULES.hourlyRateMonthEnd,
+      maxDailyValidHours: parseFloat(incoming.maxDailyValidHours) > 0 ? parseFloat(incoming.maxDailyValidHours) : DEFAULT_FINANCE_RULES.maxDailyValidHours,
       standardLiveDurationHours: parseFloat(incoming.standardLiveDurationHours) > 0 ? parseFloat(incoming.standardLiveDurationHours) : DEFAULT_FINANCE_RULES.standardLiveDurationHours,
       durationShortagePenaltyPerHour: parseFloat(incoming.durationShortagePenaltyPerHour) >= 0 ? parseFloat(incoming.durationShortagePenaltyPerHour) : DEFAULT_FINANCE_RULES.durationShortagePenaltyPerHour,
       recapDeadlineTime: String(incoming.recapDeadlineTime || DEFAULT_FINANCE_RULES.recapDeadlineTime),
@@ -1040,28 +1023,23 @@ export const getPenaltyAudit = async (req, res) => {
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
       
-      // Determine Base Salary based on periodType
+      // Determine Base Salary & Hourly Rate based on periodType
       let baseSalary = rules.baseSalary15th;
+      let hourlyRate = rules.hourlyRate15th || 20000;
       if (periodType === '15th') {
-        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th);
+        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000);
+        hourlyRate = rules.hourlyRate15th || 20000;
       } else if (periodType === '1st') {
-        baseSalary = parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd);
+        baseSalary = parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
+        hourlyRate = rules.hourlyRateMonthEnd || 40000;
       } else if (periodType === 'full') {
-        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th) + parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd);
+        baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000) + parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
+        hourlyRate = 30000;
       }
 
-      let totalLiveDuration = 0;
+      let totalRawLiveDuration = 0;
+      let totalValidLiveHours = 0;
       let liveDaysCount = 0;
-      let under4hCount = 0;
-      let totalShortageHours = 0;
-      let shortagePenalty = 0;
-
-      let noReportDaysCount = 0;
-      let noReportPenalty = 0;
-
-      let absentDaysCount = 0;
-      let absentPenalty = 0;
-
       let offDaysCount = 0;
       let excusedDaysCount = 0;
 
@@ -1074,6 +1052,15 @@ export const getPenaltyAudit = async (req, res) => {
 
         const isCompensated = rep?.status_izin === 'Kompensasi';
         const isExcused = (rep && (rep.status_izin === 'Izin' || rep.status_izin === 'Kompensasi')) || isSunday;
+        const rawDuration = rep ? parseFloat(rep.live_duration || 0) : 0;
+        
+        // Capping: Max 4.0 hours per day (2 sessions @ 2h max)
+        const validHours = Math.min(rules.maxDailyValidHours || 4.0, rawDuration);
+        const dayEarnings = Math.round(validHours * hourlyRate);
+
+        totalRawLiveDuration += rawDuration;
+        totalValidLiveHours += validHours;
+        if (rawDuration > 0) liveDaysCount++;
 
         const dayItem = {
           dateStr: d.dateStr,
@@ -1083,7 +1070,9 @@ export const getPenaltyAudit = async (req, res) => {
           reportId: rep ? rep.id : null,
           hasReport: !!rep,
           kategori: rep ? rep.kategori : (isSunday ? 'Hari Libur (Minggu)' : 'Tidak Ada Laporan'),
-          liveDuration: rep ? parseFloat(rep.live_duration || 0) : 0,
+          rawLiveDuration: rawDuration,
+          liveDuration: validHours,
+          dayEarnings,
           submittedAt: rep?.created_at || null,
           rawMessage: rep?.raw_message || null,
           statusIzin: rep?.status_izin || (isSunday ? 'Izin' : 'Normal'),
@@ -1095,75 +1084,34 @@ export const getPenaltyAudit = async (req, res) => {
           noReportPenalty: 0,
           absentPenalty: 0,
           totalDayPenalty: 0,
-          statusLabel: 'OK',
-          statusColor: 'green'
+          statusLabel: rawDuration > 0 
+            ? (rawDuration > 4.0 ? `Live ${rawDuration}h (Dihitung 4.0h)` : `Live ${rawDuration}h`)
+            : (isSunday ? 'Libur Minggu' : (isExcused ? 'Izin' : 'Tidak Live')),
+          statusColor: rawDuration >= 4.0 ? 'green' : (rawDuration > 0 ? 'cyan' : (isSunday ? 'amber' : 'slate'))
         };
 
         if (dayItem.isExcused) {
           excusedDaysCount++;
-          if (isSunday) {
-            dayItem.statusLabel = 'Libur Minggu';
-            dayItem.statusColor = 'amber';
-          } else if (isCompensated) {
-            dayItem.statusLabel = rep?.catatan_izin ? `🔄 Kompensasi: ${rep.catatan_izin}` : '🔄 Kompensasi Jam';
-            dayItem.statusColor = 'cyan';
-          } else {
-            dayItem.statusLabel = rep?.catatan_izin ? `Izin: ${rep.catatan_izin}` : 'Izin Sah (ACC)';
-            dayItem.statusColor = 'amber';
-          }
-        } else if (rep) {
-          if (rep.kategori === 'Non Streaming') {
-            offDaysCount++;
-            dayItem.statusLabel = 'Hari Off';
-            dayItem.statusColor = 'blue';
-          } else {
-            // Streaming
-            liveDaysCount++;
-            const duration = parseFloat(rep.live_duration || 0);
-            totalLiveDuration += duration;
-
-            // SOP Durasi (< standardLiveDurationHours Jam)
-            if (duration < rules.standardLiveDurationHours) {
-              const shortage = parseFloat((rules.standardLiveDurationHours - duration).toFixed(2));
-              dayItem.shortageHours = shortage;
-              under4hCount++;
-              dayItem.shortagePenalty = Math.round(shortage * rules.durationShortagePenaltyPerHour);
-              totalShortageHours += shortage;
-              shortagePenalty += dayItem.shortagePenalty;
-              dayItem.statusLabel = `Durasi Kurang (${duration}h / -${shortage}h)`;
-              dayItem.statusColor = 'rose';
-            } else {
-              dayItem.statusLabel = 'OK';
-              dayItem.statusColor = 'green';
-            }
-          }
-        } else {
-          // Missing report on non-Sunday (Streamer Absen / Tidak Live)
-          absentDaysCount++;
-          
-          const dailyAbsentCost = rules.absentPenaltyPerSession * rules.sessionsPerDay;
-          dayItem.absentPenalty = dailyAbsentCost;
-          dayItem.noReportPenalty = 0; // Tidak didenda ganda jika sudah kena denda absen
-          
-          absentPenalty += dailyAbsentCost;
-
-          dayItem.statusLabel = 'Absen (Tidak Live)';
-          dayItem.statusColor = 'red';
+        } else if (rep && rep.kategori === 'Non Streaming') {
+          offDaysCount++;
         }
 
-        dayItem.totalDayPenalty = dayItem.shortagePenalty + dayItem.noReportPenalty + dayItem.absentPenalty;
         dailyBreakdown.push(dayItem);
       }
+
+      // Total earned from valid live hours (capped at baseSalary maximum)
+      const earnedFromHours = Math.min(baseSalary, Math.round(totalValidLiveHours * hourlyRate));
+      const totalEarnedSalary = Math.round(earnedFromHours / 1000) * 1000;
 
       // Adjustments (Signal cut, custom bonus/deduction)
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
       const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
-      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * rules.signalCutPenaltyPerEvent));
-      const customBonus = parseFloat(adj.custom_bonus || 0);
-      const customDeduction = parseFloat(adj.custom_deduction || 0);
+      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+      const customBonus = Math.round(parseFloat(adj.custom_bonus || 0) / 1000) * 1000;
+      const customDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
 
-      const totalPenalties = shortagePenalty + noReportPenalty + absentPenalty + signalCutAmount + customDeduction;
-      const netSalary = Math.max(0, baseSalary + customBonus - totalPenalties);
+      const totalPenalties = signalCutAmount + customDeduction;
+      const netSalary = Math.max(0, totalEarnedSalary + customBonus - totalPenalties);
 
       auditResults.push({
         streamerId: sId,
@@ -1174,15 +1122,18 @@ export const getPenaltyAudit = async (req, res) => {
         bankAccountNumber: streamer.bank_account_number || '-',
         bankAccountHolder: streamer.bank_account_holder || streamer.nama,
         baseSalary,
-        totalLiveDuration: parseFloat(totalLiveDuration.toFixed(2)),
+        hourlyRate,
+        totalRawLiveDuration: parseFloat(totalRawLiveDuration.toFixed(2)),
+        totalLiveDuration: parseFloat(totalValidLiveHours.toFixed(2)),
+        totalEarnedSalary,
         liveDaysCount,
-        under4hCount,
-        totalShortageHours: parseFloat(totalShortageHours.toFixed(2)),
-        shortagePenalty,
-        noReportDaysCount,
-        noReportPenalty,
-        absentDaysCount,
-        absentPenalty,
+        under4hCount: 0,
+        totalShortageHours: 0,
+        shortagePenalty: 0,
+        noReportDaysCount: 0,
+        noReportPenalty: 0,
+        absentDaysCount: 0,
+        absentPenalty: 0,
         offDaysCount,
         excusedDaysCount,
         signalCutCount,

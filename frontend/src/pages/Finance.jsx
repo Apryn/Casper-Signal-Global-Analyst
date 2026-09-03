@@ -220,6 +220,11 @@ const Finance = () => {
   const [financeRules, setFinanceRules] = useState({
     baseSalary15th: 1000000,
     baseSalaryMonthEnd: 2000000,
+    hourlyRate15th: 20000,
+    hourlyRateMonthEnd: 40000,
+    maxDailyValidHours: 4.0,
+    maxHoursPerSession: 2.0,
+    maxSessionsPerDay: 2,
     standardLiveDurationHours: 4.0,
     durationShortagePenaltyPerHour: 30000,
     recapDeadlineTime: '08:00',
@@ -232,6 +237,11 @@ const Finance = () => {
   const [editingRules, setEditingRules] = useState({
     baseSalary15th: 1000000,
     baseSalaryMonthEnd: 2000000,
+    hourlyRate15th: 20000,
+    hourlyRateMonthEnd: 40000,
+    maxDailyValidHours: 4.0,
+    maxHoursPerSession: 2.0,
+    maxSessionsPerDay: 2,
     standardLiveDurationHours: 4.0,
     durationShortagePenaltyPerHour: 30000,
     recapDeadlineTime: '08:00',
@@ -643,90 +653,36 @@ const Finance = () => {
   };
 
   const generateStreamerAuditWaSlip = (s) => {
-    let text = `📄 *SLIP GAJI & AUDIT KEDISIPLINAN STREAMER*\n`;
+    const rate = s.hourlyRate || (auditPeriodType === '15th' ? 20000 : 40000);
+    let text = `💰 *SLIP GAJI STREAMER — CASPER SIGNAL*\n`;
     text += `*CASPER SIGNAL GLOBAL ANALYST*\n`;
-    text += `------------------------------------\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `👤 *Nama:* ${s.nama}\n`;
     text += `🏦 *Rekening:* ${s.bankName} - ${s.bankAccountNumber} (a.n ${s.bankAccountHolder})\n`;
     text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bulan)' : 'Full 1 Bulan'})\n`;
-    text += `------------------------------------\n`;
-    text += `💵 *Gaji Pokok:* ${formatRupiah(s.baseSalary)}\n\n`;
-    text += `*Ringkasan Denda & Potongan:*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `⏱️ *Total Jam Live Valid:* ${s.totalLiveDuration} Jam (Max 4 Jam/Hari)\n`;
+    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam\n`;
+    text += `💰 *Gaji Jam Live:* ${formatRupiah(s.totalEarnedSalary || s.baseSalary)}\n`;
     
-    if (s.shortagePenalty > 0) {
-      text += `• Denda Durasi Kurang (${s.totalShortageHours}h / ${s.under4hCount}x): -${formatRupiah(s.shortagePenalty)}\n`;
-    } else {
-      text += `• Denda Durasi Kurang: Rp 0 (SOP Terpenuhi)\n`;
-    }
-
-    if (s.noReportPenalty > 0) {
-      text += `• Denda Lupa/Telat Rekap (${s.noReportDaysCount} hari): -${formatRupiah(s.noReportPenalty)}\n`;
-    } else {
-      text += `• Denda Lupa/Telat Rekap: Rp 0 (Lengkap)\n`;
-    }
-
-    if (s.absentPenalty > 0) {
-      text += `• Denda Absen/Tidak Live (${s.absentDaysCount} hari): -${formatRupiah(s.absentPenalty)}\n`;
-    }
-
     if (s.signalCutAmount > 0) {
-      text += `• Potongan Pembagian Sinyal (${s.signalCutCount}x): -${formatRupiah(s.signalCutAmount)}\n`;
+      text += `• Potongan Sinyal (${s.signalCutCount}x): -${formatRupiah(s.signalCutAmount)}\n`;
     }
-
     if (s.customDeduction > 0) {
-      text += `• Potongan Tambahan/Kasbon: -${formatRupiah(s.customDeduction)}\n`;
+      text += `• Potongan/Kasbon: -${formatRupiah(s.customDeduction)}\n`;
     }
-
     if (s.customBonus > 0) {
       text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
     }
-
-    // Detail Per Tanggal (Rincian untuk cross-check streamer)
-    const absentDates = s.dailyBreakdown?.filter(d => d.absentPenalty > 0) || [];
-    const shortageDates = s.dailyBreakdown?.filter(d => d.shortagePenalty > 0) || [];
-    const noReportDates = s.dailyBreakdown?.filter(d => d.noReportPenalty > 0) || [];
-    const excuseDates = s.dailyBreakdown?.filter(d => !d.isSunday && (d.isExcused || d.isCompensated)) || [];
-
-    if (absentDates.length > 0 || shortageDates.length > 0 || noReportDates.length > 0) {
-      text += `\n📋 *RINCIAN TANGGAL PELANGGARAN:*\n`;
-      
-      if (absentDates.length > 0) {
-        text += `🔴 *Absen / Tidak Live (${absentDates.length} Hari):*\n`;
-        absentDates.forEach(d => {
-          text += `  - ${d.shortDate} (-${formatRupiah(d.absentPenalty)})\n`;
-        });
-      }
-
-      if (shortageDates.length > 0) {
-        text += `⏱️ *Durasi Kurang (${shortageDates.length} Hari):*\n`;
-        shortageDates.forEach(d => {
-          text += `  - ${d.shortDate}: Live ${d.liveDuration}h (Kurang -${d.shortageHours}h -> -${formatRupiah(d.shortagePenalty)})\n`;
-        });
-      }
-
-      if (noReportDates.length > 0) {
-        text += `📝 *Telat / Tidak Rekap (${noReportDates.length} Hari):*\n`;
-        noReportDates.forEach(d => {
-          text += `  - ${d.shortDate} (-${formatRupiah(d.noReportPenalty)})\n`;
-        });
-      }
-    }
-
-    if (excuseDates.length > 0) {
-      text += `\n📌 *IZIN & KOMPENSASI DISETUJUI:*\n`;
-      excuseDates.forEach(d => {
-        text += `  - ${d.shortDate}: ${d.statusLabel || d.catatanIzin || 'Izin Sah'} (Bebas Denda)\n`;
-      });
-    }
-
-    text += `------------------------------------\n`;
-    text += `🔴 *Total Potongan:* -${formatRupiah(s.totalPenalties)}\n`;
-    text += `💰 *GAJI BERSIH (TAKE HOME PAY): ${formatRupiah(s.netSalary)}*\n\n`;
-    text += `_Mohon dicek kembali rincian tanggal di atas. Jika ada kendala/sanggahan, silakan hubungi admin. Tetap semangat & salam profit! 🚀_`;
+    
+    text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `💳 *TOTAL DITERIMA:* *${formatRupiah(s.netSalary)}*\n`;
+    text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
+    text += `_Terima kasih atas dedikasi dan performa live terbaikmu! Tetap semangat._ 🚀`;
 
     copyToClipboard(text, `audit-wa-${s.streamerId}`);
     setPreviewWaSlip({
-      title: 'Slip Gaji & Audit Kedisiplinan',
+      title: 'Slip Gaji Streamer',
       recipient: s.nama,
       text,
       key: `audit-wa-${s.streamerId}`
@@ -2133,15 +2089,15 @@ const Finance = () => {
           </div>
 
           {/* ── RULES & SOP ACCORDION BANNER ── */}
-          <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-rose-500/10 border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+          <div className="bg-gradient-to-r from-amber-500/10 via-indigo-500/10 to-emerald-500/10 border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
             <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
               <div className="flex items-center gap-2 text-xs font-extrabold text-amber-400 uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Ketentuan Skema Gaji &amp; Aturan Denda Otomatis</span>
+                <span>Ketentuan Skema Gaji Berbasis Jam Live &amp; Batas Sesi</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] bg-amber-400/20 text-amber-300 font-bold px-2 py-0.5 rounded-md border border-amber-400/30">
-                  SOP Aktif
+                <span className="text-[10px] bg-emerald-400/20 text-emerald-300 font-bold px-2 py-0.5 rounded-md border border-emerald-400/30">
+                  Tarif Bulat Aktif
                 </span>
                 <button
                   onClick={() => {
@@ -2157,24 +2113,24 @@ const Finance = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-[11px] text-slate-300 pt-1">
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-white mb-0.5">💰 Gaji Pokok {((financeRules.baseSalary15th + financeRules.baseSalaryMonthEnd) / 1000000).toLocaleString('id-ID')} Juta</div>
-                <div className="text-[10px] text-slate-400">Tgl 15: {formatRupiah(financeRules.baseSalary15th)} • Akhir Bln: {formatRupiah(financeRules.baseSalaryMonthEnd)}</div>
+                <div className="font-extrabold text-amber-300 mb-0.5">💰 Termin 1 (Tgl 1-15)</div>
+                <div className="text-[10px] text-slate-400">{formatRupiah(financeRules.hourlyRate15th || 20000)} / Jam • Max {formatRupiah(financeRules.baseSalary15th)}</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">⏱️ Durasi SOP {financeRules.standardLiveDurationHours} Jam</div>
-                <div className="text-[10px] text-slate-400">Kurang durasi: -{formatRupiah(financeRules.durationShortagePenaltyPerHour)} / Jam</div>
+                <div className="font-extrabold text-indigo-300 mb-0.5">💰 Termin 2 (Tgl 16-Akhir)</div>
+                <div className="text-[10px] text-slate-400">{formatRupiah(financeRules.hourlyRateMonthEnd || 40000)} / Jam • Max {formatRupiah(financeRules.baseSalaryMonthEnd)}</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
-                <div className="text-[10px] text-slate-400">Telat: -{formatRupiah(financeRules.noReportPenaltyPerDay)} (Bebas denda durasi)</div>
+                <div className="font-extrabold text-emerald-300 mb-0.5">⏱️ Batas Jam Harian</div>
+                <div className="text-[10px] text-slate-400">Max 2 Sesi ({financeRules.maxDailyValidHours || 4} Jam / Hari)</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">🚫 Absen / Bolos</div>
-                <div className="text-[10px] text-slate-400">Tidak live: -{formatRupiah(financeRules.absentPenaltyPerSession)} / Sesi ({financeRules.sessionsPerDay} sesi = -{formatRupiah(financeRules.absentPenaltyPerSession * financeRules.sessionsPerDay)})</div>
+                <div className="font-extrabold text-slate-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
+                <div className="text-[10px] text-slate-400">Kirim rekapan harian via Bot/Grup</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-amber-300 mb-0.5">📉 Pembagian Sinyal</div>
-                <div className="text-[10px] text-slate-400">Potongan: -{formatRupiah(financeRules.signalCutPenaltyPerEvent)} / kejadian</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">📉 Potongan Sinyal</div>
+                <div className="text-[10px] text-slate-400">Potongan: -{formatRupiah(financeRules.signalCutPenaltyPerEvent || 30000)} / kejadian</div>
               </div>
             </div>
           </div>
@@ -2182,55 +2138,55 @@ const Finance = () => {
           {/* ── KPI METRICS CARDS ── */}
           {auditData && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-              {/* 1. Total Gaji Pokok */}
+              {/* 1. Total Gaji Jam Live */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
                 <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block mb-1">
-                  Total Gaji Pokok Kotor
+                  Total Gaji Jam Live
                 </span>
                 <div className="text-xl font-black text-white tracking-tight">
-                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.baseSalary, 0))}
+                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + (s.totalEarnedSalary || s.baseSalary), 0))}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
                   {auditData.auditResults.length} Streamer Terdaftar
                 </div>
               </div>
 
-              {/* 2. Total Denda Durasi */}
+              {/* 2. Total Jam Live Valid */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
-                <span className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider block mb-1">
-                  Denda Durasi Kurang
+                <span className="text-[10px] font-extrabold text-indigo-400 uppercase tracking-wider block mb-1">
+                  Total Jam Live Valid
                 </span>
-                <div className="text-xl font-black text-rose-400 tracking-tight">
-                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.shortagePenalty, 0))}
+                <div className="text-xl font-black text-indigo-400 tracking-tight">
+                  {auditData.auditResults.reduce((acc, s) => acc + (s.totalLiveDuration || 0), 0).toFixed(1)} Jam
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
-                  {auditData.auditResults.reduce((acc, s) => acc + s.totalShortageHours, 0).toFixed(1)} Jam Kekurangan
+                  Maksimal 4.0 Jam / Hari
                 </div>
               </div>
 
-              {/* 3. Total Denda Rekap & Absen */}
+              {/* 3. Total Hari Live */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
-                <span className="text-[10px] font-extrabold text-rose-400 uppercase tracking-wider block mb-1">
-                  Denda Rekap &amp; Absen
+                <span className="text-[10px] font-extrabold text-cyan-400 uppercase tracking-wider block mb-1">
+                  Total Hari Live Sesi
                 </span>
-                <div className="text-xl font-black text-rose-400 tracking-tight">
-                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.noReportPenalty + s.absentPenalty, 0))}
+                <div className="text-xl font-black text-cyan-400 tracking-tight">
+                  {auditData.auditResults.reduce((acc, s) => acc + (s.liveDaysCount || 0), 0)} Hari
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
-                  {auditData.auditResults.reduce((acc, s) => acc + s.noReportDaysCount, 0)}x Telat/No Rekap
+                  Akumulasi seluruh streamer
                 </div>
               </div>
 
-              {/* 4. Total Potongan Sinyal */}
+              {/* 4. Total Potongan Sinyal & Kasbon */}
               <div className="bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
                 <span className="text-[10px] font-extrabold text-amber-400 uppercase tracking-wider block mb-1">
-                  Potongan Sinyal
+                  Potongan Sinyal &amp; Kasbon
                 </span>
                 <div className="text-xl font-black text-amber-400 tracking-tight">
-                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.signalCutAmount, 0))}
+                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + (s.totalPenalties || 0), 0))}
                 </div>
                 <div className="text-[10px] text-slate-500 mt-1">
-                  {auditData.auditResults.reduce((acc, s) => acc + s.signalCutCount, 0)}x Kejadian
+                  {auditData.auditResults.reduce((acc, s) => acc + (s.signalCutCount || 0), 0)}x Kendala Sinyal
                 </div>
               </div>
 
@@ -2240,10 +2196,10 @@ const Finance = () => {
                   Total Bersih Siap Transfer
                 </span>
                 <div className="text-xl font-black text-emerald-400 tracking-tight">
-                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.netSalary, 0))}
+                  {formatRupiah(auditData.auditResults.reduce((acc, s) => acc + (s.netSalary || 0), 0))}
                 </div>
                 <div className="text-[10px] text-emerald-300/70 mt-1">
-                  Total Potongan: -{formatRupiah(auditData.auditResults.reduce((acc, s) => acc + s.totalPenalties, 0))}
+                  Nominal Bulat Rapi
                 </div>
               </div>
             </div>
@@ -2308,7 +2264,7 @@ const Finance = () => {
                   onChange={(e) => setAuditFilterPenaltyOnly(e.target.checked)}
                   className="rounded text-indigo-600 focus:ring-0 focus:outline-none cursor-pointer"
                 />
-                <span>Hanya yang Ada Denda</span>
+                <span>Hanya yang Ada Potongan</span>
               </label>
             </div>
           </div>
@@ -2322,13 +2278,12 @@ const Finance = () => {
                     <th className="py-3 px-3 text-center w-10">No</th>
                     <th className="py-3 px-4">Streamer &amp; Rekening</th>
                     <th className="py-3 px-3 text-center">Status Audit</th>
-                    <th className="py-3 px-3 text-right">Gaji Pokok</th>
+                    <th className="py-3 px-3 text-right">Tarif / Jam</th>
+                    <th className="py-3 px-3 text-center">Jam Valid (Max 4h)</th>
                     <th className="py-3 px-3 text-center">Hari Live</th>
-                    <th className="py-3 px-3 text-right">Kurang Jam</th>
-                    <th className="py-3 px-3 text-right">Telat Rekap</th>
-                    <th className="py-3 px-3 text-right">Absen Live</th>
+                    <th className="py-3 px-3 text-right">Gaji Jam Live</th>
                     <th className="py-3 px-3 text-center">Potong Sinyal</th>
-                    <th className="py-3 px-3 text-right">Total Denda</th>
+                    <th className="py-3 px-3 text-right">Total Potongan</th>
                     <th className="py-3 px-4 text-right bg-emerald-950/20 text-emerald-400">Gaji Bersih</th>
                     <th className="py-3 px-4 text-center">Aksi</th>
                   </tr>
@@ -2336,14 +2291,14 @@ const Finance = () => {
                 <tbody className="divide-y divide-slate-800/80 text-xs">
                   {auditLoading ? (
                     <tr>
-                      <td colSpan={12} className="py-12 text-center text-slate-400">
+                      <td colSpan={11} className="py-12 text-center text-slate-400">
                         <RefreshCw className="h-6 w-6 animate-spin mx-auto text-indigo-400 mb-2" />
-                        <span>Menghitung denda &amp; audit gaji streamer...</span>
+                        <span>Menghitung jam live valid &amp; audit gaji streamer...</span>
                       </td>
                     </tr>
                   ) : !auditData || auditData.auditResults.length === 0 ? (
                     <tr>
-                      <td colSpan={12} className="py-8 text-center text-slate-400">
+                      <td colSpan={11} className="py-8 text-center text-slate-400">
                         Tidak ada data streamer pada periode ini.
                       </td>
                     </tr>
@@ -2406,55 +2361,31 @@ const Finance = () => {
                               )}
                             </button>
                           </td>
-                          <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-200">
-                            {formatRupiah(s.baseSalary)}
+                          {/* Tarif / Jam */}
+                          <td className="py-3.5 px-3 text-right font-mono font-bold text-amber-300 text-xs">
+                            {formatRupiah(s.hourlyRate || (auditPeriodType === '15th' ? 20000 : 40000))}
+                            <div className="text-[9.5px] text-slate-500 font-normal">/ Jam</div>
                           </td>
+                          {/* Jam Live Valid */}
+                          <td className="py-3.5 px-3 text-center">
+                            <span className="font-black text-white text-sm">
+                              {s.totalLiveDuration}h
+                            </span>
+                            {s.totalRawLiveDuration > s.totalLiveDuration && (
+                              <div className="text-[9.5px] text-slate-500 font-mono" title="Total jam asli sebelum dibatasi max 4 jam per hari">
+                                (raw: {s.totalRawLiveDuration}h)
+                              </div>
+                            )}
+                          </td>
+                          {/* Hari Live */}
                           <td className="py-3.5 px-3 text-center">
                             <span className="font-bold text-slate-300">
                               {s.liveDaysCount} hari
                             </span>
-                            <div className="text-[10px] text-slate-500 font-mono">
-                              ({s.totalLiveDuration}h)
-                            </div>
                           </td>
-                          {/* Kurang Jam */}
-                          <td className="py-3.5 px-3 text-right font-mono">
-                            {s.shortagePenalty > 0 ? (
-                              <div className="text-rose-400 font-bold">
-                                -{formatRupiah(s.shortagePenalty)}
-                                <div className="text-[9.5px] text-rose-300/70 font-normal">
-                                  {s.totalShortageHours}h ({s.under4hCount}x)
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-slate-500">-</span>
-                            )}
-                          </td>
-                          {/* Telat Rekap */}
-                          <td className="py-3.5 px-3 text-right font-mono">
-                            {s.noReportPenalty > 0 ? (
-                              <div className="text-rose-400 font-bold">
-                                -{formatRupiah(s.noReportPenalty)}
-                                <div className="text-[9.5px] text-rose-300/70 font-normal">
-                                  {s.noReportDaysCount} hari
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-slate-500">-</span>
-                            )}
-                          </td>
-                          {/* Absen */}
-                          <td className="py-3.5 px-3 text-right font-mono">
-                            {s.absentPenalty > 0 ? (
-                              <div className="text-rose-400 font-bold">
-                                -{formatRupiah(s.absentPenalty)}
-                                <div className="text-[9.5px] text-rose-300/70 font-normal">
-                                  {s.absentDaysCount} hari
-                                </div>
-                              </div>
-                            ) : (
-                              <span className="text-slate-500">-</span>
-                            )}
+                          {/* Gaji Jam Live */}
+                          <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-200">
+                            {formatRupiah(s.totalEarnedSalary || s.baseSalary)}
                           </td>
                           {/* Potongan Sinyal (Interactive Counter) */}
                           <td className="py-3.5 px-3 text-center">
@@ -2483,7 +2414,7 @@ const Finance = () => {
                               </div>
                             )}
                           </td>
-                          {/* Total Denda */}
+                          {/* Total Potongan */}
                           <td className="py-3.5 px-3 text-right font-mono font-black">
                             {s.totalPenalties > 0 ? (
                               <span className="text-rose-400">-{formatRupiah(s.totalPenalties)}</span>
@@ -2501,7 +2432,7 @@ const Finance = () => {
                               <button
                                 onClick={() => setDrilldownStreamer(s)}
                                 className="px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-indigo-300 bg-indigo-950/40 border border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-xs transition-all"
-                                title="Lihat Rincian Harian & Dispensasi Izin"
+                                title="Lihat Rincian Harian Jam Live"
                               >
                                 <span>Detail</span>
                               </button>
@@ -4145,18 +4076,18 @@ const Finance = () => {
             {/* Clean KPI Metrics Strip */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 py-3.5 bg-slate-900/20 border-b border-slate-800/80 text-xs">
               <div className="flex flex-col">
-                <span className="text-[11px] text-slate-400 mb-0.5">Gaji Pokok</span>
-                <span className="text-sm font-bold text-white font-mono">{formatRupiah(drilldownStreamer.baseSalary)}</span>
+                <span className="text-[11px] text-slate-400 mb-0.5">Gaji Jam Live</span>
+                <span className="text-sm font-bold text-white font-mono">{formatRupiah(drilldownStreamer.totalEarnedSalary || drilldownStreamer.baseSalary)}</span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] text-slate-400 mb-0.5">Total Denda Disiplin</span>
-                <span className="text-sm font-bold text-rose-400 font-mono">
-                  -{formatRupiah(drilldownStreamer.shortagePenalty + drilldownStreamer.noReportPenalty + drilldownStreamer.absentPenalty)}
+                <span className="text-[11px] text-indigo-400 mb-0.5">Total Jam Valid</span>
+                <span className="text-sm font-bold text-indigo-400 font-mono">
+                  {drilldownStreamer.totalLiveDuration} Jam (Max 4h/hr)
                 </span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] text-slate-400 mb-0.5">Potongan Sinyal ({drilldownStreamer.signalCutCount}x)</span>
-                <span className="text-sm font-bold text-slate-300 font-mono">-{formatRupiah(drilldownStreamer.signalCutAmount)}</span>
+                <span className="text-[11px] text-amber-400 mb-0.5">Potongan ({drilldownStreamer.signalCutCount}x Sinyal)</span>
+                <span className="text-sm font-bold text-amber-400 font-mono">-{formatRupiah(drilldownStreamer.totalPenalties)}</span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[11px] text-emerald-400 font-semibold mb-0.5">Gaji Bersih Diterima</span>
@@ -4170,24 +4101,25 @@ const Finance = () => {
                 <thead>
                   <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-[#0c101d] z-10">
                     <th className="py-3 px-3 w-28">Tanggal</th>
-                    <th className="py-3 px-3">Aktivitas &amp; Durasi</th>
-                    <th className="py-3 px-3">Keterangan Denda</th>
-                    <th className="py-3 px-3 text-right w-36">Total Denda</th>
-                    <th className="py-3 px-3 text-center w-36">Dispensasi</th>
+                    <th className="py-3 px-3">Durasi Live Asli</th>
+                    <th className="py-3 px-3 text-center">Jam Valid (Max 4h)</th>
+                    <th className="py-3 px-3 text-right w-32">Upah Harian</th>
+                    <th className="py-3 px-3 text-center w-36">Status</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-850/60 font-sans">
                   {drilldownStreamer.dailyBreakdown?.map((day) => {
-                    const hasPenalty = day.totalDayPenalty > 0;
                     return (
                       <tr
                         key={day.dateStr}
                         className={`transition-colors ${
                           day.isSunday
                             ? 'bg-slate-900/10 text-slate-500'
-                            : hasPenalty
-                            ? 'bg-rose-950/10 hover:bg-rose-950/20'
-                            : 'hover:bg-slate-800/20'
+                            : day.liveDuration >= 4.0
+                            ? 'bg-emerald-950/10 hover:bg-emerald-950/20'
+                            : day.liveDuration > 0
+                            ? 'hover:bg-slate-800/20'
+                            : 'hover:bg-slate-800/20 text-slate-500'
                         }`}
                       >
                         {/* 1. Tanggal */}
@@ -4199,24 +4131,21 @@ const Finance = () => {
                           </span>
                         </td>
 
-                        {/* 2. Aktivitas & Durasi */}
+                        {/* 2. Aktivitas & Durasi Asli */}
                         <td className="py-2.5 px-3">
                           {day.isSunday ? (
                             <span className="text-slate-500 text-xs">Libur Rutin</span>
                           ) : (
                             <div className="flex items-center gap-2 flex-wrap">
-                              {day.liveDuration >= 4.0 ? (
-                                <span className="inline-flex items-center gap-1 text-emerald-400 font-medium text-xs">
-                                  <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{day.liveDuration} Jam Live</span>
-                                </span>
-                              ) : day.liveDuration > 0 ? (
-                                <span className="inline-flex items-center gap-1 text-amber-400 font-medium text-xs">
-                                  <Clock className="h-3.5 w-3.5 shrink-0" />
-                                  <span>{day.liveDuration} Jam Live (Kurang {(4.0 - day.liveDuration).toFixed(1)}h)</span>
+                              {day.rawLiveDuration > 0 ? (
+                                <span className="inline-flex items-center gap-1 font-medium text-xs text-white">
+                                  <span>Live {day.rawLiveDuration} Jam</span>
+                                  {day.rawLiveDuration > 4.0 && (
+                                    <span className="text-[10px] text-amber-400">(Kelebihan {day.rawLiveDuration - 4.0}h)</span>
+                                  )}
                                 </span>
                               ) : (
-                                <span className="text-slate-400 text-xs">Tidak Live / Absen</span>
+                                <span className="text-slate-400 text-xs">Tidak Live</span>
                               )}
 
                               {/* Quick Edit Durasi Link */}
@@ -4250,76 +4179,40 @@ const Finance = () => {
                           )}
                         </td>
 
-                        {/* 3. Keterangan Denda */}
-                        <td className="py-2.5 px-3">
+                        {/* 3. Jam Valid */}
+                        <td className="py-2.5 px-3 text-center font-mono font-bold">
                           {day.isSunday ? (
                             <span className="text-slate-600">-</span>
-                          ) : hasPenalty ? (
-                            <div className="text-xs text-rose-400/90 font-mono flex items-center gap-1.5 flex-wrap">
-                              {day.shortagePenalty > 0 && <span>Durasi Kurang (-{formatRupiah(day.shortagePenalty)})</span>}
-                              {day.noReportPenalty > 0 && <span>• Telat/Lupa Rekap (-{formatRupiah(day.noReportPenalty)})</span>}
-                              {day.absentPenalty > 0 && <span>• Absen (-{formatRupiah(day.absentPenalty)})</span>}
-                            </div>
+                          ) : day.liveDuration > 0 ? (
+                            <span className="text-emerald-400">{day.liveDuration}h</span>
                           ) : (
-                            <span className="text-slate-500 text-xs">SOP Terpenuhi (Rp 0)</span>
+                            <span className="text-slate-500">0h</span>
                           )}
                         </td>
 
-                        {/* 4. Total Denda (Single line nowrap) */}
-                        <td className="py-2.5 px-3 text-right font-mono whitespace-nowrap">
-                          {hasPenalty ? (
-                            <span className="font-bold text-rose-400">-{formatRupiah(day.totalDayPenalty)}</span>
+                        {/* 4. Upah Harian */}
+                        <td className="py-2.5 px-3 text-right font-mono font-bold whitespace-nowrap">
+                          {day.dayEarnings > 0 ? (
+                            <span className="text-slate-200">{formatRupiah(day.dayEarnings)}</span>
                           ) : (
-                            <span className="text-slate-500">Rp 0</span>
+                            <span className="text-slate-600">Rp 0</span>
                           )}
                         </td>
 
-                        {/* 5. Dispensasi / Aksi */}
+                        {/* 5. Status */}
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {day.isSunday ? (
-                            <span className="text-slate-600 text-xs">-</span>
-                          ) : day.isCompensated ? (
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-cyan-950/40 text-cyan-300 text-[11px] font-medium border border-cyan-500/20">
-                              <span>🔄 Kompensasi</span>
-                              <button
-                                onClick={() => handleToggleDailyExcuse(day)}
-                                className="text-slate-400 hover:text-rose-400 ml-1 font-bold text-xs"
-                                title="Batalkan Kompensasi"
-                              >
-                                ×
-                              </button>
+                            <span className="text-slate-600 text-xs">Libur Minggu</span>
+                          ) : day.liveDuration >= 4.0 ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300 text-[11px] font-medium border border-emerald-500/20">
+                              <span>✅ Penuh 4 Jam</span>
                             </span>
-                          ) : day.isExcused ? (
+                          ) : day.liveDuration > 0 ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300 text-[11px] font-medium border border-amber-500/20">
-                              <span>✅ Izin Bebas Denda</span>
-                              <button
-                                onClick={() => handleToggleDailyExcuse(day)}
-                                className="text-slate-400 hover:text-rose-400 ml-1 font-bold text-xs"
-                                title="Batalkan Izin"
-                              >
-                                ×
-                              </button>
+                              <span>⏱️ {day.liveDuration} Jam</span>
                             </span>
-                          ) : hasPenalty ? (
-                            <div className="inline-flex items-center gap-1">
-                              <button
-                                onClick={() => handleToggleDailyExcuse(day)}
-                                className="px-2 py-0.5 rounded text-[11px] text-amber-400 hover:bg-amber-950/40 hover:text-amber-300 transition-colors"
-                                title="Tandai izin sah via WA agar bebas denda"
-                              >
-                                + Izin
-                              </button>
-                              <span className="text-slate-700">|</span>
-                              <button
-                                onClick={() => handleSetDailyCompensation(day)}
-                                className="px-2 py-0.5 rounded text-[11px] text-cyan-400 hover:bg-cyan-950/40 hover:text-cyan-300 transition-colors"
-                                title="Tandai janji ganti jam live"
-                              >
-                                Kompensasi
-                              </button>
-                            </div>
                           ) : (
-                            <span className="text-slate-600 text-xs">-</span>
+                            <span className="text-slate-500 text-xs">Tidak Ada Sesi</span>
                           )}
                         </td>
                       </tr>
