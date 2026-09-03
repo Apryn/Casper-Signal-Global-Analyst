@@ -95,11 +95,13 @@ export const sendManualReportReminder = async () => {
   const missingStreamersRes = await query(`
     SELECT id, nama, telegram_username, telegram_chat_id 
     FROM streamers 
-    WHERE id NOT IN (
-      SELECT streamer_id 
-      FROM daily_reports 
-      WHERE tanggal = $1 AND raw_message IS NOT NULL
-    )
+    WHERE COALESCE(status, 'active') = 'active'
+      AND COALESCE(is_active, TRUE) = TRUE
+      AND id NOT IN (
+        SELECT streamer_id 
+        FROM daily_reports 
+        WHERE tanggal = $1 AND raw_message IS NOT NULL
+      )
     ORDER BY nama ASC
   `, [dateStr]);
   const missingStreamers = missingStreamersRes.rows;
@@ -179,8 +181,12 @@ export const checkMissingReports = async (wibDateStr) => {
   }
   
   try {
-    // Get all streamers
-    const streamersRes = await query('SELECT id, nama, telegram_username, telegram_chat_id FROM streamers');
+    // Get all active streamers
+    const streamersRes = await query(`
+      SELECT id, nama, telegram_username, telegram_chat_id 
+      FROM streamers 
+      WHERE COALESCE(status, 'active') = 'active' AND COALESCE(is_active, TRUE) = TRUE
+    `);
     const streamers = streamersRes.rows;
 
     for (const streamer of streamers) {
@@ -236,7 +242,11 @@ export const checkMissingReports = async (wibDateStr) => {
  */
 export const checkPerformanceDrops = async () => {
   try {
-    const streamersRes = await query('SELECT id, nama FROM streamers');
+    const streamersRes = await query(`
+      SELECT id, nama 
+      FROM streamers 
+      WHERE COALESCE(status, 'active') = 'active' AND COALESCE(is_active, TRUE) = TRUE
+    `);
     
     for (const streamer of streamersRes.rows) {
       try {
@@ -304,7 +314,11 @@ export const checkTargetAchievements = async () => {
   const startStr = currentMonthStart.toISOString().split('T')[0];
 
   try {
-    const streamersRes = await query('SELECT id, nama FROM streamers');
+    const streamersRes = await query(`
+      SELECT id, nama 
+      FROM streamers 
+      WHERE COALESCE(status, 'active') = 'active' AND COALESCE(is_active, TRUE) = TRUE
+    `);
     
     for (const streamer of streamersRes.rows) {
       try {

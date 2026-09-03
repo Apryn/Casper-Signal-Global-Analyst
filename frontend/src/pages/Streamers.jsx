@@ -11,18 +11,24 @@ import {
   Award,
   Sparkles,
   Search,
-  CheckCircle2
+  CheckCircle2,
+  UserMinus,
+  UserCheck,
+  ShieldCheck,
+  Filter
 } from 'lucide-react';
 
 const Streamers = () => {
   const [streamers, setStreamers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'active' | 'resigned'
+  const [actionNotice, setActionNotice] = useState('');
   
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add'); // 'add' | 'edit'
-  const [currentStreamer, setCurrentStreamer] = useState({ id: '', nama: '', platform: 'TikTok', telegram_username: '' });
+  const [currentStreamer, setCurrentStreamer] = useState({ id: '', nama: '', platform: 'TikTok', telegram_username: '', status: 'active' });
   const [modalError, setModalError] = useState('');
   const [modalSuccess, setModalSuccess] = useState('');
 
@@ -113,7 +119,6 @@ const Streamers = () => {
     }
   };
 
-
   const fetchStreamers = async () => {
     setLoading(true);
     try {
@@ -131,7 +136,7 @@ const Streamers = () => {
   }, []);
 
   const handleOpenAddModal = () => {
-    setCurrentStreamer({ id: '', nama: '', platform: 'TikTok', telegram_username: '' });
+    setCurrentStreamer({ id: '', nama: '', platform: 'TikTok', telegram_username: '', status: 'active' });
     setModalMode('add');
     setModalError('');
     setModalSuccess('');
@@ -139,7 +144,13 @@ const Streamers = () => {
   };
 
   const handleOpenEditModal = (streamer) => {
-    setCurrentStreamer({ id: streamer.id, nama: streamer.nama, platform: streamer.platform, telegram_username: streamer.telegram_username || '' });
+    setCurrentStreamer({ 
+      id: streamer.id, 
+      nama: streamer.nama, 
+      platform: streamer.platform, 
+      telegram_username: streamer.telegram_username || '',
+      status: streamer.status || 'active'
+    });
     setModalMode('edit');
     setModalError('');
     setModalSuccess('');
@@ -175,24 +186,63 @@ const Streamers = () => {
     }
   };
 
-  const handleDelete = async (id, nama) => {
-    if (!window.confirm(`Are you sure you want to delete streamer "${nama}"? This will delete all their historical daily reports!`)) {
+  const handleToggleStatus = async (streamer) => {
+    const isCurrentlyActive = (streamer.status === 'active' || !streamer.status);
+    const targetStatus = isCurrentlyActive ? 'resigned' : 'active';
+    const actionText = isCurrentlyActive 
+      ? `Tandai streamer "${streamer.nama}" sebagai RESIGN?\n\n🛡️ CATATAN PENTING:\nSeluruh riwayat ${streamer.total_reports || 0} laporan harian, log performa, dan data keuangan AKAN TETAP AMAN TERSIMPAN.`
+      : `Aktifkan kembali streamer "${streamer.nama}"?`;
+
+    if (!window.confirm(actionText)) {
       return;
     }
 
     try {
-      await api.delete(`/streamers/${id}`);
+      const res = await api.patch(`/streamers/${streamer.id}/status`, { status: targetStatus });
+      setActionNotice(res.data?.message || `Status streamer berhasil diperbarui ke ${targetStatus}`);
+      setTimeout(() => setActionNotice(''), 5000);
       fetchStreamers();
     } catch (error) {
-      console.error('Failed to delete streamer:', error);
-      alert(error.response?.data?.message || 'Failed to delete streamer');
+      console.error('Failed to update streamer status:', error);
+      alert(error.response?.data?.message || 'Gagal mengubah status streamer');
     }
   };
 
-  const filteredStreamers = streamers.filter(s => 
-    s.nama.toLowerCase().includes(search.toLowerCase()) ||
-    s.platform.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleDelete = async (id, nama, totalReports) => {
+    const promptMsg = `Tandai streamer "${nama}" sebagai Resign?\n\n🛡️ CATATAN PENTING:\nRiwayat ${totalReports || 0} laporan harian & data keuangan TIDAK AKAN DIHAPUS dan tetap aman tersimpan di database.`;
+    
+    if (!window.confirm(promptMsg)) {
+      return;
+    }
+
+    try {
+      const res = await api.delete(`/streamers/${id}`);
+      setActionNotice(res.data?.message || `Streamer "${nama}" berhasil dinonaktifkan (data historis aman).`);
+      setTimeout(() => setActionNotice(''), 5000);
+      fetchStreamers();
+    } catch (error) {
+      console.error('Failed to delete/deactivate streamer:', error);
+      alert(error.response?.data?.message || 'Failed to update streamer');
+    }
+  };
+
+  const counts = {
+    all: streamers.length,
+    active: streamers.filter(s => (s.status === 'active' || !s.status)).length,
+    resigned: streamers.filter(s => s.status === 'resigned' || s.status === 'inactive').length,
+  };
+
+  const filteredStreamers = streamers.filter(s => {
+    const matchesSearch = s.nama.toLowerCase().includes(search.toLowerCase()) ||
+      s.platform.toLowerCase().includes(search.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    const isActive = (s.status === 'active' || !s.status);
+    if (statusFilter === 'active') return isActive;
+    if (statusFilter === 'resigned') return !isActive;
+    return true;
+  });
 
   return (
     <div className="space-y-6">
@@ -201,29 +251,74 @@ const Streamers = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white tracking-wide">Streamer Management</h2>
-          <p className="text-sm text-gray-400">Add, edit, or delete affiliate accounts and view their total metrics logs.</p>
+          <p className="text-sm text-gray-400">Kelola status streamer (Aktif/Resign), akun platform, dan rekap jam live historis.</p>
         </div>
 
         <button
           onClick={handleOpenAddModal}
-          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200"
+          className="flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/10 active:translate-y-px transition-all duration-200 cursor-pointer"
         >
           <Plus className="h-4.5 w-4.5" />
           Add New Streamer
         </button>
       </div>
 
-      {/* Search Input Filter */}
-      <div className="max-w-md">
-        <div className="relative">
-          <Search className="absolute inset-y-0 left-0 pl-3.5 h-full w-4.5 text-gray-500 flex items-center pointer-events-none" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search streamers by name or platform..."
-            className="block w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
-          />
+      {/* Action Notification Banner */}
+      {actionNotice && (
+        <div className="flex items-center gap-3 p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs shadow-lg animate-fade-in">
+          <ShieldCheck className="h-5 w-5 text-emerald-400 shrink-0" />
+          <span>{actionNotice}</span>
+        </div>
+      )}
+
+      {/* Filter and Search Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Status Filter Tabs */}
+        <div className="flex items-center bg-slate-900/80 p-1 rounded-xl border border-dark-border gap-1 text-xs">
+          <button
+            onClick={() => setStatusFilter('all')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              statusFilter === 'all'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            Semua ({counts.all})
+          </button>
+          <button
+            onClick={() => setStatusFilter('active')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              statusFilter === 'active'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-emerald-400 hover:bg-slate-800'
+            }`}
+          >
+            Aktif ({counts.active})
+          </button>
+          <button
+            onClick={() => setStatusFilter('resigned')}
+            className={`px-3 py-1.5 rounded-lg font-medium transition-all ${
+              statusFilter === 'resigned'
+                ? 'bg-rose-600 text-white shadow-sm'
+                : 'text-gray-400 hover:text-rose-400 hover:bg-slate-800'
+            }`}
+          >
+            Resign / Non-Aktif ({counts.resigned})
+          </button>
+        </div>
+
+        {/* Search Input Filter */}
+        <div className="w-full sm:max-w-xs">
+          <div className="relative">
+            <Search className="absolute inset-y-0 left-0 pl-3.5 h-full w-4.5 text-gray-500 flex items-center pointer-events-none" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search streamer..."
+              className="block w-full pl-10 pr-3 py-2 text-sm rounded-xl border border-dark-border bg-slate-900/60 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors"
+            />
+          </div>
         </div>
       </div>
 
@@ -234,81 +329,112 @@ const Streamers = () => {
           <span className="ml-3 text-sm">Loading streamers directory...</span>
         </div>
       ) : filteredStreamers.length === 0 ? (
-        <div className="glass-panel p-12 text-center rounded-2xl text-gray-500">
-          No streamers found in database. Add a streamer to get started.
+        <div className="glass-panel p-12 text-center rounded-2xl text-gray-400 border border-slate-800">
+          Tidak ada streamer yang ditemukan dengan filter yang dipilih.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredStreamers.map((streamer) => (
-            <div
-              key={streamer.id}
-              className="glass-panel p-6 rounded-2xl border flex flex-col justify-between hover:border-indigo-500/20 hover:-translate-y-1 transition-all duration-300 bg-slate-950/20"
-            >
-              <div>
-                {/* Header */}
-                <div className="flex items-start justify-between border-b border-dark-border/40 pb-3 mb-4">
-                  <div>
-                    <h3 className="text-lg font-bold text-white leading-tight">{streamer.nama}</h3>
-                    <span className="inline-block text-[10px] uppercase font-bold text-indigo-400 tracking-wider mt-0.5">
-                      {streamer.platform}
+          {filteredStreamers.map((streamer) => {
+            const isActive = (streamer.status === 'active' || !streamer.status);
+            const isResigned = streamer.status === 'resigned';
+            const isInactive = streamer.status === 'inactive';
+
+            return (
+              <div
+                key={streamer.id}
+                className={`glass-panel p-6 rounded-2xl border flex flex-col justify-between hover:border-indigo-500/30 hover:-translate-y-0.5 transition-all duration-300 ${
+                  !isActive ? 'bg-slate-950/40 opacity-80 border-slate-800/60' : 'bg-slate-950/20 border-slate-800'
+                }`}
+              >
+                <div>
+                  {/* Header */}
+                  <div className="flex items-start justify-between border-b border-dark-border/40 pb-3 mb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-bold text-white leading-tight">{streamer.nama}</h3>
+                      </div>
+                      <span className="inline-block text-[10px] uppercase font-bold text-indigo-400 tracking-wider mt-0.5">
+                        {streamer.platform}
+                      </span>
+                    </div>
+                    
+                    {/* Status Indicator */}
+                    <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full border ${
+                      isActive
+                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                        : isResigned
+                        ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                        : 'bg-slate-500/15 text-slate-400 border-slate-500/30'
+                    }`}>
+                      {isActive ? 'Aktif' : isResigned ? 'Resigned' : 'Non-Aktif'}
                     </span>
                   </div>
-                  
-                  {/* Status Indicator */}
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                    parseInt(streamer.total_reports, 10) > 0
-                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                      : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                  }`}>
-                    {parseInt(streamer.total_reports, 10) > 0 ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
 
-                {/* Statistics counts */}
-                <div className="space-y-2 mb-6">
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>Telegram Handle</span>
-                    <strong className="text-indigo-400 font-semibold">{streamer.telegram_username ? `@${streamer.telegram_username}` : '-'}</strong>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>Reports Ingested</span>
-                    <strong className="text-white font-semibold">{streamer.total_reports} logs</strong>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-400">
-                    <span>Cumulative Duration</span>
-                    <strong className="text-white font-semibold">{parseFloat(streamer.total_live_hours).toFixed(1)} hours</strong>
+                  {/* Statistics counts */}
+                  <div className="space-y-2 mb-6">
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Telegram Handle</span>
+                      <strong className="text-indigo-400 font-semibold">{streamer.telegram_username ? `@${streamer.telegram_username}` : '-'}</strong>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Riwayat Laporan</span>
+                      <strong className="text-white font-semibold">{streamer.total_reports} logs</strong>
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-400">
+                      <span>Total Durasi Live</span>
+                      <strong className="text-white font-semibold">{parseFloat(streamer.total_live_hours).toFixed(1)} jam</strong>
+                    </div>
                   </div>
                 </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center justify-between gap-2 pt-4 border-t border-dark-border/40">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => handleOpenAccountsModal(streamer)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/10 text-gray-300 hover:text-indigo-400 transition-colors"
+                      title="Kelola Akun Medsos"
+                    >
+                      <Users className="h-3 w-3" />
+                      Akun
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditModal(streamer)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/10 text-gray-300 hover:text-indigo-400 transition-colors"
+                      title="Edit Detail Streamer"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      Edit
+                    </button>
+                  </div>
+
+                  {/* Status Toggle / Resign Button */}
+                  <button
+                    onClick={() => handleToggleStatus(streamer)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all ${
+                      isActive
+                        ? 'border-rose-500/30 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20'
+                        : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                    }`}
+                    title={isActive ? 'Tandai streamer sebagai resign (riwayat data tetap aman)' : 'Aktifkan kembali streamer'}
+                  >
+                    {isActive ? (
+                      <>
+                        <UserMinus className="h-3 w-3" />
+                        Tandai Resign
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-3 w-3" />
+                        Aktifkan
+                      </>
+                    )}
+                  </button>
+                </div>
+
               </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-dark-border/40">
-                <button
-                  onClick={() => handleOpenAccountsModal(streamer)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/10 text-gray-300 hover:text-indigo-400 transition-colors"
-                >
-                  <Users className="h-3 w-3" />
-                  Kelola Akun
-                </button>
-                <button
-                  onClick={() => handleOpenEditModal(streamer)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-dark-border hover:border-indigo-500/30 hover:bg-indigo-500/10 text-gray-300 hover:text-indigo-400 transition-colors"
-                >
-                  <Edit2 className="h-3 w-3" />
-                  Edit
-                </button>
-
-                <button
-                  onClick={() => handleDelete(streamer.id, streamer.nama)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg border border-dark-border hover:border-red-500/30 hover:bg-red-500/10 text-gray-300 hover:text-red-400 transition-colors"
-                >
-                  <Trash2 className="h-3 w-3" />
-                  Delete
-                </button>
-              </div>
-
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -381,9 +507,28 @@ const Streamers = () => {
                 />
               </div>
 
+              {modalMode === 'edit' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Status Keaktifan</label>
+                  <select
+                    value={currentStreamer.status || 'active'}
+                    onChange={(e) => setCurrentStreamer({ ...currentStreamer, status: e.target.value })}
+                    className="w-full p-2.5 text-sm rounded-xl border border-dark-border bg-slate-900 text-white focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                  >
+                    <option value="active">Aktif (Active)</option>
+                    <option value="resigned">Resigned (Resign)</option>
+                    <option value="inactive">Non-Aktif (Inactive)</option>
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1.5 flex items-center gap-1">
+                    <ShieldCheck className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    Status Resign tidak menghapus riwayat laporan harian & data keuangan.
+                  </p>
+                </div>
+              )}
+
               <button
                 type="submit"
-                className="w-full mt-4 py-3 rounded-xl font-semibold bg-indigo-600 hover:bg-indigo-500 text-white text-sm tracking-wide transition-colors"
+                className="w-full mt-4 py-3 rounded-xl font-semibold bg-indigo-600 hover:bg-indigo-500 text-white text-sm tracking-wide transition-colors cursor-pointer"
               >
                 {modalMode === 'add' ? 'Create Account' : 'Save Profiles'}
               </button>

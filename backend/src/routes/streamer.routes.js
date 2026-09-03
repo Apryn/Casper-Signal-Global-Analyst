@@ -3,6 +3,7 @@ import {
   getAllStreamers,
   createStreamer,
   updateStreamer,
+  setStreamerStatus,
   deleteStreamer,
 } from '../controllers/streamer.controller.js';
 import { authenticateToken, authorizeRoles } from '../middleware/auth.middleware.js';
@@ -18,6 +19,7 @@ router.get('/', getAllStreamers);
 // Manage list (both roles)
 router.post('/', createStreamer);
 router.put('/:id', updateStreamer);
+router.patch('/:id/status', setStreamerStatus);
 router.delete('/:id', deleteStreamer);
 
 export default router;

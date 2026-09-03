@@ -105,12 +105,19 @@ const Finance = () => {
   const [loading, setLoading] = useState(false);
 
   // Cash Summary & Transactions
+  const getCurrentMonthStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const [cashMonth, setCashMonth] = useState(getCurrentMonthStr());
   const [cashSummary, setCashSummary] = useState({
     total_masuk: 0,
     total_keluar: 0,
     saldo_kas: 0,
     bulan_masuk: 0,
     bulan_keluar: 0,
+    bulan_saldo: 0,
     total_payroll_paid: 0,
   });
   const [transactions, setTransactions] = useState([]);
@@ -203,6 +210,24 @@ const Finance = () => {
   // ==========================================
   // HELPERS
   // ==========================================
+  const formatMonthName = (monthStr) => {
+    if (!monthStr || monthStr === 'All') return 'Semua Periode';
+    const parts = monthStr.split('-');
+    if (parts.length !== 2) return monthStr;
+    const monthNames = [
+      'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+      'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+    ];
+    const mIndex = parseInt(parts[1], 10) - 1;
+    return `${monthNames[mIndex] || parts[1]} ${parts[0]}`;
+  };
+
+  const getPreviousMonthStr = () => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
   const formatRupiah = (val) => {
     const num = parseFloat(val) || 0;
     return new Intl.NumberFormat('id-ID', {
@@ -1062,6 +1087,8 @@ const Finance = () => {
 
     const totalMasukFiltered = filteredTx.filter(t => t.tipe === 'Masuk').reduce((a, b) => a + parseFloat(b.nominal || 0), 0);
     const totalKeluarFiltered = filteredTx.filter(t => t.tipe === 'Keluar').reduce((a, b) => a + parseFloat(b.nominal || 0), 0);
+    const netFlowFiltered = totalMasukFiltered - totalKeluarFiltered;
+    const periodLabel = formatMonthName(cashMonth);
 
     const rowsHtml = filteredTx.map((tx, idx) => {
       const isIncome = tx.tipe === 'Masuk';
@@ -1080,7 +1107,7 @@ const Finance = () => {
                 ? 'background: #dcfce7; color: #166534;' 
                 : 'background: #fee2e2; color: #991b1b;'
             }">
-              ${isIncome ? '🟢 Masuk' : '🔴 Keluar'}
+              ${isIncome ? '🟢 Kas Masuk' : '🔴 Pengeluaran'}
             </span>
           </td>
           <td style="padding: 4.5px 6px; font-size: 8.5px; font-weight: 700; color: #1e293b;">${tx.kategori}</td>
@@ -1096,7 +1123,7 @@ const Finance = () => {
     const html = `
       <html>
         <head>
-          <title>Casper Signal — Buku Arus Uang Kas & Pengeluaran</title>
+          <title>Casper Signal — Laporan Uang Kas & Pengeluaran (${periodLabel})</title>
           <style>
             * { box-sizing: border-box; }
             body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; color: #1e293b; padding: 12px 16px; margin: 0; line-height: 1.3; }
@@ -1104,10 +1131,10 @@ const Finance = () => {
             .title { font-size: 13px; font-weight: 800; color: #0f172a; text-transform: uppercase; margin: 0; }
             .subtitle { font-size: 8.5px; color: #64748b; margin-top: 1px; }
             .meta { font-size: 8.5px; color: #475569; text-align: right; line-height: 1.35; }
-            .summary-bar { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 12px; margin-bottom: 8px; }
+            .summary-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; padding: 6px 10px; margin-bottom: 8px; }
             .summary-item { text-align: left; }
             .summary-label { font-size: 7.5px; text-transform: uppercase; color: #64748b; font-weight: 700; }
-            .summary-value { font-size: 11px; font-weight: 800; color: #0f172a; margin-top: 1px; }
+            .summary-value { font-size: 10.5px; font-weight: 800; color: #0f172a; margin-top: 1px; }
             table { width: 100%; border-collapse: collapse; margin-top: 2px; }
             th { background: #f1f5f9; padding: 4px 6px; font-weight: 700; border-bottom: 1.5px solid #94a3b8; text-align: left; text-transform: uppercase; font-size: 7.5px; color: #334155; }
             @media print {
@@ -1119,27 +1146,33 @@ const Finance = () => {
         <body>
           <div class="header-bar">
             <div>
-              <h1 class="title">Casper Signal — Buku Arus Uang Kas &amp; Pengeluaran</h1>
-              <div class="subtitle">Laporan Mutasi Petty Cash, Pemasukan Bos &amp; Pengeluaran Operasional</div>
+              <h1 class="title">Casper Signal — Laporan Uang Kas &amp; Pengeluaran</h1>
+              <div class="subtitle">Periode: <strong>${periodLabel}</strong> • Mutasi Petty Cash &amp; Pengeluaran Operasional</div>
             </div>
             <div class="meta">
               <strong>Tgl Cetak:</strong> ${todayStr}<br/>
-              <strong>Filter:</strong> ${cashFilterType === 'All' ? 'Semua Transaksi' : cashFilterType === 'Masuk' ? 'Hanya Kas Masuk' : 'Hanya Pengeluaran'} (${filteredTx.length} data)
+              <strong>Filter:</strong> ${cashFilterType === 'All' ? 'Semua Transaksi' : cashFilterType === 'Masuk' ? 'Hanya Kas Masuk' : 'Hanya Pengeluaran'} (${filteredTx.length} baris)
             </div>
           </div>
 
           <div class="summary-bar">
             <div class="summary-item">
-              <div class="summary-label">Saldo Kas Terkini</div>
-              <div class="summary-value" style="color: ${cashSummary.saldo_kas < 0 ? '#991b1b' : '#166534'};">${formatRupiah(cashSummary.saldo_kas)}</div>
+              <div class="summary-label">Kas Masuk (${periodLabel})</div>
+              <div class="summary-value" style="color: #166534;">${formatRupiah(totalMasukFiltered)}</div>
             </div>
             <div class="summary-item">
-              <div class="summary-label">Total Kas Masuk</div>
-              <div class="summary-value" style="color: #166534;">${formatRupiah(cashSummary.total_masuk)}</div>
+              <div class="summary-label">Pengeluaran (${periodLabel})</div>
+              <div class="summary-value" style="color: #991b1b;">${formatRupiah(totalKeluarFiltered)}</div>
             </div>
             <div class="summary-item">
-              <div class="summary-label">Total Pengeluaran</div>
-              <div class="summary-value" style="color: #991b1b;">${formatRupiah(cashSummary.total_keluar)}</div>
+              <div class="summary-label">Arus Bersih (${periodLabel})</div>
+              <div class="summary-value" style="color: ${netFlowFiltered >= 0 ? '#166534' : '#991b1b'};">
+                ${netFlowFiltered >= 0 ? '+' : ''}${formatRupiah(netFlowFiltered)}
+              </div>
+            </div>
+            <div class="summary-item">
+              <div class="summary-label">Saldo Akumulasi Kas</div>
+              <div class="summary-value" style="color: ${cashSummary.saldo_kas < 0 ? '#991b1b' : '#0f172a'};">${formatRupiah(cashSummary.saldo_kas)}</div>
             </div>
           </div>
 
@@ -1148,7 +1181,7 @@ const Finance = () => {
               <tr>
                 <th style="text-align: center; width: 22px;">No</th>
                 <th style="width: 75px;">Tanggal</th>
-                <th style="text-align: center; width: 90px;">Tipe</th>
+                <th style="text-align: center; width: 95px;">Tipe</th>
                 <th>Kategori</th>
                 <th>Keterangan</th>
                 <th style="width: 85px;">Pencatat</th>
@@ -1159,20 +1192,20 @@ const Finance = () => {
               ${filteredTx.length === 0 ? `
                 <tr>
                   <td colspan="7" style="text-align: center; padding: 15px; color: #94a3b8; font-style: italic;">
-                    Tidak ada catatan transaksi uang kas sesuai filter.
+                    Tidak ada catatan transaksi uang kas untuk periode ${periodLabel}.
                   </td>
                 </tr>
               ` : rowsHtml}
             </tbody>
             <tfoot>
               <tr style="background: #f8fafc; font-weight: 800; border-top: 1.5px solid #0f172a;">
-                <td colspan="3" style="padding: 5px; font-size: 8.5px; text-transform: uppercase;">TOTAL TAMPIL</td>
+                <td colspan="3" style="padding: 5px; font-size: 8.5px; text-transform: uppercase;">TOTAL PERIODE INI</td>
                 <td colspan="3" style="padding: 5px; font-size: 8px; color: #64748b;">
                   Masuk: <strong style="color: #166534;">+${formatRupiah(totalMasukFiltered)}</strong> | 
                   Keluar: <strong style="color: #991b1b;">-${formatRupiah(totalKeluarFiltered)}</strong>
                 </td>
                 <td style="text-align: right; padding: 5px; font-size: 9.5px; color: #0f172a; background: #e2e8f0;">
-                  ${formatRupiah(totalMasukFiltered - totalKeluarFiltered)}
+                  ${formatRupiah(netFlowFiltered)}
                 </td>
               </tr>
             </tfoot>
@@ -1228,8 +1261,8 @@ const Finance = () => {
       await Promise.all([
         fetchFinanceRules(),
         fetchPenaltyAudit(),
-        fetchCashSummary(),
-        fetchTransactions(),
+        fetchCashSummary(cashMonth),
+        fetchTransactions(cashMonth, cashFilterType, cashSearch),
         fetchProfiles(),
         fetchPeriods(),
       ]);
@@ -1240,21 +1273,24 @@ const Finance = () => {
     }
   };
 
-  const fetchCashSummary = async () => {
+  const fetchCashSummary = async (targetMonth = cashMonth) => {
     try {
-      const res = await api.get('/finance/cash/summary');
+      const res = await api.get('/finance/cash/summary', {
+        params: { month: targetMonth },
+      });
       setCashSummary(res.data);
     } catch (err) {
       console.error('Error fetching cash summary:', err);
     }
   };
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = async (targetMonth = cashMonth, targetType = cashFilterType, targetSearch = cashSearch) => {
     try {
       const res = await api.get('/finance/cash/transactions', {
         params: {
-          tipe: cashFilterType,
-          search: cashSearch,
+          tipe: targetType,
+          search: targetSearch,
+          month: targetMonth,
         },
       });
       setTransactions(res.data);
@@ -1355,9 +1391,10 @@ const Finance = () => {
 
   useEffect(() => {
     if (isUnlocked) {
-      fetchTransactions();
+      fetchTransactions(cashMonth, cashFilterType, cashSearch);
+      fetchCashSummary(cashMonth);
     }
-  }, [cashFilterType, cashSearch]);
+  }, [cashFilterType, cashSearch, cashMonth, isUnlocked]);
 
   useEffect(() => {
     if (selectedPeriodId && isUnlocked) {
@@ -1394,8 +1431,8 @@ const Finance = () => {
         nominal: cleanNominal,
       });
       setShowCashModal(false);
-      fetchTransactions();
-      fetchCashSummary();
+      fetchTransactions(cashMonth, cashFilterType, cashSearch);
+      fetchCashSummary(cashMonth);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menyimpan transaksi kas');
     }
@@ -1405,8 +1442,8 @@ const Finance = () => {
     if (!window.confirm('Yakin ingin menghapus catatan transaksi ini?')) return;
     try {
       await api.delete(`/finance/cash/transactions/${id}`);
-      fetchTransactions();
-      fetchCashSummary();
+      fetchTransactions(cashMonth, cashFilterType, cashSearch);
+      fetchCashSummary(cashMonth);
     } catch (err) {
       alert(err.response?.data?.message || 'Gagal menghapus transaksi');
     }
@@ -2862,9 +2899,55 @@ const Finance = () => {
           ============================================================ */}
       {activeTab === 'cash' && (
         <div className="space-y-6">
-          {/* Action Bar */}
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
-            <div className="flex items-center gap-2 flex-wrap">
+          {/* Action & Filter Bar */}
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-dark-card border-2 border-black rounded-2xl p-4 shadow-tactile-sm">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Month Filter Picker */}
+              <div className="flex items-center gap-1.5 bg-dark-panel border-2 border-black rounded-xl px-3 py-1.5 shadow-inset-screen">
+                <Calendar className="h-4 w-4 text-indigo-400 shrink-0" />
+                <span className="text-[10px] font-extrabold uppercase text-slate-400">Bulan:</span>
+                <input
+                  type="month"
+                  value={cashMonth === 'All' ? '' : cashMonth}
+                  onChange={(e) => setCashMonth(e.target.value || 'All')}
+                  className="bg-transparent text-white font-black text-xs focus:outline-none cursor-pointer"
+                />
+              </div>
+
+              {/* Quick Month Presets */}
+              <div className="flex items-center bg-dark-panel border-2 border-black rounded-xl p-1 shadow-inset-screen text-xs">
+                <button
+                  onClick={() => setCashMonth(getCurrentMonthStr())}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all ${
+                    cashMonth === getCurrentMonthStr()
+                      ? 'bg-indigo-600 text-white shadow-tactile-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Bulan Ini
+                </button>
+                <button
+                  onClick={() => setCashMonth(getPreviousMonthStr())}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all ${
+                    cashMonth === getPreviousMonthStr()
+                      ? 'bg-indigo-600 text-white shadow-tactile-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Bulan Lalu
+                </button>
+                <button
+                  onClick={() => setCashMonth('All')}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold transition-all ${
+                    cashMonth === 'All'
+                      ? 'bg-indigo-600 text-white shadow-tactile-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Semua
+                </button>
+              </div>
+
               {/* Type Filter */}
               <div className="flex items-center bg-dark-panel border-2 border-black rounded-xl p-1 shadow-inset-screen">
                 {['All', 'Masuk', 'Keluar'].map((t) => (
@@ -2876,7 +2959,7 @@ const Finance = () => {
                       : 'text-slate-400 hover:text-white'
                       }`}
                   >
-                    {t === 'All' ? 'Semua' : t === 'Masuk' ? '🟢 Kas Masuk' : '🔴 Pengeluaran'}
+                    {t === 'All' ? 'Semua Tipe' : t === 'Masuk' ? '🟢 Kas Masuk' : '🔴 Pengeluaran'}
                   </button>
                 ))}
               </div>
@@ -2888,37 +2971,67 @@ const Finance = () => {
                   placeholder="Cari keterangan / kategori..."
                   value={cashSearch}
                   onChange={(e) => setCashSearch(e.target.value)}
-                  className="bg-dark-panel border-2 border-black rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inset-screen w-52"
+                  className="bg-dark-panel border-2 border-black rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 shadow-inset-screen w-48"
                 />
                 <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-500" />
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={handleExportCashPdf}
-                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-indigo-300 bg-indigo-950/40 border-2 border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-sm transition-all"
-                title="Cetak / Download Laporan PDF Arus Uang Kas"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-indigo-300 bg-indigo-950/40 border-2 border-indigo-500/40 hover:bg-indigo-600 hover:text-white shadow-tactile-sm transition-all cursor-pointer"
+                title="Cetak / Download Laporan PDF Arus Uang Kas Bulan Ini"
               >
                 <Printer className="h-4 w-4" />
-                <span>Cetak / Export PDF</span>
+                <span>Cetak Laporan Bulanan</span>
               </button>
 
               <button
                 onClick={() => handleOpenCashModal('Masuk')}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-emerald-300 bg-emerald-950/40 border-2 border-emerald-500/40 hover:bg-emerald-500 hover:text-black shadow-tactile-sm transition-all"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-emerald-300 bg-emerald-950/40 border-2 border-emerald-500/40 hover:bg-emerald-500 hover:text-black shadow-tactile-sm transition-all cursor-pointer"
               >
                 <ArrowDownLeft className="h-4 w-4" />
-                <span>+ Catat Kas Masuk (Bos)</span>
+                <span>+ Kas Masuk (Bos)</span>
               </button>
 
               <button
                 onClick={() => handleOpenCashModal('Keluar')}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-rose-300 bg-rose-950/40 border-2 border-rose-500/40 hover:bg-rose-500 hover:text-black shadow-tactile-sm transition-all"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-extrabold text-rose-300 bg-rose-950/40 border-2 border-rose-500/40 hover:bg-rose-500 hover:text-black shadow-tactile-sm transition-all cursor-pointer"
               >
                 <ArrowUpRight className="h-4 w-4" />
-                <span>+ Catat Pengeluaran</span>
+                <span>+ Pengeluaran</span>
               </button>
+            </div>
+          </div>
+
+          {/* Monthly Mini Stats Card Banner */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-dark-panel/60 border-2 border-black rounded-2xl p-4 shadow-inset-screen">
+            <div className="p-3 bg-dark-card border border-slate-800 rounded-xl">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Periode Terpilih</div>
+              <div className="text-sm font-extrabold text-indigo-400 mt-0.5 truncate">
+                {formatMonthName(cashMonth)}
+              </div>
+            </div>
+            <div className="p-3 bg-dark-card border border-slate-800 rounded-xl">
+              <div className="text-[10px] uppercase font-bold text-emerald-400">Kas Masuk Periode</div>
+              <div className="text-sm font-black text-emerald-400 mt-0.5">
+                +{formatRupiah(cashSummary.bulan_masuk)}
+              </div>
+            </div>
+            <div className="p-3 bg-dark-card border border-slate-800 rounded-xl">
+              <div className="text-[10px] uppercase font-bold text-rose-400">Pengeluaran Periode</div>
+              <div className="text-sm font-black text-rose-400 mt-0.5">
+                -{formatRupiah(cashSummary.bulan_keluar)}
+              </div>
+            </div>
+            <div className="p-3 bg-dark-card border border-slate-800 rounded-xl">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Arus Bersih Periode</div>
+              <div className={`text-sm font-black mt-0.5 ${
+                (cashSummary.bulan_saldo || 0) >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}>
+                {(cashSummary.bulan_saldo || 0) >= 0 ? '+' : ''}{formatRupiah(cashSummary.bulan_saldo || 0)}
+              </div>
             </div>
           </div>
 

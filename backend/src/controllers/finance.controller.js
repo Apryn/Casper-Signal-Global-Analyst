@@ -703,6 +703,8 @@ export const deletePeriod = async (req, res) => {
 
 export const getCashSummary = async (req, res) => {
   try {
+    const { month } = req.query;
+
     const summaryRes = await pool.query(`
       SELECT 
         COALESCE(SUM(CASE WHEN tipe = 'Masuk' THEN nominal ELSE 0 END), 0)::numeric as total_masuk,
@@ -714,12 +716,18 @@ export const getCashSummary = async (req, res) => {
       FROM cash_transactions
     `);
 
-    // Get current month total expenses
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    // Target month for monthly metrics
+    let targetMonth = month;
+    if (!targetMonth || targetMonth === 'All') {
+      const now = new Date();
+      targetMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    }
 
-    const currentMonthRes = await pool.query(`
+    const [tYear, tMonth] = targetMonth.split('-').map(n => parseInt(n, 10));
+    const startOfMonth = new Date(Date.UTC(tYear, tMonth - 1, 1)).toISOString().split('T')[0];
+    const endOfMonth = new Date(Date.UTC(tYear, tMonth, 0)).toISOString().split('T')[0];
+
+    const monthRes = await pool.query(`
       SELECT 
         COALESCE(SUM(CASE WHEN tipe = 'Masuk' THEN nominal ELSE 0 END), 0)::numeric as bulan_masuk,
         COALESCE(SUM(CASE WHEN tipe = 'Keluar' THEN nominal ELSE 0 END), 0)::numeric as bulan_keluar
@@ -738,8 +746,10 @@ export const getCashSummary = async (req, res) => {
       total_masuk: summaryRes.rows[0].total_masuk,
       total_keluar: summaryRes.rows[0].total_keluar,
       saldo_kas: summaryRes.rows[0].saldo_kas,
-      bulan_masuk: currentMonthRes.rows[0].bulan_masuk,
-      bulan_keluar: currentMonthRes.rows[0].bulan_keluar,
+      selected_month: targetMonth,
+      bulan_masuk: monthRes.rows[0].bulan_masuk,
+      bulan_keluar: monthRes.rows[0].bulan_keluar,
+      bulan_saldo: parseFloat(monthRes.rows[0].bulan_masuk) - parseFloat(monthRes.rows[0].bulan_keluar),
       total_payroll_paid: totalPayrollRes.rows[0].total_payroll_paid
     });
   } catch (err) {
@@ -750,7 +760,7 @@ export const getCashSummary = async (req, res) => {
 
 export const getTransactions = async (req, res) => {
   try {
-    const { tipe, kategori, search, limit = 100 } = req.query;
+    const { tipe, kategori, search, month, limit = 500 } = req.query;
     let query = `SELECT * FROM cash_transactions WHERE 1=1`;
     const params = [];
 
@@ -764,9 +774,14 @@ export const getTransactions = async (req, res) => {
       query += ` AND kategori = $${params.length}`;
     }
 
+    if (month && month !== 'All') {
+      params.push(month);
+      query += ` AND TO_CHAR(tanggal, 'YYYY-MM') = $${params.length}`;
+    }
+
     if (search && search.trim() !== '') {
       params.push(`%${search.trim()}%`);
-      query += ` AND (keterangan ILIKE $${params.length} OR kategori ILIKE $${params.length})`;
+      query += ` AND (keterangan ILIKE $${params.length} OR kategori ILIKE $${params.length} OR created_by ILIKE $${params.length})`;
     }
 
     query += ` ORDER BY tanggal DESC, id DESC LIMIT $${params.length + 1}`;
