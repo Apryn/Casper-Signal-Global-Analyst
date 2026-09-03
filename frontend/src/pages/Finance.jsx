@@ -662,7 +662,7 @@ const Finance = () => {
     text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (Gaji Bulanan Full)\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `⏱️ *Total Jam Live Valid:* ${s.totalLiveDuration} Jam (Max 4 Jam/Hari)\n`;
-    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam\n`;
+    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam (Maks. Plafon Rp 3.000.000)\n`;
     text += `💰 *Gaji Jam Live:* ${formatRupiah(s.totalEarnedSalary || s.baseSalary)}\n`;
     
     if (s.signalCutAmount > 0) {
