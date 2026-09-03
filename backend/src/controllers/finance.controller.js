@@ -481,7 +481,9 @@ export const syncAuditToPeriod = async (req, res) => {
         ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
         LIMIT 1
       ) p ON true
-      WHERE p.is_active IS TRUE OR p.is_active IS NULL
+      WHERE COALESCE(s.status, 'active') = 'active'
+        AND COALESCE(s.is_active, TRUE) = TRUE
+        AND (p.is_active IS TRUE OR p.is_active IS NULL)
       ORDER BY s.nama ASC
     `);
 
@@ -975,7 +977,9 @@ export const getPenaltyAudit = async (req, res) => {
         ORDER BY CASE WHEN p.streamer_id = s.id THEN 0 ELSE 1 END, p.id ASC
         LIMIT 1
       ) p ON true
-      WHERE p.is_active IS TRUE OR p.is_active IS NULL
+      WHERE COALESCE(s.status, 'active') = 'active'
+        AND COALESCE(s.is_active, TRUE) = TRUE
+        AND (p.is_active IS TRUE OR p.is_active IS NULL)
       ORDER BY s.nama ASC
     `);
 
