@@ -1,17 +1,21 @@
 import { query } from '../config/db.js';
 
 export const getAllStreamers = async (req, res) => {
+  const { all } = req.query;
   try {
+    let whereClause = "WHERE COALESCE(s.status, 'active') = 'active' AND COALESCE(s.is_active, TRUE) = TRUE";
+    if (all === 'true') {
+      whereClause = "";
+    }
     const result = await query(
       `SELECT s.*, 
        COALESCE(COUNT(r.id), 0) as total_reports,
        COALESCE(SUM(r.live_duration), 0) as total_live_hours
        FROM streamers s
        LEFT JOIN daily_reports r ON s.id = r.streamer_id
+       ${whereClause}
        GROUP BY s.id
-       ORDER BY 
-         CASE WHEN COALESCE(s.status, 'active') = 'active' THEN 1 ELSE 2 END,
-         s.nama ASC`
+       ORDER BY s.nama ASC`
     );
     res.json(result.rows);
   } catch (error) {
