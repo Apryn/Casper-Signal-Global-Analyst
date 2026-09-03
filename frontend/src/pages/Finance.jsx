@@ -67,13 +67,56 @@ const Finance = () => {
   // Copy feedback state
   const [copiedKey, setCopiedKey] = useState(null);
 
+  // Date & Period Helpers
+  const getCurrentMonthStr = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+
+  const getLastDayOfMonth = (yearMonth) => {
+    if (!yearMonth) {
+      const d = new Date();
+      yearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+    const [y, m] = yearMonth.split('-').map(Number);
+    const lastDay = new Date(y, m, 0).getDate();
+    return `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
+  };
+
+  const getDatesForPeriod = (yearMonth, pType) => {
+    if (pType === '15th') {
+      return { start: `${yearMonth}-01`, end: `${yearMonth}-15` };
+    } else if (pType === '1st') {
+      return { start: `${yearMonth}-16`, end: getLastDayOfMonth(yearMonth) };
+    } else if (pType === 'full') {
+      return { start: `${yearMonth}-01`, end: getLastDayOfMonth(yearMonth) };
+    }
+    return { start: `${yearMonth}-01`, end: `${yearMonth}-15` };
+  };
+
+  const getInitialAuditConfig = () => {
+    const d = new Date();
+    const currentYearMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const day = d.getDate();
+    // In day 1-15, default to '15th' (Termin 1: 1-15). In day 16+, default to '1st' (Termin 2: 16-akhir).
+    const defaultPeriodType = day <= 15 ? '15th' : '1st';
+    const dates = getDatesForPeriod(currentYearMonth, defaultPeriodType);
+    return {
+      month: currentYearMonth,
+      type: defaultPeriodType,
+      start: dates.start,
+      end: dates.end,
+    };
+  };
+
   // ==========================================
   // AUTOMATED SALARY & PENALTY AUDIT STATES
   // ==========================================
-  const [auditPeriodType, setAuditPeriodType] = useState('1st'); // '15th' | '1st' | 'full' | 'custom'
-  const [auditMonth, setAuditMonth] = useState('2026-08');
-  const [auditStartDate, setAuditStartDate] = useState('2026-08-16');
-  const [auditEndDate, setAuditEndDate] = useState('2026-08-31');
+  const initialAudit = getInitialAuditConfig();
+  const [auditPeriodType, setAuditPeriodType] = useState(initialAudit.type); // '15th' | '1st' | 'full' | 'custom'
+  const [auditMonth, setAuditMonth] = useState(initialAudit.month);
+  const [auditStartDate, setAuditStartDate] = useState(initialAudit.start);
+  const [auditEndDate, setAuditEndDate] = useState(initialAudit.end);
   const [auditData, setAuditData] = useState(null);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditSearch, setAuditSearch] = useState('');
@@ -105,11 +148,6 @@ const Finance = () => {
   const [loading, setLoading] = useState(false);
 
   // Cash Summary & Transactions
-  const getCurrentMonthStr = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-  };
-
   const [cashMonth, setCashMonth] = useState(getCurrentMonthStr());
   const [cashSummary, setCashSummary] = useState({
     total_masuk: 0,
@@ -363,24 +401,6 @@ const Finance = () => {
   // ==========================================
   // DATA FETCHING
   // ==========================================
-  const getLastDayOfMonth = (yearMonth) => {
-    if (!yearMonth) return '2026-08-31';
-    const [y, m] = yearMonth.split('-').map(Number);
-    const lastDay = new Date(y, m, 0).getDate();
-    return `${yearMonth}-${String(lastDay).padStart(2, '0')}`;
-  };
-
-  const getDatesForPeriod = (yearMonth, pType) => {
-    if (pType === '15th') {
-      return { start: `${yearMonth}-01`, end: `${yearMonth}-15` };
-    } else if (pType === '1st') {
-      return { start: `${yearMonth}-16`, end: getLastDayOfMonth(yearMonth) };
-    } else if (pType === 'full') {
-      return { start: `${yearMonth}-01`, end: getLastDayOfMonth(yearMonth) };
-    }
-    return { start: `${yearMonth}-01`, end: `${yearMonth}-15` };
-  };
-
   const fetchPenaltyAudit = async (start = auditStartDate, end = auditEndDate, pType = auditPeriodType) => {
     setAuditLoading(true);
     try {
