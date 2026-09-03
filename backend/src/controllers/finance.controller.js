@@ -826,6 +826,39 @@ export const createTransaction = async (req, res) => {
   }
 };
 
+export const updateTransaction = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { tanggal, tipe, kategori, nominal, keterangan } = req.body;
+
+    if (!tanggal || !tipe || nominal === undefined || nominal === null || nominal === '') {
+      return res.status(400).json({ message: 'Tanggal, tipe, dan nominal wajib diisi' });
+    }
+
+    const cleanNominal = String(nominal).replace(/[^0-9]/g, '');
+    const numNominal = parseFloat(cleanNominal);
+    if (isNaN(numNominal) || numNominal <= 0) {
+      return res.status(400).json({ message: 'Nominal harus angka positif' });
+    }
+
+    const result = await pool.query(`
+      UPDATE cash_transactions
+      SET tanggal = $1, tipe = $2, kategori = $3, nominal = $4, keterangan = $5
+      WHERE id = $6
+      RETURNING *
+    `, [tanggal, tipe, kategori || 'Operasional', numNominal, keterangan || '', id]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Transaksi tidak ditemukan' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('[Finance updateTransaction] Error:', err);
+    res.status(500).json({ message: 'Gagal memperbarui transaksi kas' });
+  }
+};
+
 export const deleteTransaction = async (req, res) => {
   try {
     const { id } = req.params;

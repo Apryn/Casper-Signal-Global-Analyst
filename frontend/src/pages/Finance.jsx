@@ -1405,15 +1405,28 @@ const Finance = () => {
   // ==========================================
   // CASH TRANSACTIONS HANDLERS
   // ==========================================
-  const handleOpenCashModal = (type) => {
-    setCashModalType(type);
-    setCashForm({
-      tanggal: new Date().toISOString().split('T')[0],
-      tipe: type,
-      kategori: type === 'Masuk' ? 'Suntikan Kas Bos' : 'Operasional',
-      nominal: '',
-      keterangan: '',
-    });
+  const handleOpenCashModal = (type, tx = null) => {
+    if (tx) {
+      setCashModalType(tx.tipe);
+      setCashForm({
+        id: tx.id,
+        tanggal: new Date(tx.tanggal).toISOString().split('T')[0],
+        tipe: tx.tipe,
+        kategori: tx.kategori || (tx.tipe === 'Masuk' ? 'Suntikan Kas Bos' : 'Operasional'),
+        nominal: formatInputNominal(String(tx.nominal || '')),
+        keterangan: tx.keterangan || '',
+      });
+    } else {
+      setCashModalType(type);
+      setCashForm({
+        id: null,
+        tanggal: new Date().toISOString().split('T')[0],
+        tipe: type,
+        kategori: type === 'Masuk' ? 'Suntikan Kas Bos' : 'Operasional',
+        nominal: '',
+        keterangan: '',
+      });
+    }
     setShowCashModal(true);
   };
 
@@ -1426,10 +1439,17 @@ const Finance = () => {
     }
 
     try {
-      await api.post('/finance/cash/transactions', {
-        ...cashForm,
-        nominal: cleanNominal,
-      });
+      if (cashForm.id) {
+        await api.put(`/finance/cash/transactions/${cashForm.id}`, {
+          ...cashForm,
+          nominal: cleanNominal,
+        });
+      } else {
+        await api.post('/finance/cash/transactions', {
+          ...cashForm,
+          nominal: cleanNominal,
+        });
+      }
       setShowCashModal(false);
       fetchTransactions(cashMonth, cashFilterType, cashSearch);
       fetchCashSummary(cashMonth);
@@ -3103,12 +3123,22 @@ const Finance = () => {
                             {tx.created_by || 'Admin'}
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <button
-                              onClick={() => handleDeleteTransaction(tx.id)}
-                              className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-rose-950/20 transition-all"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenCashModal(tx.tipe, tx)}
+                                className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-slate-400 hover:text-amber-400 hover:bg-amber-950/20 transition-all cursor-pointer"
+                                title="Edit Transaksi Kas"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTransaction(tx.id)}
+                                className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-slate-400 hover:text-rose-400 hover:bg-rose-950/20 transition-all cursor-pointer"
+                                title="Hapus Transaksi"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -3599,13 +3629,18 @@ const Finance = () => {
         </div>
       )}
 
-      {/* MODAL 2: CATAT KAS MASUK / PENGELUARAN */}
+      {/* MODAL 2: CATAT / EDIT KAS MASUK / PENGELUARAN */}
       {showCashModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-md bg-dark-card border-3 border-black rounded-2xl p-6 shadow-tactile-lg relative">
             <div className="flex justify-between items-center pb-3 border-b-2 border-black mb-4">
               <h3 className="text-sm font-extrabold text-white uppercase tracking-wide flex items-center gap-2">
-                {cashModalType === 'Masuk' ? (
+                {cashForm.id ? (
+                  <>
+                    <Edit3 className="h-4 w-4 text-amber-400" />
+                    <span>Edit Transaksi Kas ({cashModalType === 'Masuk' ? '🟢 Kas Masuk' : '🔴 Pengeluaran'})</span>
+                  </>
+                ) : cashModalType === 'Masuk' ? (
                   <>
                     <ArrowDownLeft className="h-4 w-4 text-emerald-400" />
                     <span>Catat Uang Kas Masuk (Dari Bos)</span>
@@ -3619,13 +3654,37 @@ const Finance = () => {
               </h3>
               <button
                 onClick={() => setShowCashModal(false)}
-                className="text-slate-400 hover:text-white"
+                className="text-slate-400 hover:text-white cursor-pointer"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleSaveCashTransaction} className="space-y-4">
+              {cashForm.id && (
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
+                    Tipe Transaksi
+                  </label>
+                  <select
+                    value={cashForm.tipe}
+                    onChange={(e) => {
+                      const newType = e.target.value;
+                      setCashModalType(newType);
+                      setCashForm({
+                        ...cashForm,
+                        tipe: newType,
+                        kategori: newType === 'Masuk' ? 'Suntikan Kas Bos' : 'Operasional',
+                      });
+                    }}
+                    className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-bold text-white focus:outline-none focus:border-indigo-500 shadow-inset-screen"
+                  >
+                    <option value="Masuk">🟢 Kas Masuk (Dari Bos / Kasbon / Lainnya)</option>
+                    <option value="Keluar">🔴 Pengeluaran Operasional</option>
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
                   Tanggal
@@ -3699,18 +3758,21 @@ const Finance = () => {
                 <button
                   type="button"
                   onClick={() => setShowCashModal(false)}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 bg-dark-panel border-2 border-black hover:bg-slate-800"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-slate-300 bg-dark-panel border-2 border-black hover:bg-slate-800 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className={`px-5 py-2 rounded-xl text-xs font-extrabold text-black border-2 border-black shadow-tactile-sm transition-all ${cashModalType === 'Masuk'
-                    ? 'bg-emerald-400 hover:bg-emerald-300'
-                    : 'bg-rose-400 hover:bg-rose-300'
-                    }`}
+                  className={`px-5 py-2 rounded-xl text-xs font-extrabold text-black border-2 border-black shadow-tactile-sm transition-all cursor-pointer ${
+                    cashForm.id
+                      ? 'bg-amber-400 hover:bg-amber-300'
+                      : cashModalType === 'Masuk'
+                      ? 'bg-emerald-400 hover:bg-emerald-300'
+                      : 'bg-rose-400 hover:bg-rose-300'
+                  }`}
                 >
-                  Simpan Transaksi
+                  {cashForm.id ? 'Simpan Perubahan' : 'Simpan Transaksi'}
                 </button>
               </div>
             </form>

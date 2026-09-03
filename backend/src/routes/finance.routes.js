@@ -16,6 +16,7 @@ import {
   getCashSummary,
   getTransactions,
   createTransaction,
+  updateTransaction,
   deleteTransaction,
   getPenaltyAudit,
   saveSalaryAdjustment,
@@ -66,6 +67,7 @@ router.post('/periods/bulk-status', bulkUpdateStatus);
 router.get('/cash/summary', getCashSummary);
 router.get('/cash/transactions', getTransactions);
 router.post('/cash/transactions', createTransaction);
+router.put('/cash/transactions/:id', updateTransaction);
 router.delete('/cash/transactions/:id', deleteTransaction);
 
 export default router;
