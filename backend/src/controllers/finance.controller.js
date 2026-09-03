@@ -538,7 +538,7 @@ export const syncAuditToPeriod = async (req, res) => {
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
       let baseSalary = periodType === '15th' ? parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000) : parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
-      let hourlyRate = periodType === '15th' ? (rules.hourlyRate15th || 20000) : (rules.hourlyRateMonthEnd || 40000);
+      let hourlyRate = rules.hourlyRate || 30000;
 
       let totalRawLiveDuration = 0;
       let totalValidLiveHours = 0;
@@ -558,21 +558,28 @@ export const syncAuditToPeriod = async (req, res) => {
       const earnedFromHours = Math.min(baseSalary, Math.round(totalValidLiveHours * hourlyRate));
       const totalEarnedSalary = Math.round(earnedFromHours / 1000) * 1000;
 
+      const isMonthEndOrFull = periodType === '1st' || periodType === 'full';
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
       const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
-      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+      const rawSignalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+      const rawCustomDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
       const customBonus = Math.round(parseFloat(adj.custom_bonus || 0) / 1000) * 1000;
-      const customDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
 
+      // Potongan hanya dieksekusi di akhir bulan
+      const signalCutAmount = isMonthEndOrFull ? rawSignalCutAmount : 0;
+      const customDeduction = isMonthEndOrFull ? rawCustomDeduction : 0;
       const totalDeductions = signalCutAmount + customDeduction;
       const netSalary = Math.max(0, totalEarnedSalary + customBonus - totalDeductions);
 
       // Build readable notes
       const noteParts = [];
-      noteParts.push(`Live Valid: ${totalValidLiveHours.toFixed(1)}h × Rp ${hourlyRate.toLocaleString('id-ID')}/h = Rp ${totalEarnedSalary.toLocaleString('id-ID')}`);
+      noteParts.push(`Live: ${totalValidLiveHours.toFixed(1)}h × Rp ${hourlyRate.toLocaleString('id-ID')}/h = Rp ${totalEarnedSalary.toLocaleString('id-ID')}`);
       if (signalCutAmount > 0) noteParts.push(`Potong Sinyal: -Rp ${signalCutAmount.toLocaleString('id-ID')} (${signalCutCount}x)`);
       if (customDeduction > 0) noteParts.push(`Kasbon/Potongan: -Rp ${customDeduction.toLocaleString('id-ID')}`);
       if (customBonus > 0) noteParts.push(`Bonus: +Rp ${customBonus.toLocaleString('id-ID')}`);
+      if (!isMonthEndOrFull && (rawSignalCutAmount > 0 || rawCustomDeduction > 0)) {
+        noteParts.push(`Potongan ditampung ke Akhir Bulan`);
+      }
 
       auditResultsMap[streamer.nama.toLowerCase()] = {
         streamerId: sId,
@@ -854,8 +861,9 @@ export const deleteTransaction = async (req, res) => {
 export const DEFAULT_FINANCE_RULES = {
   baseSalary15th: 1000000,
   baseSalaryMonthEnd: 2000000,
-  hourlyRate15th: 20000,
-  hourlyRateMonthEnd: 40000,
+  hourlyRate: 30000,
+  hourlyRate15th: 30000,
+  hourlyRateMonthEnd: 30000,
   maxDailyValidHours: 4.0,
   maxHoursPerSession: 2.0,
   maxSessionsPerDay: 2,
@@ -1023,18 +1031,15 @@ export const getPenaltyAudit = async (req, res) => {
     for (const streamer of streamersRes.rows) {
       const sId = streamer.streamer_id;
       
-      // Determine Base Salary & Hourly Rate based on periodType
+      // Determine Base Salary & Hourly Rate (Uniform Rp 30.000 / Jam)
       let baseSalary = rules.baseSalary15th;
-      let hourlyRate = rules.hourlyRate15th || 20000;
+      let hourlyRate = rules.hourlyRate || 30000;
       if (periodType === '15th') {
         baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000);
-        hourlyRate = rules.hourlyRate15th || 20000;
       } else if (periodType === '1st') {
         baseSalary = parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
-        hourlyRate = rules.hourlyRateMonthEnd || 40000;
       } else if (periodType === 'full') {
         baseSalary = parseFloat(streamer.salary_15 || rules.baseSalary15th || 1000000) + parseFloat(streamer.salary_1 || rules.baseSalaryMonthEnd || 2000000);
-        hourlyRate = 30000;
       }
 
       let totalRawLiveDuration = 0;
@@ -1103,13 +1108,17 @@ export const getPenaltyAudit = async (req, res) => {
       const earnedFromHours = Math.min(baseSalary, Math.round(totalValidLiveHours * hourlyRate));
       const totalEarnedSalary = Math.round(earnedFromHours / 1000) * 1000;
 
-      // Adjustments (Signal cut, custom bonus/deduction)
+      // Potongan hanya dieksekusi di akhir bulan (Termin 2 / Full)
+      const isMonthEndOrFull = periodType === '1st' || periodType === 'full';
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
       const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
-      const signalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+      const rawSignalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+      const rawCustomDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
       const customBonus = Math.round(parseFloat(adj.custom_bonus || 0) / 1000) * 1000;
-      const customDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
 
+      // Termin 1 (Tgl 15) tidak terkena potongan. Termin 2 (Akhir Bulan) memotong potongan sinyal/kasbon.
+      const signalCutAmount = isMonthEndOrFull ? rawSignalCutAmount : 0;
+      const customDeduction = isMonthEndOrFull ? rawCustomDeduction : 0;
       const totalPenalties = signalCutAmount + customDeduction;
       const netSalary = Math.max(0, totalEarnedSalary + customBonus - totalPenalties);
 

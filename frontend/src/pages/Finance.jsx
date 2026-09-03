@@ -220,8 +220,9 @@ const Finance = () => {
   const [financeRules, setFinanceRules] = useState({
     baseSalary15th: 1000000,
     baseSalaryMonthEnd: 2000000,
-    hourlyRate15th: 20000,
-    hourlyRateMonthEnd: 40000,
+    hourlyRate: 30000,
+    hourlyRate15th: 30000,
+    hourlyRateMonthEnd: 30000,
     maxDailyValidHours: 4.0,
     maxHoursPerSession: 2.0,
     maxSessionsPerDay: 2,
@@ -237,8 +238,9 @@ const Finance = () => {
   const [editingRules, setEditingRules] = useState({
     baseSalary15th: 1000000,
     baseSalaryMonthEnd: 2000000,
-    hourlyRate15th: 20000,
-    hourlyRateMonthEnd: 40000,
+    hourlyRate: 30000,
+    hourlyRate15th: 30000,
+    hourlyRateMonthEnd: 30000,
     maxDailyValidHours: 4.0,
     maxHoursPerSession: 2.0,
     maxSessionsPerDay: 2,
@@ -653,16 +655,17 @@ const Finance = () => {
   };
 
   const generateStreamerAuditWaSlip = (s) => {
-    const rate = s.hourlyRate || (auditPeriodType === '15th' ? 20000 : 40000);
+    const rate = s.hourlyRate || financeRules.hourlyRate || 30000;
+    const isMonthEnd = auditPeriodType === '1st' || auditPeriodType === 'full';
     let text = `💰 *SLIP GAJI STREAMER — CASPER SIGNAL*\n`;
     text += `*CASPER SIGNAL GLOBAL ANALYST*\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `👤 *Nama:* ${s.nama}\n`;
     text += `🏦 *Rekening:* ${s.bankName} - ${s.bankAccountNumber} (a.n ${s.bankAccountHolder})\n`;
-    text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bulan)' : 'Full 1 Bulan'})\n`;
+    text += `📅 *Periode:* ${auditStartDate} s/d ${auditEndDate} (${auditPeriodType === '15th' ? 'Termin 1 (Tgl 1-15)' : auditPeriodType === '1st' ? 'Termin 2 (Akhir Bulan)' : 'Full 1 Bulan'})\n`;
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
     text += `⏱️ *Total Jam Live Valid:* ${s.totalLiveDuration} Jam (Max 4 Jam/Hari)\n`;
-    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam\n`;
+    text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam (Seragam)\n`;
     text += `💰 *Gaji Jam Live:* ${formatRupiah(s.totalEarnedSalary || s.baseSalary)}\n`;
     
     if (s.signalCutAmount > 0) {
@@ -673,6 +676,9 @@ const Finance = () => {
     }
     if (s.customBonus > 0) {
       text += `• Bonus Tambahan: +${formatRupiah(s.customBonus)}\n`;
+    }
+    if (!isMonthEnd && (s.signalCutCount > 0)) {
+      text += `_ℹ️ Potongan sinyal/kasbon akan dieksekusi pada gaji akhir bulan._\n`;
     }
     
     text += `━━━━━━━━━━━━━━━━━━━━━━━\n`;
@@ -2093,11 +2099,11 @@ const Finance = () => {
             <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
               <div className="flex items-center gap-2 text-xs font-extrabold text-amber-400 uppercase tracking-wider">
                 <ShieldCheck className="h-4 w-4" />
-                <span>Ketentuan Skema Gaji Berbasis Jam Live &amp; Batas Sesi</span>
+                <span>Ketentuan Skema Gaji 3 Juta • Tarif Seragam Rp 30.000 / Jam</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] bg-emerald-400/20 text-emerald-300 font-bold px-2 py-0.5 rounded-md border border-emerald-400/30">
-                  Tarif Bulat Aktif
+                  Tarif Seragam Rp 30.000/Jam
                 </span>
                 <button
                   onClick={() => {
@@ -2113,24 +2119,24 @@ const Finance = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 text-[11px] text-slate-300 pt-1">
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-amber-300 mb-0.5">💰 Termin 1 (Tgl 1-15)</div>
-                <div className="text-[10px] text-slate-400">{formatRupiah(financeRules.hourlyRate15th || 20000)} / Jam • Max {formatRupiah(financeRules.baseSalary15th)}</div>
+                <div className="font-extrabold text-amber-300 mb-0.5">💰 Tarif Jam Seragam</div>
+                <div className="text-[10px] text-slate-400">{formatRupiah(financeRules.hourlyRate || 30000)} / Jam • Total 1 Bulan: {formatRupiah((financeRules.baseSalary15th || 1000000) + (financeRules.baseSalaryMonthEnd || 2000000))}</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-indigo-300 mb-0.5">💰 Termin 2 (Tgl 16-Akhir)</div>
-                <div className="text-[10px] text-slate-400">{formatRupiah(financeRules.hourlyRateMonthEnd || 40000)} / Jam • Max {formatRupiah(financeRules.baseSalaryMonthEnd)}</div>
+                <div className="font-extrabold text-indigo-300 mb-0.5">📅 Termin 1 (Tgl 1-15)</div>
+                <div className="text-[10px] text-slate-400">Max {formatRupiah(financeRules.baseSalary15th)} • Bebas Potongan</div>
+              </div>
+              <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
+                <div className="font-extrabold text-indigo-300 mb-0.5">📅 Termin 2 (Tgl 16-Akhir)</div>
+                <div className="text-[10px] text-slate-400">Max {formatRupiah(financeRules.baseSalaryMonthEnd)} • Eksekusi Potongan</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-emerald-300 mb-0.5">⏱️ Batas Jam Harian</div>
                 <div className="text-[10px] text-slate-400">Max 2 Sesi ({financeRules.maxDailyValidHours || 4} Jam / Hari)</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-slate-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
-                <div className="text-[10px] text-slate-400">Kirim rekapan harian via Bot/Grup</div>
-              </div>
-              <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
-                <div className="font-extrabold text-rose-300 mb-0.5">📉 Potongan Sinyal</div>
-                <div className="text-[10px] text-slate-400">Potongan: -{formatRupiah(financeRules.signalCutPenaltyPerEvent || 30000)} / kejadian</div>
+                <div className="font-extrabold text-rose-300 mb-0.5">📉 Potongan di Akhir Bulan</div>
+                <div className="text-[10px] text-slate-400">Sinyal/Kasbon dipotong di Termin 2</div>
               </div>
             </div>
           </div>
