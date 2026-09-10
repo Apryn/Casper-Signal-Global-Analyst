@@ -15,6 +15,7 @@ export const getReports = async (req, res) => {
              r.youtube_upload, 
              r.instagram_upload, 
              r.facebook_upload,
+             COALESCE(NULLIF(r.total_upload, 0), GREATEST(r.tiktok_upload, r.youtube_upload, r.instagram_upload, r.facebook_upload), 0) as total_upload,
              r.live_duration, 
              r.reported_live_duration, 
              r.chat_count, 
@@ -117,6 +118,7 @@ export const updateReport = async (req, res) => {
     youtube_upload,
     instagram_upload,
     facebook_upload,
+    total_upload,
     live_duration,
     chat_count,
     registration_count,
@@ -143,6 +145,9 @@ export const updateReport = async (req, res) => {
     }
 
     const finalTanggal = tanggal || checkReport.rows[0].tanggal;
+    const resolvedTotalUpload = (total_upload !== undefined && total_upload !== null)
+      ? parseInt(total_upload, 10)
+      : Math.max(tiktok_upload || 0, youtube_upload || 0, instagram_upload || 0, facebook_upload || 0);
 
     const result = await query(
       `UPDATE daily_reports 
@@ -152,14 +157,15 @@ export const updateReport = async (req, res) => {
            youtube_upload = $4,
            instagram_upload = $5,
            facebook_upload = $6,
-           live_duration = $7,
-           reported_live_duration = $8,
-           chat_count = $9,
-           registration_count = $10,
-           ftd_count = $11,
-           status_izin = $12,
-           catatan_izin = $13
-       WHERE id = $14 
+           total_upload = $7,
+           live_duration = $8,
+           reported_live_duration = $9,
+           chat_count = $10,
+           registration_count = $11,
+           ftd_count = $12,
+           status_izin = $13,
+           catatan_izin = $14
+       WHERE id = $15 
        RETURNING *`,
       [
         finalTanggal,
@@ -168,6 +174,7 @@ export const updateReport = async (req, res) => {
         youtube_upload || 0,
         instagram_upload || 0,
         facebook_upload || 0,
+        resolvedTotalUpload,
         live_duration || 0.0,
         live_duration || 0.0,
         chat_count || 0,
@@ -217,6 +224,7 @@ export const createReport = async (req, res) => {
     youtube_upload = 0,
     instagram_upload = 0,
     facebook_upload = 0,
+    total_upload,
     live_duration = 0.0,
     chat_count = 0,
     registration_count = 0,
@@ -230,12 +238,16 @@ export const createReport = async (req, res) => {
   }
 
   try {
+    const resolvedTotalUpload = (total_upload !== undefined && total_upload !== null)
+      ? parseInt(total_upload, 10)
+      : Math.max(tiktok_upload || 0, youtube_upload || 0, instagram_upload || 0, facebook_upload || 0);
+
     const result = await query(
       `INSERT INTO daily_reports (
          streamer_id, tanggal, kategori,
-         tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
+         tiktok_upload, youtube_upload, instagram_upload, facebook_upload, total_upload,
          live_duration, reported_live_duration, chat_count, registration_count, ftd_count, status_izin, catatan_izin, raw_message
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING *`,
       [
         streamer_id,
@@ -245,6 +257,7 @@ export const createReport = async (req, res) => {
         youtube_upload,
         instagram_upload,
         facebook_upload,
+        resolvedTotalUpload,
         live_duration,
         live_duration,
         chat_count,

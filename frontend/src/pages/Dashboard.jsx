@@ -500,7 +500,7 @@ const Dashboard = () => {
                 <textarea
                   value={rawMessage}
                   onChange={(e) => setRawMessage(e.target.value)}
-                  placeholder={`STREAMING\nTanggal : 20 JUNI 2026\nNama : Tizza\n\nUPLOAD:\nTikTok : 3 video\nYoutube Short : -\nInstagram Reels : 1 video\nFacebook FP : -\n\nLIVE:\n3.5 jam\n\nCHAT:\n220\n\nREGISTRASI:\n24\n\nFTD:\n12`}
+                  placeholder={`STREAMING\nTanggal : 20 JUNI 2026\nNama : Tizza\n\nUPLOAD: 3 Video\n- TikTok : 3 video\n- Youtube Short : 3 video\n- Instagram Reels : -\n- Facebook FP : -\n\nLIVE:\n- Jam 09:00 (1.5 jam)\n- Jam 14:00 (2 jam)\n\nCHAT:\n220\n\nREGISTRASI:\n24\n\nFTD:\n12`}
                   rows={9}
                   className="w-full p-4 text-xs font-mono rounded-lg border-2 border-cyan-800/80 bg-slate-950/70 text-cyan-300 placeholder-cyan-800/40 focus:outline-none focus:border-cyan-400 shadow-inset-screen"
                 />
@@ -518,7 +518,7 @@ const Dashboard = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setRawMessage(`STREAMING\nTanggal : ${new Date().toISOString().split('T')[0]}\nNama : Tizza\n\nUPLOAD:\nTikTok : 2 video\nYoutube Short : 1 video\nInstagram Reels : -\nFacebook FP : -\n\nLIVE:\n2.5 jam\n\nCHAT:\n150 chat masuk\n\nREGISTRASI:\n16 user register\n\nFTD:\n6`);
+                    setRawMessage(`STREAMING\nTanggal : ${new Date().toISOString().split('T')[0]}\nNama : Tizza\n\nUPLOAD: 3 Video\n- TikTok : 3 video\n- Youtube Short : 3 video\n- Instagram Reels : -\n- Facebook FP : -\n\nLIVE:\n- Jam 09:00 (1.5 jam)\n- Jam 14:00 (1.5 jam)\n\nCHAT:\n150 chat masuk\n\nREGISTRASI:\n16 user register\n\nFTD:\n6`);
                   }}
                   className="px-3.5 py-2.5 rounded-lg border-2 border-cyan-850 hover:bg-cyan-950 hover:text-cyan-300 text-cyan-400 text-xs font-bold transition-all shadow-tactile-sm active:translate-y-0.5 active:shadow-tactile-pressed"
                 >
@@ -553,7 +553,12 @@ const Dashboard = () => {
                   </div>
 
                   <div className="p-2.5 rounded-lg bg-black border-2 border-cyan-900">
-                    <div className="font-bold text-cyan-500 mb-1">Uploads Breakdowns:</div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-cyan-500">Uploads Breakdown:</span>
+                      <span className="text-[11px] font-bold text-indigo-400 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-800/40">
+                        Total: {simResult.parsedData.uploads.totalVideo !== undefined && simResult.parsedData.uploads.totalVideo !== null ? simResult.parsedData.uploads.totalVideo : Math.max(simResult.parsedData.uploads.tiktok || 0, simResult.parsedData.uploads.youtube || 0, simResult.parsedData.uploads.instagram || 0, simResult.parsedData.uploads.facebook || 0)} Video Unik
+                      </span>
+                    </div>
                     <div className="grid grid-cols-4 gap-1 text-center">
                       <div>TikTok: <strong className="text-white block">{simResult.parsedData.uploads.tiktok}</strong></div>
                       <div>YouTube: <strong className="text-white block">{simResult.parsedData.uploads.youtube}</strong></div>

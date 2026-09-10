@@ -71,6 +71,7 @@ const Reports = () => {
     youtube_upload: 0,
     instagram_upload: 0,
     facebook_upload: 0,
+    total_upload: 0,
     live_duration: 0.0,
     chat_count: 0,
     registration_count: 0,
@@ -115,6 +116,7 @@ const Reports = () => {
       youtube_upload: 0,
       instagram_upload: 0,
       facebook_upload: 0,
+      total_upload: 0,
       live_duration: 0.0,
       chat_count: 0,
       registration_count: 0,
@@ -189,6 +191,7 @@ const Reports = () => {
       'Tanggal': r.tanggal ? r.tanggal.split('T')[0] : '',
       'Nama Streamer': r.streamer_name,
       'Kategori': r.kategori,
+      'Total Video Upload': r.total_upload || Math.max(r.tiktok_upload || 0, r.youtube_upload || 0, r.instagram_upload || 0, r.facebook_upload || 0),
       'TikTok Upload': r.tiktok_upload,
       'YouTube Upload': r.youtube_upload,
       'Instagram Upload': r.instagram_upload,
@@ -205,7 +208,7 @@ const Reports = () => {
     const summaryData = uniqueStreamers.map((name, index) => {
       const streamerReports = reports.filter(r => r.streamer_name === name);
       const hours = streamerReports.reduce((sum, r) => sum + parseFloat(r.live_duration), 0);
-      const uploads = streamerReports.reduce((sum, r) => sum + r.tiktok_upload + r.youtube_upload + r.instagram_upload + r.facebook_upload, 0);
+      const uploads = streamerReports.reduce((sum, r) => sum + (r.total_upload || Math.max(r.tiktok_upload || 0, r.youtube_upload || 0, r.instagram_upload || 0, r.facebook_upload || 0)), 0);
       const chats = streamerReports.reduce((sum, r) => sum + r.chat_count, 0);
       const regs = streamerReports.reduce((sum, r) => sum + r.registration_count, 0);
       const ftds = streamerReports.reduce((sum, r) => sum + r.ftd_count, 0);
@@ -562,6 +565,7 @@ const Reports = () => {
     setEditingReport({
       ...report,
       tanggal: report.tanggal ? report.tanggal.split('T')[0] : '',
+      total_upload: report.total_upload !== undefined && report.total_upload !== null ? report.total_upload : Math.max(report.tiktok_upload || 0, report.youtube_upload || 0, report.instagram_upload || 0, report.facebook_upload || 0),
       status_izin: report.status_izin || 'Normal',
       catatan_izin: report.catatan_izin || ''
     });
@@ -1125,7 +1129,9 @@ const Reports = () => {
                         const reportedHours = parseFloat(report.reported_live_duration || 0);
                         const hasDiff = reportedHours > 0 && Math.abs(reportedHours - liveHours) > 0.2;
                         const isSopMet = liveHours >= MIN_LIVE_HOURS;
-                        const totalUploads = (report.tiktok_upload || 0) + (report.youtube_upload || 0) + (report.instagram_upload || 0) + (report.facebook_upload || 0);
+                        const totalUploads = report.total_upload !== undefined && report.total_upload !== null && report.total_upload > 0
+                          ? report.total_upload
+                          : Math.max(report.tiktok_upload || 0, report.youtube_upload || 0, report.instagram_upload || 0, report.facebook_upload || 0);
 
                         // Determine excuse status
                         const matchedExcuse = findExcuseForStreamerAndDate(report.streamer_id, report.streamer_name, date);
@@ -1291,6 +1297,9 @@ const Reports = () => {
                             <div className="border-t border-slate-800/80 pt-2.5 mt-1 flex flex-wrap gap-1.5 text-[10px] items-center min-h-[30px]">
                               {totalUploads > 0 ? (
                                 <>
+                                  <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 font-bold border border-indigo-500/30">
+                                    {totalUploads} Video
+                                  </span>
                                   {report.tiktok_upload > 0 && (
                                     <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700/60">TT·{report.tiktok_upload}</span>
                                   )}
@@ -1363,7 +1372,18 @@ const Reports = () => {
               
               {/* Uploads Breakdown */}
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Content Uploads</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Content Uploads</label>
+                  <div className="flex items-center gap-1.5 text-[11px] text-indigo-400">
+                    <span className="font-semibold">Total Video Unik:</span>
+                    <input
+                      type="number"
+                      value={editingReport.total_upload !== undefined && editingReport.total_upload !== null ? editingReport.total_upload : Math.max(editingReport.tiktok_upload || 0, editingReport.youtube_upload || 0, editingReport.instagram_upload || 0, editingReport.facebook_upload || 0)}
+                      onChange={(e) => setEditingReport({ ...editingReport, total_upload: parseInt(e.target.value) || 0 })}
+                      className="w-14 text-center py-0.5 px-1 text-xs rounded border border-indigo-500/40 bg-slate-900 text-white font-bold"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-4 gap-2.5">
                   <div className="space-y-1">
                     <span className="block text-[9px] font-semibold text-gray-400 text-center">TikTok</span>
@@ -1546,7 +1566,18 @@ const Reports = () => {
 
               {/* Uploads Breakdown */}
               <div>
-                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Content Uploads</label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Content Uploads</label>
+                  <div className="flex items-center gap-1.5 text-[11px] text-indigo-400">
+                    <span className="font-semibold">Total Video Unik:</span>
+                    <input
+                      type="number"
+                      value={newReport.total_upload !== undefined && newReport.total_upload !== null ? newReport.total_upload : Math.max(newReport.tiktok_upload || 0, newReport.youtube_upload || 0, newReport.instagram_upload || 0, newReport.facebook_upload || 0)}
+                      onChange={(e) => setNewReport({ ...newReport, total_upload: parseInt(e.target.value) || 0 })}
+                      className="w-14 text-center py-0.5 px-1 text-xs rounded border border-indigo-500/40 bg-slate-900 text-white font-bold"
+                    />
+                  </div>
+                </div>
                 <div className="grid grid-cols-4 gap-2.5">
                   <div className="space-y-1">
                     <span className="block text-[9px] font-semibold text-gray-400 text-center">TikTok</span>

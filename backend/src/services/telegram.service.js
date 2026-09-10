@@ -329,32 +329,46 @@ const normalizeName = (raw) => {
 // ============================================================
 const extractUploads = (text) => {
   let tiktok = 0, youtube = 0, instagram = 0, facebook = 0;
+  let explicitTotal = null;
   const lines = text.split('\n');
 
   for (const line of lines) {
-    const up = line.toUpperCase().trim();
+    const trimmed = line.trim();
+    const up = trimmed.toUpperCase();
     // Skip if this is a SESI LIVE line
     if (/^JAM\s*(?:ONTIME)?/i.test(up)) continue;
 
-    // Extract number: handle both with and without colons (e.g. "TIKTOK : 3 Video" or "TIKTOK 3 Video")
-    const afterColon = line.includes(':') ? (line.split(':').slice(1).join(':')).trim() : line.trim();
+    // Check for main UPLOAD header with count: e.g. "UPLOAD: 3 Video", "UPLOAD : 3", "TOTAL VIDEO : 3"
+    const uploadHeaderMatch = trimmed.match(/^(?:UPLOAD|TOTAL\s+(?:VIDEO|KONTEN|UPLOAD))\s*:\s*(\d+)/i);
+    if (uploadHeaderMatch) {
+      explicitTotal = parseInt(uploadHeaderMatch[1], 10);
+      continue;
+    }
+
+    // Strip leading list bullet chars: -, *, •, or numbered list 1., 1)
+    const cleanLine = trimmed.replace(/^[-*•\s]+|^\d+[\.\)]\s*/, '');
+    const afterColon = cleanLine.includes(':') ? (cleanLine.split(':').slice(1).join(':')).trim() : cleanLine.trim();
     const numMatch = afterColon.match(/\d+/);
     // If there's a checkmark but no number → count as 1 video
     const hasCheck = /[✅☑️]/.test(afterColon);
-    const count = numMatch ? parseInt(numMatch[0]) : (hasCheck ? 1 : 0);
+    const count = numMatch ? parseInt(numMatch[0], 10) : (hasCheck ? 1 : 0);
 
-    if (/^(?:TIK?\s*TOK|TT)\b/i.test(up)) {
+    const cleanUp = cleanLine.toUpperCase();
+    if (/^(?:TIK?\s*TOK|TT)\b/i.test(cleanUp)) {
       tiktok += count;
-    } else if (/^(?:YOUTUBE|YT|YUTUB|UTUBE|YOTUBE|YOUTUB)\b/i.test(up)) {
+    } else if (/^(?:YOUTUBE|YT|YUTUB|UTUBE|YOTUBE|YOUTUB)\b/i.test(cleanUp)) {
       youtube += count;
-    } else if (/^(?:INSTAGRAM|IG|INSTA|REELS|REEL|FEELS)\b/i.test(up)) {
+    } else if (/^(?:INSTAGRAM|IG|INSTA|REELS|REEL|FEELS)\b/i.test(cleanUp)) {
       instagram += count;
-    } else if (/^(?:FACEBOOK|FB)\b/i.test(up)) {
+    } else if (/^(?:FACEBOOK|FB)\b/i.test(cleanUp)) {
       facebook += count;
     }
   }
 
-  return { tiktok, youtube, instagram, facebook };
+  // Fallback to highest platform count if explicitTotal is not provided
+  const totalVideo = explicitTotal !== null ? explicitTotal : Math.max(tiktok, youtube, instagram, facebook);
+
+  return { tiktok, youtube, instagram, facebook, totalVideo };
 };
 
 // ============================================================
@@ -592,17 +606,22 @@ const parseBulkBlocks = (body, date) => {
   }
   if (currentName) blocks.push({ name: currentName, text: currentLines.join('\n') });
 
-  return blocks.map(b => ({
-    name: b.name,
-    date,
-    kategori: 'Streaming',
-    uploads: extractUploads(b.text),
-    totalVidio: toInt(b.text.match(/Total\s+vi[dt]io\s*:\s*([^\n]+)/i)?.[1]),
-    liveDuration: extractLive(b.text) || toInt(b.text.match(/Total\s+live\s*:\s*([^\n]+)/i)?.[1]),
-    chatCount: extractField(b.text, 'Total\\s+chat', 'CHAT\\s+MASUK', 'CHAT'),
-    registrationCount: extractField(b.text, 'Total\\s+registrasi', 'JUMLAH\\s+REGISTRASI'),
-    ftdCount: extractField(b.text, 'Total\\s+(?:ftd|ttd)', 'JUMLAH\\s+(?:FTD|TTD)'),
-  }));
+  return blocks.map(b => {
+    const rawTotalVidio = toInt(b.text.match(/Total\s+vi[dt]io\s*:\s*([^\n]+)/i)?.[1]);
+    const up = extractUploads(b.text);
+    const resolvedTotal = rawTotalVidio || up.totalVideo;
+    return {
+      name: b.name,
+      date,
+      kategori: 'Streaming',
+      uploads: { ...up, totalVidio: resolvedTotal, totalVideo: resolvedTotal },
+      totalVidio: resolvedTotal,
+      liveDuration: extractLive(b.text) || toInt(b.text.match(/Total\s+live\s*:\s*([^\n]+)/i)?.[1]),
+      chatCount: extractField(b.text, 'Total\\s+chat', 'CHAT\\s+MASUK', 'CHAT'),
+      registrationCount: extractField(b.text, 'Total\\s+registrasi', 'JUMLAH\\s+REGISTRASI'),
+      ftdCount: extractField(b.text, 'Total\\s+(?:ftd|ttd)', 'JUMLAH\\s+(?:FTD|TTD)'),
+    };
+  });
 };
 
 // ============================================================
@@ -728,24 +747,33 @@ const extractIzinFromText = (text) => {
 };
 
 const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration, chatCount, registrationCount, ftdCount, rawMessage, statusIzin = 'Normal', catatanIzin = '') => {
-  const { tiktok = 0, youtube = 0, instagram = 0, facebook = 0, totalVidio = 0 } = uploads;
+  const { tiktok = 0, youtube = 0, instagram = 0, facebook = 0, totalVideo, totalVidio = 0 } = uploads;
+
+  // Determine total unique video upload count:
+  // 1. Explicit totalVideo (e.g. from "UPLOAD: 3 Video")
+  // 2. totalVidio (from bulk format)
+  // 3. Fallback to maximum across all platforms Math.max(tiktok, youtube, instagram, facebook)
+  const calcTotal = (totalVideo !== undefined && totalVideo !== null)
+    ? totalVideo
+    : (totalVidio || Math.max(tiktok, youtube, instagram, facebook));
 
   // If individual upload counts are all 0 but we have a total, distribute to tiktok
-  const ttiktok = tiktok || (tiktok + youtube + instagram + facebook === 0 ? totalVidio : 0);
+  const ttiktok = tiktok || (tiktok + youtube + instagram + facebook === 0 ? calcTotal : 0);
 
   const res = await query(
     `INSERT INTO daily_reports (
        tanggal, streamer_id, kategori,
-       tiktok_upload, youtube_upload, instagram_upload, facebook_upload,
+       tiktok_upload, youtube_upload, instagram_upload, facebook_upload, total_upload,
        live_duration, reported_live_duration, chat_count, registration_count, ftd_count, raw_message,
        status_izin, catatan_izin
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
      ON CONFLICT (tanggal, streamer_id) DO UPDATE SET
        kategori          = EXCLUDED.kategori,
        tiktok_upload     = EXCLUDED.tiktok_upload,
        youtube_upload    = EXCLUDED.youtube_upload,
        instagram_upload  = EXCLUDED.instagram_upload,
        facebook_upload   = EXCLUDED.facebook_upload,
+       total_upload      = EXCLUDED.total_upload,
        live_duration     = COALESCE(NULLIF(daily_reports.live_duration, 0.0), EXCLUDED.live_duration),
        reported_live_duration = EXCLUDED.reported_live_duration,
        chat_count        = EXCLUDED.chat_count,
@@ -756,7 +784,7 @@ const upsertReport = async (tanggal, streamerId, kategori, uploads, liveDuration
        catatan_izin      = CASE WHEN EXCLUDED.catatan_izin <> '' THEN EXCLUDED.catatan_izin ELSE daily_reports.catatan_izin END
      RETURNING *`,
     [tanggal, streamerId, kategori,
-     ttiktok, youtube, instagram, facebook,
+     ttiktok, youtube, instagram, facebook, calcTotal,
      liveDuration || 0.0, liveDuration || 0.0, chatCount || 0, registrationCount || 0, ftdCount || 0,
      rawMessage,
      statusIzin || 'Normal',

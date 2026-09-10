@@ -110,11 +110,11 @@ const ImportPage = () => {
 Tanggal : ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
 Nama : [Nama Streamer]
 
-UPLOAD:
-TikTok : 3 Video
-YouTube Short : 3 Video
-Instagram Reels : -
-Facebook FP : -
+UPLOAD: 3 Video
+- TikTok : 3 Video
+- YouTube Short : 3 Video
+- Instagram Reels : -
+- Facebook FP : -
 
 LIVE:
 - Jam 09:00 (1.5 jam)
@@ -160,11 +160,11 @@ FTD:
 Tanggal : ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
 Nama : [Nama Streamer]
 
-UPLOAD:
-TikTok : 3 Video
-YouTube Short : 3 Video
-Instagram Reels : -
-Facebook FP : -
+UPLOAD: 3 Video
+- TikTok : 3 Video
+- YouTube Short : 3 Video
+- Instagram Reels : -
+- Facebook FP : -
 
 LIVE:
 - Jam 09:00 (1.5 jam)
@@ -205,7 +205,7 @@ FTD:
         <textarea
           value={rawInput}
           onChange={e => setRawInput(e.target.value)}
-          placeholder={`Contoh format laporan:\n\nTanggal : 1 Juli 2025\nNama : Laflanca\n\nUPLOAD:\nTikTok : 2 video\nYoutube Short : 1 video\nInstagram Reels : -\nFacebook FP : -\n\nLIVE:\n3 jam\n\nCHAT:\n120 chat masuk\n\nREGISTRASI:\n15 user\n\nFTD:\n5\n\n---\n\nTanggal : 2 Juli 2025\nNama : Tizza\n...`}
+          placeholder={`Contoh format laporan:\n\nSTREAMING\nTanggal : 1 Juli 2025\nNama : Laflanca\n\nUPLOAD: 3 Video\n- TikTok : 3 Video\n- YouTube Short : 3 Video\n- Instagram Reels : -\n- Facebook FP : -\n\nLIVE:\n- Jam 09:00 (1.5 jam)\n- Jam 14:00 (1.5 jam)\n\nCHAT:\n120 chat masuk\n\nREGISTRASI:\n15 user\n\nFTD:\n5\n\n---\n\nTanggal : 2 Juli 2025\nNama : Tizza\n...`}
           style={{
             width: '100%',
             minHeight: '320px',

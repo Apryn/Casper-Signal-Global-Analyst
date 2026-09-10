@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS daily_reports (
     youtube_upload INTEGER NOT NULL DEFAULT 0,
     instagram_upload INTEGER NOT NULL DEFAULT 0,
     facebook_upload INTEGER NOT NULL DEFAULT 0,
+    total_upload INTEGER NOT NULL DEFAULT 0,
     live_duration NUMERIC(5,2) NOT NULL DEFAULT 0.0,
     reported_live_duration NUMERIC(5,2) DEFAULT NULL,
     chat_count INTEGER NOT NULL DEFAULT 0,

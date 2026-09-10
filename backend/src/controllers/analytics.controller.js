@@ -45,7 +45,7 @@ export const getStreamerPerformance = async (req, res) => {
     const statsRes = await query(
       `SELECT 
         COALESCE(SUM(live_duration), 0) as total_live_hours,
-        COALESCE(SUM(tiktok_upload + youtube_upload + instagram_upload + facebook_upload), 0) as total_uploads,
+        COALESCE(SUM(COALESCE(NULLIF(total_upload, 0), GREATEST(tiktok_upload, youtube_upload, instagram_upload, facebook_upload), 0)), 0) as total_uploads,
         COALESCE(SUM(chat_count), 0) as total_chats,
         COALESCE(SUM(registration_count), 0) as total_registrations,
         COALESCE(SUM(ftd_count), 0) as total_ftds
@@ -88,7 +88,7 @@ export const getStreamerPerformance = async (req, res) => {
       `SELECT 
         tanggal,
         live_duration as live_hours,
-        (tiktok_upload + youtube_upload + instagram_upload + facebook_upload) as uploads,
+        COALESCE(NULLIF(total_upload, 0), GREATEST(tiktok_upload, youtube_upload, instagram_upload, facebook_upload), 0) as uploads,
         chat_count as chats,
         registration_count as regs,
         ftd_count as ftds
@@ -165,7 +165,7 @@ export const getLeaderboardWithScores = async (req, res) => {
         s.nama,
         s.platform,
         COALESCE(SUM(r.live_duration), 0) as live_duration,
-        COALESCE(SUM(r.tiktok_upload + r.youtube_upload + r.instagram_upload + r.facebook_upload), 0) as uploads,
+        COALESCE(SUM(COALESCE(NULLIF(r.total_upload, 0), GREATEST(r.tiktok_upload, r.youtube_upload, r.instagram_upload, r.facebook_upload), 0)), 0) as uploads,
         COALESCE(SUM(r.chat_count), 0) as chats,
         COALESCE(SUM(r.registration_count), 0) as registrations,
         COALESCE(SUM(r.ftd_count), 0) as ftds

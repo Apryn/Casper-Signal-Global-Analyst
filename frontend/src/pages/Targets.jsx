@@ -112,7 +112,7 @@ const Targets = () => {
     return {
       ftds: periodReports.reduce((sum, r) => sum + r.ftd_count, 0),
       registrations: periodReports.reduce((sum, r) => sum + r.registration_count, 0),
-      uploads: periodReports.reduce((sum, r) => sum + r.tiktok_upload + r.youtube_upload + r.instagram_upload + r.facebook_upload, 0),
+      uploads: periodReports.reduce((sum, r) => sum + (r.total_upload || Math.max(r.tiktok_upload || 0, r.youtube_upload || 0, r.instagram_upload || 0, r.facebook_upload || 0)), 0),
       live_duration: periodReports.reduce((sum, r) => sum + parseFloat(r.live_duration), 0)
     };
   };

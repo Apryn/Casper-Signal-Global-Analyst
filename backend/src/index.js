@@ -257,11 +257,11 @@ const launchBot = () => {
           `STREAMING\n` +
           `Tanggal : 8 Sep 2025\n` +
           `Nama : [Nama Panggilan]\n\n` +
-          `UPLOAD:\n` +
-          `TikTok : 3 Video\n` +
-          `YouTube Short : 3 Video\n` +
-          `Instagram Reels : -\n` +
-          `Facebook FP : -\n\n` +
+          `UPLOAD: 3 Video\n` +
+          `- TikTok : 3 Video\n` +
+          `- YouTube Short : 3 Video\n` +
+          `- Instagram Reels : -\n` +
+          `- Facebook FP : -\n\n` +
           `LIVE:\n` +
           `4 jam\n` +
           `2 jam (Kompensasi tgl 15)  <-- Opsional jika ada ganti jam\n\n` +
@@ -614,8 +614,10 @@ const launchBot = () => {
             replyMsg = `✅ *Laporan bulk berhasil disimpan!* 🚀\n\n*Streamer:* ${names}\n*Tanggal:* ${tanggal}`;
           } else {
             const p = result.parsedData;
-            const up = p.uploads || { tiktok: 0, youtube: 0, instagram: 0, facebook: 0 };
-            const totalUp = (up.tiktok || 0) + (up.youtube || 0) + (up.instagram || 0) + (up.facebook || 0);
+            const up = p.uploads || { tiktok: 0, youtube: 0, instagram: 0, facebook: 0, totalVideo: 0 };
+            const totalUp = (up.totalVideo !== undefined && up.totalVideo !== null)
+              ? up.totalVideo
+              : (up.totalVidio || Math.max(up.tiktok || 0, up.youtube || 0, up.instagram || 0, up.facebook || 0));
             
             replyMsg = `✅ *Laporan ${streamerName} tanggal ${tanggal} berhasil disimpan!* 🚀\n\n` +
                        `📊 *Rincian Data Terbaca:*\n` +
