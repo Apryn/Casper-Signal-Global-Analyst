@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Executive Brief: Summary Daily Report Streamer - Casper Signal Analytics</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f1f5f9;
+      color: #0f172a;
+      font-size: 10.5px;
+      line-height: 1.5;
+    }
+
+    @page {
+      size: A4 portrait;
+      margin: 10mm 12mm;
+    }
+
+    .page-sheet {
+      background: #ffffff;
+      width: 210mm;
+      min-height: 297mm;
+      margin: 14px auto;
+      padding: 24px 28px 20px 28px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    @media print {
+      body {
+        background: white !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .page-sheet {
+        width: 100% !important;
+        min-height: auto !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+      }
+
+      .page-sheet:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
+
+    /* Header */
+    .header-box {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2.5px solid #2563eb;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+
+    .title-area h1 {
+      font-size: 19px;
+      font-weight: 800;
+      color: #0f172a;
+      margin: 0;
+      letter-spacing: -0.4px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tag-badge {
+      background: #2563eb;
+      color: white;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .subtitle {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #475569;
+      margin-top: 3px;
+    }
+
+    .meeting-meta {
+      text-align: right;
+      font-size: 9.5px;
+      color: #475569;
+      background: #f8fafc;
+      padding: 7px 12px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+      line-height: 1.4;
+    }
+
+    .meeting-meta strong {
+      color: #0f172a;
+    }
+
+    /* Top Metric Strip */
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric-card {
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
+      border-left: 4px solid #2563eb;
+    }
+
+    .metric-card.green {
+      border-left-color: #059669;
+    }
+
+    .metric-card.indigo {
+      border-left-color: #6366f1;
+    }
+
+    .metric-card.purple {
+      border-left-color: #8b5cf6;
+    }
+
+    .m-label {
+      font-size: 9px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .m-val {
+      font-size: 18px;
+      font-weight: 800;
+      color: #0f172a;
+      line-height: 1.2;
+      margin-top: 2px;
+    }
+
+    .m-sub {
+      font-size: 8.5px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+
+    /* Section & Block Styling */
+    .point-section {
+      margin-bottom: 12px;
+    }
+
+    .section-head {
+      font-size: 12px;
+      font-weight: 800;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      border-bottom: 1.5px solid #e2e8f0;
+      padding-bottom: 4px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .section-pill {
+      font-size: 8.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: #e2e8f0;
+      color: #334155;
+    }
+
+    /* Cards with Points */
+    .point-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 9px;
+    }
+
+    .point-card.highlight {
+      background: #f8fafc;
+      border-left: 3.5px solid #2563eb;
+    }
+
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    ul.point-list {
+      margin: 0;
+      padding-left: 16px;
+      font-size: 10px;
+      color: #334155;
+      line-height: 1.55;
+    }
+
+    ul.point-list li {
+      margin-bottom: 3px;
+    }
+
+    ul.point-list li strong {
+      color: #0f172a;
+    }
+
+    .badge-chip {
+      display: inline-block;
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 8.5px;
+      font-weight: 700;
+    }
+
+    .badge-green {
+      background: #d1fae5;
+      color: #047857;
+    }
+
+    .badge-blue {
+      background: #dbeafe;
+      color: #1d4ed8;
+    }
+
+    .badge-rose {
+      background: #ffe4e6;
+      color: #be123c;
+    }
+
+    .badge-amber {
+      background: #fef3c7;
+      color: #b45309;
+    }
+
+    /* Compact Mini-Table for Quick Comparison */
+    .mini-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 6px 0;
+      font-size: 9.5px;
+    }
+
+    .mini-table th {
+      background: #f1f5f9;
+      padding: 5px 8px;
+      text-align: left;
+      font-size: 8.5px;
+      color: #475569;
+      border-bottom: 1.5px solid #cbd5e1;
+      text-transform: uppercase;
+    }
+
+    .mini-table td {
+      padding: 5px 8px;
+      border-bottom: 1px solid #f1f5f9;
+      color: #1e293b;
+    }
+
+    .mini-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* Footer */
+    .page-footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 8.5px;
+      color: #94a3b8;
+      margin-top: auto;
+    }
+
+    /* Print Controls */
+    .no-print {
+      margin: 14px auto;
+      max-width: 210mm;
+      background: #0f172a;
+      color: white;
+      padding: 10px 18px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .print-btn {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 7px 18px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .print-btn:hover {
+      background: #1d4ed8;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- Top Floating Bar -->
+  <div class="no-print">
+    <div>
+      <strong style="font-size: 12px;">Executive Meeting Brief: Summary Daily Report (Point-by-Point)</strong><br>
+      <span style="font-size: 10px; color: #94a3b8;">Format 2 Halaman Ringkas, To-the-Point &amp; Siap
+        Dipresentasikan</span>
+    </div>
+    <button class="print-btn" onclick="window.print()">🖨️ Cetak / Unduh PDF</button>
+  </div>
+
+  <!-- ==================== HALAMAN 1: RINGKASAN POIN PERFORMA BULANAN ==================== -->
+  <div class="page-sheet">
+    <div>
+      <!-- Header -->
+      <div class="header-box">
+        <div class="title-area">
+          <h1>
+            CASPER SIGNAL ANALYTICS
+            <span class="tag-badge">Executive Brief</span>
+          </h1>
+          <div class="subtitle">Summary Kinerja Daily Report Streamer Per Bulan (Meeting Direksi &amp; Manajemen)</div>
+        </div>
+        <div class="meeting-meta">
+          <div><strong>Agenda:</strong> Evaluasi Kinerja &amp; Strategi </div>
+          <div><strong>Periode:</strong> Juli 2026 – September 2026 (MTD)</div>
+          <div><strong>Waktu Cetak:</strong> Rabu, 9 September 2026</div>
+        </div>
+      </div>
+
+      <!-- 4 Core Metrics -->
+      <div class="metric-strip">
+        <div class="metric-card green">
+          <div class="m-label">Total First Time Deposit</div>
+          <div class="m-val" style="color: #059669;">869 <span style="font-size: 11px;">FTD</span></div>
+          <div class="m-sub">Jul: 373 | Agu: 410 | Sep MTD: 86</div>
+        </div>
+        <div class="metric-card">
+          <div class="m-label">Total Durasi Live Streaming</div>
+          <div class="m-val" style="color: #2563eb;">1461.1 <span style="font-size: 11px;">Jam</span></div>
+          <div class="m-sub">Dari 489 catatan harian 11 streamer</div>
+        </div>
+        <div class="metric-card indigo">
+          <div class="m-label">Total Leads Registrasi</div>
+          <div class="m-val" style="color: #4f46e5;">1.070 <span style="font-size: 11px;">Member</span></div>
+          <div class="m-sub">Rasio Konversi Rata-rata: <strong>81.2%</strong></div>
+        </div>
+        <div class="metric-card purple">
+          <div class="m-label">Total Konten Media Sosial</div>
+          <div class="m-val" style="color: #7c3aed;">1.651 <span style="font-size: 11px;">Post</span></div>
+          <div class="m-sub">TikTok, YouTube Shorts, IG &amp; FB</div>
+        </div>
+      </div>
+
+      <!-- Section 1: Monthly Trend Points -->
+      <div class="point-section">
+        <div class="section-head">
+          <span>1. Poin Evaluasi Kinerja Per Bulan (Month-over-Month)</span>
+          <span class="section-pill">Tren &amp; Komparasi</span>
+        </div>
+
+        <table class="mini-table">
+          <thead>
+            <tr>
+              <th>Bulan</th>
+              <th>Status Periode</th>
+              <th style="text-align:center;">Laporan</th>
+              <th style="text-align:center;">Total Live</th>
+              <th style="text-align:center;">Registrasi</th>
+              <th style="text-align:center;">Total FTD</th>
+              <th style="text-align:center;">Rasio Konversi</th>
+              <th style="text-align:center;">Uploads</th>
+              <th style="text-align:center;">Live &lt; 4h</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Juli 2026</strong></td>
+              <td>7 – 31 Jul (Fase Awal)</td>
+              <td style="text-align:center;">115</td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">374.5 jam</td>
+              <td style="text-align:center;">281</td>
+              <td style="text-align:center; font-weight:700; color:#059669;">373 FTD</td>
+              <td style="text-align:center; font-weight:700; color:#059669;">132.7%</td>
+              <td style="text-align:center;">556</td>
+              <td style="text-align:center;"><span class="badge-chip badge-rose">35 sesi</span></td>
+            </tr>
+            <tr style="background:#f8fafc;">
+              <td><strong>Agustus 2026</strong></td>
+              <td>1 – 31 Agu (Bulan Rekor)</td>
+              <td style="text-align:center;">309</td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">891.9 jam <span
+                  style="font-size:8px; color:#059669;">(+138%)</span></td>
+              <td style="text-align:center;">646 <span style="font-size:8px; color:#059669;">(+130%)</span></td>
+              <td style="text-align:center; font-weight:700; color:#059669;">410 FTD <span
+                  style="font-size:8px; color:#059669;">(+10%)</span></td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">63.5%</td>
+              <td style="text-align:center;">901 <span style="font-size:8px; color:#059669;">(+62%)</span></td>
+              <td style="text-align:center;"><span class="badge-chip badge-rose">58 sesi</span></td>
+            </tr>
+            <tr>
+              <td><strong>September 2026</strong></td>
+              <td>1 – 8 Sep (MTD Berjalan)</td>
+              <td style="text-align:center;">65</td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">194.7 jam</td>
+              <td style="text-align:center;">143</td>
+              <td style="text-align:center; font-weight:700; color:#059669;">86 FTD</td>
+              <td style="text-align:center; font-weight:700; color:#2563eb;">60.1%</td>
+              <td style="text-align:center;">194</td>
+              <td style="text-align:center;"><span class="badge-chip badge-rose">14 sesi</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="point-card highlight" style="margin-top: 8px;">
+          <div class="card-title">📌 Poin Kunci Pembahasan Per Bulan:</div>
+          <ul class="point-list">
+            <li><strong>Bulan Juli 2026 (Fase Fondasi):</strong> Menghasilkan <strong>373 FTD</strong> dari 374.5 jam
+              live. Konversi mencapai 132.7% berkat tingginya repeat deposit dari traffic live awal. Dominasi disumbang
+              oleh Bagas (97 FTD) dan Brayy (73 FTD).</li>
+            <li><strong>Bulan Agustus 2026 (Rekor Kinerja Tertinggi):</strong> Jam tayang live meledak <strong>+138%
+                (891.9 jam)</strong> dan registrasi naik <strong>+130% (646 reg)</strong>. Total 410 FTD tercapai.
+              <strong>Keylaa</strong> mencetak sejarah tim dengan menembus <strong>105 FTD</strong> (mencapai target
+              bulanan 100 FTD).
+            </li>
+            <li><strong>Bulan September 2026 (Laju MTD &amp; Proyeksi):</strong> Dalam 8 hari pertama telah tercapai
+              <strong>86 FTD</strong> (laju rata-rata 10.75 FTD/hari). Dengan ritme ini, September diproyeksikan menutup
+              di angka <strong>~320 FTD dan 730+ Jam Live</strong>.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Section 2: Streamer Tiers Points -->
+      <div class="point-section">
+        <div class="section-head">
+          <span>2. Peta Kekuatan Streamer (Top Performers vs Butuh Perhatian)</span>
+          <span class="section-pill">11 Streamer Aktif</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <!-- Pillar Streamers -->
+          <div class="point-card" style="border-top: 3px solid #059669;">
+            <div class="card-title" style="color: #059669;">🟢 Top Tier (Pilar Utama — Menyumbang 53% FTD Tim):</div>
+            <ul class="point-list">
+              <li><strong>Bagas (Total 175 FTD | 182.5j Live):</strong> Streamer paling konsisten. Raih 97 FTD di Juli,
+                58 FTD di Agustus, dan 20 FTD di awal September. Jam tayang selalu di atas target.</li>
+              <li><strong>Brayy (Total 145 FTD | 176.2j Live):</strong> Kreator konten teraktif (279 post) dengan 73 FTD
+                di Juli dan 63 FTD di Agustus.</li>
+              <li><strong>Keylaa (Total 141 FTD | 126.0j Live):</strong> Konversi FTD tertinggi tim (1.12 FTD/jam live).
+                Rekor 105 FTD di Agustus dan saat ini memimpin September dengan 26 FTD.</li>
+            </ul>
+          </div>
+
+          <!-- Mid Tier & Attention Streamers -->
+          <div class="point-card" style="border-top: 3px solid #f59e0b;">
+            <div class="card-title" style="color: #d97706;">🟡 Mid Tier &amp; 🔴 Perhatian Khusus (Attention Needed):
+            </div>
+            <ul class="point-list">
+              <li><strong>Ajo (119 FTD | 181.0j Live):</strong> Jam live paling disiplin (rata-rata 4.5 jam/sesi) dan
+                produksi konten masif (288 post). Sudah cetak 20 FTD di September.</li>
+              <li><strong>Teizza (98 FTD | 101.0j Live):</strong> Closing tajam (konversi 96.1%), namun jam live perlu
+                ditingkatkan.</li>
+              <li><strong>Aline (66 FTD) &amp; Laflanca (64 FTD):</strong> Kontribusi solid dan stabil setiap bulan,
+                perlu dorongan agar durasi live konsisten di atas 4 jam.</li>
+              <li><strong style="color: #be123c;">BG Chenn (Jam Live Tinggi 147.9j, namun hanya 4 FTD):</strong> Masalah
+                serius pada skrip closing live chat ke deposit. Jam tayang tinggi tidak menghasilkan konversi.</li>
+              <li><strong style="color: #be123c;">Katrineely (18 FTD) &amp; Ratu (9 FTD):</strong> Frekuensi live di
+                bawah 4 jam paling tinggi dan perolehan FTD masih tertinggal.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span>Casper Signal Global Analyst • Executive Meeting Brief</span>
+      <span>Halaman 1 dari 2 (Ringkasan Poin Kinerja)</span>
+    </div>
+  </div>
+
+  <!-- ==================== HALAMAN 2: TEMUAN AUDIT & AGENDA KEPUTUSAN ==================== -->
+  <div class="page-sheet">
+    <div>
+      <!-- Header Mini -->
+      <div
+        style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1.5px solid #cbd5e1; padding-bottom: 6px; margin-bottom: 14px; font-size: 9px; color: #64748b;">
+        <span><strong>CASPER SIGNAL ANALYTICS</strong> — Temuan Operasional &amp; Agenda Keputusan Rapat</span>
+        <span>Halaman 2 / 2</span>
+      </div>
+
+      <!-- Section 3: Audit Findings Points -->
+      <div class="point-section">
+        <div class="section-head">
+          <span style="color: #be123c;">3. Poin Temuan Audit SOP &amp; Masalah Lapangan</span>
+          <span class="section-pill" style="background: #ffe4e6; color: #be123c;">Operational Audit</span>
+        </div>
+
+        <div class="point-card" style="border-left: 3.5px solid #be123c; margin-bottom: 12px;">
+          <ul class="point-list">
+            <li>
+              <strong>Pelanggaran Durasi Live Minimal 4 Jam / Hari (SOP):</strong><br>
+              Tercatat total <strong>107 sesi live under-4h</strong> (35 di Juli, 58 di Agustus, 14 di September). Sesi
+              live yang dipotong pendek (1–2 jam) menyebabkan penurunan drastis penonton live dan hilangnya momentum
+              akuisisi member baru.
+            </li>
+            <li>
+              <strong>Pentingnya Penjadwalan Streamer Pengganti (Substitute) Saat Izin / Cuti:</strong><br>
+              Total <strong>93 hari off/izin</strong> tercatat selama 3 bulan. Ketika ada streamer yang berhalangan atau
+              terkena musibah, diperlukan mekanisme penunjukan <em>streamer substitute</em> secara cepat agar slot
+              siaran live channel tetap terisi dan tidak ada traffic yang terbuang.
+            </li>
+            <li>
+              <strong>Ketimpangan Distribusi Upload Konten Media Sosial:</strong><br>
+              Hanya sebagian kecil streamer (Ajo 288 post, Brayy 279 post, Bagas 165 post) yang konsisten upload
+              multi-channel ke TikTok, YouTube Shorts, dan Facebook Reels. Streamer lain masih hanya upload 0–1 video
+              per minggu.
+            </li>
+            <li>
+              <strong>Penurunan Rasio Konversi Registrasi ke FTD (Closing Gap):</strong><br>
+              Di bulan Agustus terjadi lonjakan 646 registrasi, namun yang menjadi FTD sebesar 410 (konversi 63.5%). Ada
+              gap ~236 member yang sudah registrasi tapi belum deposit karena kurangnya follow-up via live chat.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Section 4: Meeting Agenda & Action Items -->
+      <div class="point-section">
+        <div class="section-head">
+          <span style="color: #1e40af;">4. Agenda Keputusan Strategis untuk Disepakati</span>
+          <span class="section-pill" style="background: #eff6ff; color: #1e40af;">Action Items</span>
+        </div>
+
+        <div class="point-card highlight" style="margin-bottom: 12px;">
+          <ul class="point-list">
+            <li>
+              <strong>🎯 Keputusan 1 — Penerapan Sistem Kompensasi Wajib Live &lt; 4 Jam:</strong><br>
+              Setiap streamer yang live &lt; 4 jam wajib mengganti kekurangan durasi pada hari berikutnya (maksimal 3
+              hari kerja). Sistem bot Telegram telah siap mencatat tag <em>[Kompensasi]</em> seperti yang sudah diuji
+              coba pada Bagas (5 &amp; 6 Sep). Jika tidak diganti, insentif harian dipotong proporsional.
+            </li>
+            <li>
+              <strong>🎯 Keputusan 2 — Pengaktifan Fitur &amp; Jadwal Streamer Pengganti (Substitute
+                Streamer):</strong><br>
+              Menetapkan SOP penugasan streamer pengganti (substitute) ketika ada streamer utama yang berhalangan
+              izin/musibah, sehingga slot jam siaran channel tetap aktif dan performa channel tidak menurun.
+            </li>
+            <li>
+              <strong>🎯 Keputusan 3 — Standarisasi Kuota Konten: Minimal 2 Upload / Hari:</strong><br>
+              Menjadikan upload konten media sosial sebagai KPI wajib harian: minimal 1 konten TikTok + 1 YouTube Shorts
+              / FB Reels per streamer, dengan link video wajib dilampirkan dalam format laporan bot harian.
+            </li>
+            <li>
+              <strong>🎯 Keputusan 4 — Sesi Khusus Perbaikan Teknik Closing (Khusus BG Chenn &amp; Low
+                FTD):</strong><br>
+              Mengadakan review rekaman live BG Chenn (148 jam live vs 4 FTD) bersama Keylaa dan Bagas untuk memperbaiki
+              teknik <em>Call-To-Action</em> (CTA), script mengarahkan viewers dari chat menjadi first deposit.
+            </li>
+            <li>
+              <strong>🎯 Keputusan 5 — Target Sprint Sisa September (Membidik 350+ FTD):</strong><br>
+              Dengan sisa 22 hari di September, tim memerlukan ~264 FTD lagi (rata-rata 12 FTD/hari). Memfokuskan siaran
+              prime time dan program reward streamer yang tembus 50+ FTD di akhir bulan.
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Sign-off Block -->
+      <div
+        style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px 14px; margin-top: 10px; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div style="font-size: 8.5px; color: #475569; line-height: 1.45;">
+          <strong>Status Dokumen:</strong> Executive Meeting Briefing Note (Confidential).<br>
+          Dipersiapkan oleh <strong>Tim Global Analyst Casper Signal</strong> sebagai acuan evaluasi &amp; pengambilan
+          keputusan.<br>
+          <em>Seluruh data bersumber dari Database Daily Reports yang tervalidasi per 9 September 2026.</em>
+        </div>
+        <div style="text-align: right; min-width: 160px; font-size: 8.5px; color: #334155;">
+          <div>Disetujui dalam Meeting:</div>
+          <div style="height: 28px;"></div>
+          <div style="font-weight: 700; text-decoration: underline; color: #0f172a;">Direksi &amp; Pimpinan Manajemen
+          </div>
+          <div style="color: #64748b; font-size: 8px;">Casper Signal Global Analyst</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-footer">
+      <span>Casper Signal Global Analyst • Executive Meeting Brief</span>
+      <span>Halaman 2 dari 2 (Action Plan &amp; Keputusan Meeting)</span>
+    </div>
+  </div>
+
+</body>
+
+</html>
