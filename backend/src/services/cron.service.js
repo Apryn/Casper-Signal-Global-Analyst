@@ -531,7 +531,10 @@ export const cleanupStaleSchedules = async () => {
                 `INSERT INTO daily_reports (streamer_id, tanggal, kategori, live_duration, tiktok_upload, youtube_upload, instagram_upload, facebook_upload, chat_count, registration_count, ftd_count)
                  VALUES ($1, $2, 'Streaming', $3, 0, 0, 0, 0, 0, 0, 0)
                  ON CONFLICT (streamer_id, tanggal) 
-                 DO UPDATE SET live_duration = COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration`,
+                 DO UPDATE SET live_duration = CASE 
+                   WHEN daily_reports.raw_message IS NOT NULL AND daily_reports.raw_message <> '' THEN daily_reports.live_duration
+                   ELSE COALESCE(daily_reports.live_duration, 0) + EXCLUDED.live_duration
+                 END`,
                 [targetStreamerId, dateStr, netDuration]
               );
             }

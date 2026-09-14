@@ -495,6 +495,7 @@ export const syncAuditToPeriod = async (req, res) => {
         TO_CHAR(tanggal, 'YYYY-MM-DD') AS tanggal,
         kategori,
         live_duration,
+        reported_live_duration,
         status_izin,
         catatan_izin
       FROM daily_reports
@@ -554,7 +555,11 @@ export const syncAuditToPeriod = async (req, res) => {
       for (const d of allDates) {
         const key = `${sId}_${d.dateStr}`;
         const rep = reportMap[key];
-        const rawDuration = rep ? parseFloat(rep.live_duration || 0) : 0;
+        const rawDuration = rep 
+          ? (rep.reported_live_duration !== null && rep.reported_live_duration !== undefined 
+              ? parseFloat(rep.reported_live_duration) 
+              : parseFloat(rep.live_duration || 0))
+          : 0;
         const validHours = Math.min(rules.maxDailyValidHours || 4.0, rawDuration);
 
         totalRawLiveDuration += rawDuration;
@@ -1064,7 +1069,11 @@ export const getPenaltyAudit = async (req, res) => {
 
         const isCompensated = rep?.status_izin === 'Kompensasi';
         const isExcused = (rep && (rep.status_izin === 'Izin' || rep.status_izin === 'Kompensasi')) || isSunday;
-        const rawDuration = rep ? parseFloat(rep.live_duration || 0) : 0;
+        const rawDuration = rep 
+          ? (rep.reported_live_duration !== null && rep.reported_live_duration !== undefined 
+              ? parseFloat(rep.reported_live_duration) 
+              : parseFloat(rep.live_duration || 0))
+          : 0;
         
         // Capping: Max 4.0 hours per day (2 sessions @ 2h max)
         const validHours = Math.min(rules.maxDailyValidHours || 4.0, rawDuration);

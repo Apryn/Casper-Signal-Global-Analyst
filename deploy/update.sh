@@ -44,14 +44,15 @@ node src/db/migrate_salary_adjustments.js 2>/dev/null || true
 node src/db/migrate_excuse_requests.js 2>/dev/null || true
 node src/db/fix_payroll_profiles_mapping.js 2>/dev/null || true
 node src/db/split_key_team_oky_pratama.js 2>/dev/null || true
+node src/db/migrate_total_upload.js 2>/dev/null || true
 echo "✅ Dependencies & database migrations siap"
 
 # ── Rebuild frontend ──────────────────────────────────────────
 echo ""
 echo "▶ [3/4] Build ulang frontend..."
 cd "$APP_DIR/frontend"
-npm install
-npm run build
+npm install --include=dev
+npx vite build
 echo "✅ Frontend berhasil di-build"
 
 # ── Restart backend ───────────────────────────────────────────
