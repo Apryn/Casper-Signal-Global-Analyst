@@ -196,11 +196,23 @@ const Finance = () => {
   const [payrollSearch, setPayrollSearch] = useState('');
   const [syncingAudit, setSyncingAudit] = useState(false);
   const [newPeriodForm, setNewPeriodForm] = useState({
-    period_type: 'full',
+    period_type: '15th',
     period_date: new Date().toISOString().split('T')[0],
-    title: '',
+    title: `Gaji Tgl 15 - ${new Date().toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`,
     notes: '',
   });
+
+  const handleOpenNewPeriodModal = () => {
+    const today = new Date();
+    const monthName = today.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+    setNewPeriodForm({
+      period_type: '15th',
+      period_date: today.toISOString().split('T')[0],
+      title: `Gaji Tgl 15 - ${monthName}`,
+      notes: '',
+    });
+    setShowNewPeriodModal(true);
+  };
 
   // Modal Edit Item Adjustment (Bonus/Deduction)
   const [editingItem, setEditingItem] = useState(null);
@@ -1528,7 +1540,7 @@ const Finance = () => {
         setSelectedPeriodId(res.data.period_id);
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Gagal membuat periode gajian');
+      alert(err.response?.data?.error || err.response?.data?.message || 'Gagal membuat periode gajian');
     }
   };
 
@@ -2502,7 +2514,7 @@ const Finance = () => {
               )}
 
               <button
-                onClick={() => setShowNewPeriodModal(true)}
+                onClick={handleOpenNewPeriodModal}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-extrabold text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400 hover:-translate-y-0.5 active:translate-y-0.5 transition-all"
               >
                 <Plus className="h-4 w-4" />
@@ -2833,7 +2845,7 @@ const Finance = () => {
                 Klik tombol "Buat Periode Baru" untuk otomatis men-generate daftar gajian Tgl 15 atau Tgl 1.
               </p>
               <button
-                onClick={() => setShowNewPeriodModal(true)}
+                onClick={handleOpenNewPeriodModal}
                 className="px-5 py-2.5 rounded-xl font-extrabold text-xs text-black bg-tactile-yellow border-2 border-black shadow-tactile-sm hover:bg-amber-400 transition-all"
               >
                 + Buat Periode Gajian Sekarang
@@ -3506,7 +3518,16 @@ const Finance = () => {
                   type="date"
                   required
                   value={newPeriodForm.period_date}
-                  onChange={(e) => setNewPeriodForm({ ...newPeriodForm, period_date: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    let autoTitle = newPeriodForm.title;
+                    if (val) {
+                      const d = new Date(val);
+                      const mName = d.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
+                      autoTitle = newPeriodForm.period_type === '15th' ? `Gaji Tgl 15 - ${mName}` : `Gaji Tgl 1 - ${mName}`;
+                    }
+                    setNewPeriodForm({ ...newPeriodForm, period_date: val, title: autoTitle });
+                  }}
                   className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 shadow-inset-screen"
                 />
               </div>

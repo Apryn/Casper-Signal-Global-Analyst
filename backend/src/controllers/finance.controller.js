@@ -229,6 +229,12 @@ export const createPeriod = async (req, res) => {
       return res.status(400).json({ message: 'Tipe periode dan tanggal wajib diisi' });
     }
 
+    // Ensure PostgreSQL sequences are synchronized to prevent duplicate key errors
+    await client.query(`
+      SELECT setval('payroll_periods_id_seq', COALESCE((SELECT MAX(id) FROM payroll_periods), 1));
+      SELECT setval('payroll_items_id_seq', COALESCE((SELECT MAX(id) FROM payroll_items), 1));
+    `);
+
     // Default title formatting if empty
     const dateObj = new Date(period_date);
     const monthName = dateObj.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
@@ -289,7 +295,10 @@ export const createPeriod = async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     console.error('[Finance createPeriod] Error:', err);
-    res.status(500).json({ message: 'Gagal membuat periode gajian' });
+    res.status(500).json({ 
+      message: 'Gagal membuat periode gajian', 
+      error: err.message || String(err) 
+    });
   } finally {
     client.release();
   }

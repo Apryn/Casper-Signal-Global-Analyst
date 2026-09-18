@@ -119,6 +119,15 @@ async function migrateFinance() {
       console.log(`✅ Seeded ${streamersRes.rows.length} streamers into payroll profiles.`);
     }
 
+    // 7. Synchronize PostgreSQL sequences
+    await client.query(`
+      SELECT setval('payroll_periods_id_seq', COALESCE((SELECT MAX(id) FROM payroll_periods), 1));
+      SELECT setval('payroll_items_id_seq', COALESCE((SELECT MAX(id) FROM payroll_items), 1));
+      SELECT setval('payroll_profiles_id_seq', COALESCE((SELECT MAX(id) FROM payroll_profiles), 1));
+      SELECT setval('cash_transactions_id_seq', COALESCE((SELECT MAX(id) FROM cash_transactions), 1));
+    `);
+    console.log('✅ PostgreSQL sequences verified and synchronized.');
+
     await client.query('COMMIT');
     console.log('🎉 Finance & Payroll migration successfully finished without any data loss!');
   } catch (err) {
