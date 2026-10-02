@@ -342,17 +342,29 @@ const Finance = () => {
     }
   };
 
+  const cleanToInteger = (val) => {
+    if (val === null || val === undefined || val === '') return 0;
+    if (typeof val === 'number') return Math.round(val);
+    let str = String(val).trim();
+    if (!str) return 0;
+    // Handle database float string from PostgreSQL NUMERIC (e.g. '1565000.00', '0.00', '9000000.00')
+    if (/^-?\d+\.\d{1,2}$/.test(str)) {
+      return Math.round(parseFloat(str) || 0);
+    }
+    // Handle user-typed strings with Indonesian thousand dots (e.g. '1.565.000')
+    const digits = str.replace(/[^0-9-]/g, '');
+    return digits && digits !== '-' ? parseInt(digits, 10) : 0;
+  };
+
   const formatInputNominal = (val) => {
     if (val === null || val === undefined || val === '') return '';
-    const digits = String(val).replace(/[^0-9]/g, '');
-    if (!digits) return '';
-    return new Intl.NumberFormat('id-ID').format(parseInt(digits, 10));
+    if (typeof val === 'string' && val.trim() === '') return '';
+    const num = cleanToInteger(val);
+    return new Intl.NumberFormat('id-ID').format(num);
   };
 
   const parseCleanNumber = (val) => {
-    if (val === null || val === undefined || val === '') return 0;
-    const digits = String(val).replace(/[^0-9]/g, '');
-    return digits ? parseInt(digits, 10) : 0;
+    return cleanToInteger(val);
   };
 
   const getRoleBadgeClass = (role) => {
