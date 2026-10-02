@@ -89,12 +89,17 @@ export const upsertProfile = async (req, res) => {
     const { 
       id, name, role, streamer_id, 
       bank_name, bank_account_number, bank_account_holder, 
-      salary_15, salary_1, is_active, notes 
+      salary_15, salary_1, is_active, notes,
+      default_mess_deduction
     } = req.body;
 
     if (!name || name.trim() === '') {
       return res.status(400).json({ message: 'Nama wajib diisi' });
     }
+
+    const messDeduction = default_mess_deduction !== undefined && default_mess_deduction !== null
+      ? parseFloat(String(default_mess_deduction).replace(/[^0-9.-]/g, '')) || 0
+      : 0;
 
     if (id) {
       const updateRes = await pool.query(`
@@ -102,13 +107,15 @@ export const upsertProfile = async (req, res) => {
         SET name = $1, role = $2, streamer_id = $3,
             bank_name = $4, bank_account_number = $5, bank_account_holder = $6,
             salary_15 = $7, salary_1 = $8, is_active = $9, notes = $10,
+            default_mess_deduction = $11,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = $11
+        WHERE id = $12
         RETURNING *
       `, [
         name.trim(), role || 'Streamer', streamer_id || null,
         bank_name || 'BCA', bank_account_number || '', bank_account_holder || name.trim(),
         salary_15 ?? 1000000, salary_1 ?? 2000000, is_active !== false, notes || '',
+        messDeduction,
         id
       ]);
       return res.json(updateRes.rows[0]);
@@ -116,14 +123,16 @@ export const upsertProfile = async (req, res) => {
       const insertRes = await pool.query(`
         INSERT INTO payroll_profiles (
           name, role, streamer_id, bank_name, bank_account_number, 
-          bank_account_holder, salary_15, salary_1, is_active, notes
+          bank_account_holder, salary_15, salary_1, is_active, notes,
+          default_mess_deduction
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
         RETURNING *
       `, [
         name.trim(), role || 'Streamer', streamer_id || null,
         bank_name || 'BCA', bank_account_number || '', bank_account_holder || name.trim(),
-        salary_15 ?? 1000000, salary_1 ?? 2000000, is_active !== false, notes || ''
+        salary_15 ?? 1000000, salary_1 ?? 2000000, is_active !== false, notes || '',
+        messDeduction
       ]);
       return res.status(201).json(insertRes.rows[0]);
     }
@@ -259,21 +268,22 @@ export const createPeriod = async (req, res) => {
     let totalAmount = 0;
     for (const prof of profilesRes.rows) {
       const baseSalary = period_type === '15th' ? parseFloat(prof.salary_15 || 0) : parseFloat(prof.salary_1 || 0);
-      const finalAmount = baseSalary;
+      const defaultMess = parseFloat(prof.default_mess_deduction || 0);
+      const finalAmount = Math.max(0, baseSalary - defaultMess);
       totalAmount += finalAmount;
 
       await client.query(`
         INSERT INTO payroll_items (
           period_id, profile_id, recipient_name, role,
           bank_name, bank_account_number, bank_account_holder,
-          base_amount, bonus_amount, deduction_amount, final_amount,
+          base_amount, bonus_amount, deduction_amount, mess_deduction, final_amount,
           status, notes
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'Pending', $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'Pending', $13)
       `, [
         period.id, prof.id, prof.name, prof.role,
         prof.bank_name, prof.bank_account_number, prof.bank_account_holder || prof.name,
-        baseSalary, 0, 0, finalAmount,
+        baseSalary, 0, 0, defaultMess, finalAmount,
         ''
       ]);
     }
@@ -308,7 +318,7 @@ export const updateItem = async (req, res) => {
   try {
     const { id } = req.params;
     const { 
-      base_amount, bonus_amount, deduction_amount, 
+      base_amount, bonus_amount, deduction_amount, mess_deduction,
       status, notes, bank_name, bank_account_number, bank_account_holder, role 
     } = req.body;
 
@@ -322,7 +332,8 @@ export const updateItem = async (req, res) => {
     const base = parseNum(base_amount);
     const bonus = parseNum(bonus_amount);
     const deduction = parseNum(deduction_amount);
-    const finalAmount = Math.max(0, base + bonus - deduction);
+    const mess = parseNum(mess_deduction);
+    const finalAmount = Math.max(0, base + bonus - deduction - mess);
     const validStatus = status === 'Paid' ? 'Paid' : 'Pending';
 
     const updateRes = await pool.query(`
@@ -330,20 +341,22 @@ export const updateItem = async (req, res) => {
       SET base_amount = $1,
           bonus_amount = $2,
           deduction_amount = $3,
-          final_amount = $4,
-          status = $5::varchar,
-          paid_at = CASE WHEN $5::varchar = 'Paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE NULL END,
-          notes = $6,
-          bank_name = COALESCE($7, bank_name),
-          bank_account_number = COALESCE($8, bank_account_number),
-          bank_account_holder = COALESCE($9, bank_account_holder),
-          role = COALESCE($10, role)
-      WHERE id = $11::int
+          mess_deduction = $4,
+          final_amount = $5,
+          status = $6::varchar,
+          paid_at = CASE WHEN $6::varchar = 'Paid' THEN COALESCE(paid_at, CURRENT_TIMESTAMP) ELSE NULL END,
+          notes = $7,
+          bank_name = COALESCE($8, bank_name),
+          bank_account_number = COALESCE($9, bank_account_number),
+          bank_account_holder = COALESCE($10, bank_account_holder),
+          role = COALESCE($11, role)
+      WHERE id = $12::int
       RETURNING *
     `, [
       base,
       bonus,
       deduction,
+      mess,
       finalAmount,
       validStatus,
       notes !== undefined && notes !== null ? String(notes) : '',
@@ -630,7 +643,8 @@ export const syncAuditToPeriod = async (req, res) => {
         const base = parseFloat(item.base_amount) || audit.baseSalary;
         const bonus = audit.customBonus > 0 ? audit.customBonus : (parseFloat(item.bonus_amount) || 0);
         const deduction = audit.totalPenalties;
-        const finalAmt = Math.max(0, base + bonus - deduction);
+        const mess = parseFloat(item.mess_deduction || 0);
+        const finalAmt = Math.max(0, base + bonus - deduction - mess);
         const notes = audit.notes || item.notes || '';
 
         await client.query(`
@@ -894,7 +908,8 @@ export const DEFAULT_FINANCE_RULES = {
   noReportPenaltyPerDay: 150000,
   absentPenaltyPerSession: 60000,
   sessionsPerDay: 2,
-  signalCutPenaltyPerEvent: 30000
+  signalCutPenaltyPerEvent: 30000,
+  lateRecapPenaltyPerEvent: 20000
 };
 
 export const getFinanceRules = async (req, res) => {
@@ -929,6 +944,7 @@ export const updateFinanceRules = async (req, res) => {
       absentPenaltyPerSession: parseFloat(incoming.absentPenaltyPerSession) >= 0 ? parseFloat(incoming.absentPenaltyPerSession) : DEFAULT_FINANCE_RULES.absentPenaltyPerSession,
       sessionsPerDay: parseInt(incoming.sessionsPerDay, 10) > 0 ? parseInt(incoming.sessionsPerDay, 10) : DEFAULT_FINANCE_RULES.sessionsPerDay,
       signalCutPenaltyPerEvent: parseFloat(incoming.signalCutPenaltyPerEvent) >= 0 ? parseFloat(incoming.signalCutPenaltyPerEvent) : DEFAULT_FINANCE_RULES.signalCutPenaltyPerEvent,
+      lateRecapPenaltyPerEvent: parseFloat(incoming.lateRecapPenaltyPerEvent) >= 0 ? parseFloat(incoming.lateRecapPenaltyPerEvent) : (DEFAULT_FINANCE_RULES.lateRecapPenaltyPerEvent || 20000),
     };
 
     const val = JSON.stringify(newRules);
@@ -1068,6 +1084,8 @@ export const getPenaltyAudit = async (req, res) => {
       let liveDaysCount = 0;
       let offDaysCount = 0;
       let excusedDaysCount = 0;
+      let autoLateRecapCount = 0;
+      let autoNoReportCount = 0;
 
       const dailyBreakdown = [];
 
@@ -1092,6 +1110,56 @@ export const getPenaltyAudit = async (req, res) => {
         totalValidLiveHours += validHours;
         if (rawDuration > 0) liveDaysCount++;
 
+        // Deadline calculation: H+1 at rules.recapDeadlineTime (default '08:00') WIB
+        const [deadlineH, deadlineM] = (rules.recapDeadlineTime || '08:00').split(':').map(n => parseInt(n, 10) || 0);
+        const parts = d.dateStr.split('-');
+        const nextDayUtc = new Date(Date.UTC(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10) + 1));
+        const nextY = nextDayUtc.getUTCFullYear();
+        const nextM = String(nextDayUtc.getUTCMonth() + 1).padStart(2, '0');
+        const nextD = String(nextDayUtc.getUTCDate()).padStart(2, '0');
+        const deadlineStr = `${nextY}-${nextM}-${nextD}T${String(deadlineH).padStart(2, '0')}:${String(deadlineM).padStart(2, '0')}:00+07:00`;
+        const deadlineTime = new Date(deadlineStr);
+        const now = new Date();
+
+        let submittedTimeWib = null;
+        let submittedTimeOnly = null;
+        let isLateRecap = false;
+        let lateMinutes = 0;
+        let lateMinutesText = '';
+        let isNoReport = false;
+
+        if (rep?.created_at) {
+          const subDate = new Date(rep.created_at);
+          submittedTimeWib = subDate.toLocaleString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit'
+          }) + ' WIB';
+          submittedTimeOnly = subDate.toLocaleString('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            hour: '2-digit',
+            minute: '2-digit'
+          }) + ' WIB';
+
+          if (rep.raw_message !== '[Manual Input]') {
+            if (subDate > deadlineTime) {
+              isLateRecap = true;
+              lateMinutes = Math.round((subDate.getTime() - deadlineTime.getTime()) / 60000);
+              const lateHours = Math.floor(lateMinutes / 60);
+              const remMins = lateMinutes % 60;
+              lateMinutesText = lateHours > 0 ? `${lateHours}j ${remMins}m` : `${remMins}m`;
+              autoLateRecapCount++;
+            }
+          }
+        } else if (!isSunday && !isExcused) {
+          if (now > deadlineTime) {
+            isNoReport = true;
+            autoNoReportCount++;
+          }
+        }
+
         const dayItem = {
           dateStr: d.dateStr,
           shortDate: d.shortDate,
@@ -1104,6 +1172,13 @@ export const getPenaltyAudit = async (req, res) => {
           liveDuration: validHours,
           dayEarnings,
           submittedAt: rep?.created_at || null,
+          submittedTimeWib,
+          submittedTimeOnly,
+          isLateRecap,
+          lateMinutes,
+          lateMinutesText,
+          isNoReport,
+          recapDeadlineWib: `${rules.recapDeadlineTime || '08:00'} WIB`,
           rawMessage: rep?.raw_message || null,
           statusIzin: rep?.status_izin || (isSunday ? 'Izin' : 'Normal'),
           catatanIzin: rep?.catatan_izin || (isSunday ? 'Libur Minggu' : ''),
@@ -1138,13 +1213,26 @@ export const getPenaltyAudit = async (req, res) => {
       const adj = adjMap[sId] || { signal_cut_count: 0, signal_cut_amount: 0, custom_bonus: 0, custom_deduction: 0, notes: '' };
       const signalCutCount = parseInt(adj.signal_cut_count || 0, 10);
       const rawSignalCutAmount = parseFloat(adj.signal_cut_amount !== undefined && adj.signal_cut_amount !== null ? adj.signal_cut_amount : (signalCutCount * (rules.signalCutPenaltyPerEvent || 30000)));
+
+      // Denda Telat Rekap
+      const lateRecapRate = rules.lateRecapPenaltyPerEvent !== undefined ? parseFloat(rules.lateRecapPenaltyPerEvent) : 20000;
+      const lateRecapCount = adj.late_recap_count !== undefined && adj.late_recap_count !== null 
+        ? parseInt(adj.late_recap_count, 10) 
+        : autoLateRecapCount;
+      const rawLateRecapAmount = parseFloat(
+        adj.late_recap_amount !== undefined && adj.late_recap_amount !== null 
+          ? adj.late_recap_amount 
+          : (lateRecapCount * lateRecapRate)
+      );
+      const lateRecapAmount = isMonthEndOrFull ? rawLateRecapAmount : 0;
+
       const rawCustomDeduction = Math.round(parseFloat(adj.custom_deduction || 0) / 1000) * 1000;
       const customBonus = Math.round(parseFloat(adj.custom_bonus || 0) / 1000) * 1000;
 
-      // Termin 1 (Tgl 15) tidak terkena potongan. Termin 2 (Akhir Bulan) memotong potongan sinyal/kasbon.
+      // Termin 1 (Tgl 15) tidak terkena potongan. Termin 2 (Akhir Bulan) memotong potongan sinyal/telat rekap/kasbon.
       const signalCutAmount = isMonthEndOrFull ? rawSignalCutAmount : 0;
       const customDeduction = isMonthEndOrFull ? rawCustomDeduction : 0;
-      const totalPenalties = signalCutAmount + customDeduction;
+      const totalPenalties = signalCutAmount + lateRecapAmount + customDeduction;
       const netSalary = Math.max(0, totalEarnedSalary + customBonus - totalPenalties);
 
       auditResults.push({
@@ -1164,12 +1252,16 @@ export const getPenaltyAudit = async (req, res) => {
         under4hCount: 0,
         totalShortageHours: 0,
         shortagePenalty: 0,
-        noReportDaysCount: 0,
+        noReportDaysCount: autoNoReportCount,
         noReportPenalty: 0,
         absentDaysCount: 0,
         absentPenalty: 0,
         offDaysCount,
         excusedDaysCount,
+        autoLateRecapCount,
+        lateRecapCount,
+        lateRecapAmount,
+        lateRecapRate,
         signalCutCount,
         signalCutAmount,
         customBonus,
@@ -1205,13 +1297,14 @@ export const getPenaltyAudit = async (req, res) => {
 
 export const saveSalaryAdjustment = async (req, res) => {
   try {
-    const { streamerId, periodKey, signalCutCount, customBonus, customDeduction, notes } = req.body;
+    const { streamerId, periodKey, signalCutCount, lateRecapCount, customBonus, customDeduction, notes } = req.body;
 
     if (!streamerId || !periodKey) {
       return res.status(400).json({ message: 'streamerId dan periodKey wajib diisi' });
     }
 
     let signalRate = DEFAULT_FINANCE_RULES.signalCutPenaltyPerEvent;
+    let lateRecapRate = DEFAULT_FINANCE_RULES.lateRecapPenaltyPerEvent || 20000;
     try {
       const rulesRes = await pool.query("SELECT value FROM config WHERE key = 'finance_rules'");
       if (rulesRes.rows.length > 0 && rulesRes.rows[0].value) {
@@ -1219,28 +1312,36 @@ export const saveSalaryAdjustment = async (req, res) => {
         if (parsed.signalCutPenaltyPerEvent !== undefined) {
           signalRate = parseFloat(parsed.signalCutPenaltyPerEvent);
         }
+        if (parsed.lateRecapPenaltyPerEvent !== undefined) {
+          lateRecapRate = parseFloat(parsed.lateRecapPenaltyPerEvent);
+        }
       }
     } catch (e) {}
 
     const count = parseInt(signalCutCount || 0, 10);
     const cutAmount = count * signalRate;
+    const lateCount = lateRecapCount !== undefined && lateRecapCount !== null ? parseInt(lateRecapCount, 10) : null;
+    const lateAmount = lateCount !== null ? lateCount * lateRecapRate : null;
     const bonus = parseFloat(customBonus || 0);
     const deduction = parseFloat(customDeduction || 0);
 
     const upsertRes = await pool.query(`
       INSERT INTO streamer_salary_adjustments (
         streamer_id, period_key, signal_cut_count, signal_cut_amount,
+        late_recap_count, late_recap_amount,
         custom_bonus, custom_deduction, notes, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
       ON CONFLICT (streamer_id, period_key) DO UPDATE SET
         signal_cut_count = EXCLUDED.signal_cut_count,
         signal_cut_amount = EXCLUDED.signal_cut_amount,
+        late_recap_count = COALESCE(EXCLUDED.late_recap_count, streamer_salary_adjustments.late_recap_count),
+        late_recap_amount = COALESCE(EXCLUDED.late_recap_amount, streamer_salary_adjustments.late_recap_amount),
         custom_bonus = EXCLUDED.custom_bonus,
         custom_deduction = EXCLUDED.custom_deduction,
         notes = EXCLUDED.notes,
         updated_at = NOW()
       RETURNING *
-    `, [streamerId, periodKey, count, cutAmount, bonus, deduction, notes || '']);
+    `, [streamerId, periodKey, count, cutAmount, lateCount, lateAmount, bonus, deduction, notes || '']);
 
     res.json({ success: true, adjustment: upsertRes.rows[0] });
   } catch (err) {

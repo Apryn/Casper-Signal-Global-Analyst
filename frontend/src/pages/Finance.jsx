@@ -183,6 +183,7 @@ const Finance = () => {
     bank_account_holder: '',
     salary_15: 1000000,
     salary_1: 2000000,
+    default_mess_deduction: 0,
     is_active: true,
     notes: '',
   });
@@ -214,12 +215,13 @@ const Finance = () => {
     setShowNewPeriodModal(true);
   };
 
-  // Modal Edit Item Adjustment (Bonus/Deduction)
+  // Modal Edit Item Adjustment (Bonus/Deduction/Mess)
   const [editingItem, setEditingItem] = useState(null);
   const [itemEditForm, setItemEditForm] = useState({
     base_amount: 0,
     bonus_amount: 0,
     deduction_amount: 0,
+    mess_deduction: 0,
     notes: '',
     bank_name: '',
     bank_account_number: '',
@@ -243,6 +245,7 @@ const Finance = () => {
     absentPenaltyPerSession: 60000,
     sessionsPerDay: 2,
     signalCutPenaltyPerEvent: 30000,
+    lateRecapPenaltyPerEvent: 20000,
   });
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [editingRules, setEditingRules] = useState({
@@ -261,6 +264,7 @@ const Finance = () => {
     absentPenaltyPerSession: 60000,
     sessionsPerDay: 2,
     signalCutPenaltyPerEvent: 30000,
+    lateRecapPenaltyPerEvent: 20000,
   });
   const [isSavingRules, setIsSavingRules] = useState(false);
 
@@ -514,12 +518,78 @@ const Finance = () => {
         streamerId: sId,
         periodKey: pKey,
         signalCutCount: newCount,
+        lateRecapCount: streamer.lateRecapCount,
         customBonus: streamer.customBonus,
         customDeduction: streamer.customDeduction,
         notes: streamer.notes
       });
     } catch (err) {
       console.error('Failed to save signal adjustment:', err);
+      fetchPenaltyAudit();
+    } finally {
+      setSavingAdjStreamerId(null);
+    }
+  };
+
+  const handleLateRecapChange = async (streamer, delta) => {
+    const sId = streamer.streamerId;
+    const currentCount = streamer.lateRecapCount !== undefined ? streamer.lateRecapCount : (streamer.autoLateRecapCount || 0);
+    const newCount = Math.max(0, currentCount + delta);
+    if (newCount === streamer.lateRecapCount) return;
+
+    const lateRate = streamer.lateRecapRate || financeRules.lateRecapPenaltyPerEvent || 20000;
+
+    // Optimistic update
+    setAuditData(prev => {
+      if (!prev) return prev;
+      const updatedResults = prev.auditResults.map(s => {
+        if (s.streamerId === sId) {
+          const lateAmount = newCount * lateRate;
+          const totalPenalties = (s.signalCutAmount || 0) + lateAmount + (s.customDeduction || 0);
+          const netSalary = Math.max(0, (s.totalEarnedSalary || s.baseSalary) + (s.customBonus || 0) - totalPenalties);
+          return {
+            ...s,
+            lateRecapCount: newCount,
+            lateRecapAmount: lateAmount,
+            totalPenalties,
+            netSalary
+          };
+        }
+        return s;
+      });
+      return { ...prev, auditResults: updatedResults };
+    });
+
+    if (drilldownStreamer && drilldownStreamer.streamerId === sId) {
+      setDrilldownStreamer(prev => {
+        if (!prev) return prev;
+        const lateAmount = newCount * lateRate;
+        const totalPenalties = (prev.signalCutAmount || 0) + lateAmount + (prev.customDeduction || 0);
+        const netSalary = Math.max(0, (prev.totalEarnedSalary || prev.baseSalary) + (prev.customBonus || 0) - totalPenalties);
+        return {
+          ...prev,
+          lateRecapCount: newCount,
+          lateRecapAmount: lateAmount,
+          totalPenalties,
+          netSalary
+        };
+      });
+    }
+
+    try {
+      setSavingAdjStreamerId(sId);
+      const pKey = `${auditStartDate.slice(0, 7)}_${auditPeriodType}`;
+      await api.post('/finance/penalty-audit/adjust', {
+        streamerId: sId,
+        periodKey: pKey,
+        signalCutCount: streamer.signalCutCount,
+        lateRecapCount: newCount,
+        customBonus: streamer.customBonus,
+        customDeduction: streamer.customDeduction,
+        notes: streamer.notes
+      });
+    } catch (err) {
+      console.error('Failed to save late recap adjustment:', err);
       fetchPenaltyAudit();
     } finally {
       setSavingAdjStreamerId(null);
@@ -574,8 +644,11 @@ const Finance = () => {
 
   const handleUpdateDailyLiveDuration = async (day) => {
     if (!drilldownStreamer) return;
-    const currentDur = day.liveDuration || 0;
-    const input = prompt(`Masukkan durasi live aktual untuk ${drilldownStreamer.nama} pada tanggal ${day.shortDate} (dalam satuan jam, misal: 4.5):`, String(currentDur || '4.5'));
+    const currentDur = day.rawLiveDuration !== undefined ? day.rawLiveDuration : (day.liveDuration || 0);
+    const input = prompt(
+      `Masukkan durasi live aktual untuk ${drilldownStreamer.nama} pada tanggal ${day.shortDate} (dalam satuan jam, misal: 4 atau 2.5):`,
+      String(currentDur > 0 ? currentDur : '4')
+    );
     if (input === null) return; // User cancelled
 
     const numDuration = parseFloat(input.replace(',', '.'));
@@ -679,6 +752,9 @@ const Finance = () => {
     
     if (s.signalCutAmount > 0) {
       text += `• Potongan Sinyal (${s.signalCutCount}x): -${formatRupiah(s.signalCutAmount)}\n`;
+    }
+    if (s.lateRecapAmount > 0) {
+      text += `• Denda Telat Rekap (${s.lateRecapCount}x): -${formatRupiah(s.lateRecapAmount)}\n`;
     }
     if (s.customDeduction > 0) {
       text += `• Potongan/Kasbon: -${formatRupiah(s.customDeduction)}\n`;
@@ -897,7 +973,7 @@ const Finance = () => {
 
     const totalBase = items.reduce((acc, i) => acc + (parseFloat(i.base_amount) || 0), 0);
     const totalBonus = items.reduce((acc, i) => acc + (parseFloat(i.bonus_amount) || 0), 0);
-    const totalDeduction = items.reduce((acc, i) => acc + (parseFloat(i.deduction_amount) || 0), 0);
+    const totalDeduction = items.reduce((acc, i) => acc + (parseFloat(i.deduction_amount) || 0) + (parseFloat(i.mess_deduction) || 0), 0);
     const totalFinal = items.reduce((acc, i) => acc + (parseFloat(i.final_amount) || 0), 0);
 
     const paidItems = items.filter(i => i.status === 'Paid');
@@ -923,9 +999,11 @@ const Finance = () => {
           <td style="text-align: right; padding: 4.5px 6px; font-size: 8.5px;">${formatRupiah(item.base_amount)}</td>
           <td style="text-align: right; padding: 4.5px 6px; font-size: 8px;">
             ${parseFloat(item.bonus_amount) > 0 ? `<span style="color: #16a34a; font-weight: 600;">+${formatRupiah(item.bonus_amount)}</span>` : ''}
-            ${parseFloat(item.bonus_amount) > 0 && parseFloat(item.deduction_amount) > 0 ? '<br/>' : ''}
+            ${parseFloat(item.bonus_amount) > 0 && (parseFloat(item.deduction_amount) > 0 || parseFloat(item.mess_deduction) > 0) ? '<br/>' : ''}
             ${parseFloat(item.deduction_amount) > 0 ? `<span style="color: #dc2626; font-weight: 600;">-${formatRupiah(item.deduction_amount)}</span>` : ''}
-            ${parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 ? '-' : ''}
+            ${parseFloat(item.deduction_amount) > 0 && parseFloat(item.mess_deduction) > 0 ? '<br/>' : ''}
+            ${parseFloat(item.mess_deduction) > 0 ? `<span style="color: #d97706; font-weight: 600;">Mess: -${formatRupiah(item.mess_deduction)}</span>` : ''}
+            ${parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 && (!item.mess_deduction || parseFloat(item.mess_deduction) === 0) ? '-' : ''}
           </td>
           <td style="text-align: right; padding: 4.5px 6px; font-size: 9px; font-weight: 700; color: #0f172a;">
             ${formatRupiah(item.final_amount)}
@@ -1470,6 +1548,7 @@ const Finance = () => {
       bank_account_holder: '',
       salary_15: '1.000.000',
       salary_1: '2.000.000',
+      default_mess_deduction: '0',
       is_active: true,
       notes: '',
     });
@@ -1486,6 +1565,7 @@ const Finance = () => {
       bank_account_holder: p.bank_account_holder || p.name,
       salary_15: formatInputNominal(p.salary_15),
       salary_1: formatInputNominal(p.salary_1),
+      default_mess_deduction: formatInputNominal(p.default_mess_deduction || 0),
       is_active: p.is_active,
       notes: p.notes || '',
     });
@@ -1499,6 +1579,7 @@ const Finance = () => {
         ...profileForm,
         salary_15: parseCleanNumber(profileForm.salary_15),
         salary_1: parseCleanNumber(profileForm.salary_1),
+        default_mess_deduction: parseCleanNumber(profileForm.default_mess_deduction),
       });
       setShowProfileModal(false);
       fetchProfiles();
@@ -1623,6 +1704,7 @@ const Finance = () => {
         base_amount: item.base_amount,
         bonus_amount: item.bonus_amount,
         deduction_amount: item.deduction_amount,
+        mess_deduction: item.mess_deduction || 0,
         notes: item.notes || '',
         bank_name: item.bank_name || 'BCA',
         bank_account_number: item.bank_account_number || '',
@@ -1645,6 +1727,7 @@ const Finance = () => {
         base_amount: parseCleanNumber(itemEditForm.base_amount),
         bonus_amount: parseCleanNumber(itemEditForm.bonus_amount),
         deduction_amount: parseCleanNumber(itemEditForm.deduction_amount),
+        mess_deduction: parseCleanNumber(itemEditForm.mess_deduction),
         notes: itemEditForm.notes || '',
         bank_name: itemEditForm.bank_name || 'BCA',
         bank_account_number: itemEditForm.bank_account_number || '',
@@ -1692,6 +1775,9 @@ const Finance = () => {
     }
     if (parseFloat(item.deduction_amount) > 0) {
       text += `• Potongan/Kasbon: -${formatRupiah(item.deduction_amount)}\n`;
+    }
+    if (parseFloat(item.mess_deduction) > 0) {
+      text += `• Potongan Mess: -${formatRupiah(item.mess_deduction)}\n`;
     }
     if (item.notes) {
       text += `• Keterangan: ${item.notes}\n`;
@@ -2116,7 +2202,7 @@ const Finance = () => {
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-slate-300 mb-0.5">📝 Batas Rekap {financeRules.recapDeadlineTime}</div>
-                <div className="text-[10px] text-slate-400">Rekapan harian via Bot/Grup</div>
+                <div className="text-[10px] text-slate-400">Denda Telat: {formatRupiah(financeRules.lateRecapPenaltyPerEvent || 20000)} / telat</div>
               </div>
               <div className="bg-dark-card/80 border border-slate-700/60 rounded-xl p-2.5">
                 <div className="font-extrabold text-rose-300 mb-0.5">📉 Potongan Sinyal</div>
@@ -2273,6 +2359,7 @@ const Finance = () => {
                     <th className="py-3 px-3 text-center">Hari Live</th>
                     <th className="py-3 px-3 text-right">Gaji Jam Live</th>
                     <th className="py-3 px-3 text-center">Potong Sinyal</th>
+                    <th className="py-3 px-3 text-center">Telat Rekap</th>
                     <th className="py-3 px-3 text-right">Total Potongan</th>
                     <th className="py-3 px-4 text-right bg-emerald-950/20 text-emerald-400">Gaji Bersih</th>
                     <th className="py-3 px-4 text-center">Aksi</th>
@@ -2281,14 +2368,14 @@ const Finance = () => {
                 <tbody className="divide-y divide-slate-800/80 text-xs">
                   {auditLoading ? (
                     <tr>
-                      <td colSpan={11} className="py-12 text-center text-slate-400">
+                      <td colSpan={12} className="py-12 text-center text-slate-400">
                         <RefreshCw className="h-6 w-6 animate-spin mx-auto text-indigo-400 mb-2" />
                         <span>Menghitung jam live valid &amp; audit gaji streamer...</span>
                       </td>
                     </tr>
                   ) : !auditData || auditData.auditResults.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-slate-400">
+                      <td colSpan={12} className="py-8 text-center text-slate-400">
                         Tidak ada data streamer pada periode ini.
                       </td>
                     </tr>
@@ -2401,6 +2488,37 @@ const Finance = () => {
                             {s.signalCutAmount > 0 && (
                               <div className="text-[9.5px] font-mono text-amber-400 mt-0.5">
                                 -{formatRupiah(s.signalCutAmount)}
+                              </div>
+                            )}
+                          </td>
+                          {/* Telat Rekap (Interactive Counter) */}
+                          <td className="py-3.5 px-3 text-center">
+                            <div className="inline-flex items-center gap-1.5 bg-dark-panel border-2 border-black px-2 py-1 rounded-xl shadow-tactile-xs">
+                              <button
+                                onClick={() => handleLateRecapChange(s, -1)}
+                                disabled={savingAdjStreamerId === s.streamerId || (s.lateRecapCount || 0) <= 0}
+                                className="h-5 w-5 rounded bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white flex items-center justify-center font-black disabled:opacity-30"
+                              >
+                                <Minus className="h-3 w-3" />
+                              </button>
+                              <span
+                                className={`font-mono font-black w-5 text-center text-xs ${
+                                  (s.lateRecapCount || 0) > 0 ? 'text-rose-400 font-extrabold' : 'text-slate-400'
+                                }`}
+                              >
+                                {s.lateRecapCount || 0}
+                              </span>
+                              <button
+                                onClick={() => handleLateRecapChange(s, 1)}
+                                disabled={savingAdjStreamerId === s.streamerId}
+                                className="h-5 w-5 rounded bg-rose-500/20 text-rose-300 hover:bg-rose-500/40 hover:text-white flex items-center justify-center font-black disabled:opacity-30"
+                              >
+                                <Plus className="h-3 w-3" />
+                              </button>
+                            </div>
+                            {s.lateRecapAmount > 0 && (
+                              <div className="text-[9.5px] font-mono text-rose-400 mt-0.5">
+                                -{formatRupiah(s.lateRecapAmount)}
                               </div>
                             )}
                           </td>
@@ -2755,7 +2873,12 @@ const Finance = () => {
                                     -{formatRupiah(item.deduction_amount)}
                                   </div>
                                 )}
-                                {parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 && (
+                                {parseFloat(item.mess_deduction) > 0 && (
+                                  <div className="text-[11px] font-bold text-amber-400" title="Potongan Mess">
+                                    Mess: -{formatRupiah(item.mess_deduction)}
+                                  </div>
+                                )}
+                                {parseFloat(item.bonus_amount) === 0 && parseFloat(item.deduction_amount) === 0 && (!item.mess_deduction || parseFloat(item.mess_deduction) === 0) && (
                                   <span className="text-slate-500">-</span>
                                 )}
                               </td>
@@ -2803,13 +2926,14 @@ const Finance = () => {
                                         base_amount: formatInputNominal(item.base_amount),
                                         bonus_amount: formatInputNominal(item.bonus_amount),
                                         deduction_amount: formatInputNominal(item.deduction_amount),
+                                        mess_deduction: formatInputNominal(item.mess_deduction || 0),
                                         notes: item.notes || '',
                                         bank_name: item.bank_name || 'BCA',
                                         bank_account_number: item.bank_account_number || '',
                                         bank_account_holder: item.bank_account_holder || item.recipient_name,
                                       });
                                     }}
-                                    title="Edit Bonus/Potongan/Rekening"
+                                    title="Edit Bonus/Potongan/Mess/Rekening"
                                     className="p-1.5 rounded-lg bg-dark-panel border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-all"
                                   >
                                     <Edit3 className="h-3.5 w-3.5" />
@@ -3136,6 +3260,7 @@ const Finance = () => {
                     <th className="py-3 px-4">Rekening Bank</th>
                     <th className="py-3 px-4 text-right">Gaji Tgl 15</th>
                     <th className="py-3 px-4 text-right">Gaji Tgl 1 (Custom)</th>
+                    <th className="py-3 px-4 text-right">Pot. Mess</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     <th className="py-3 px-4 text-center">Aksi</th>
                   </tr>
@@ -3165,6 +3290,13 @@ const Finance = () => {
                       </td>
                       <td className="py-3.5 px-4 text-right font-mono font-black text-amber-400">
                         {formatRupiah(p.salary_1)}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-mono font-bold text-amber-400">
+                        {parseFloat(p.default_mess_deduction) > 0 ? (
+                          <span>-{formatRupiah(p.default_mess_deduction)}</span>
+                        ) : (
+                          <span className="text-slate-500">-</span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <span
@@ -3861,6 +3993,21 @@ const Finance = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-[11px] font-extrabold text-amber-400 uppercase mb-1 flex items-center justify-between">
+                  <span>Potongan Mess Default (Rp)</span>
+                  <span className="text-[10px] text-slate-400 normal-case font-medium">Opsional (0 jika tidak di mess)</span>
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={profileForm.default_mess_deduction}
+                  onChange={(e) => setProfileForm({ ...profileForm, default_mess_deduction: formatInputNominal(e.target.value) })}
+                  placeholder="0"
+                  className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-amber-400 focus:outline-none shadow-inset-screen"
+                />
+              </div>
+
               <div className="pt-3 flex justify-end gap-2 border-t-2 border-black">
                 <button
                   type="button"
@@ -3898,21 +4045,21 @@ const Finance = () => {
             </div>
 
             <form onSubmit={handleSaveItemEdit} className="space-y-3.5">
-              <div>
-                <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
-                  Gaji Pokok (Rp)
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={itemEditForm.base_amount}
-                  onChange={(e) => setItemEditForm({ ...itemEditForm, base_amount: formatInputNominal(e.target.value) })}
-                  placeholder="1.000.000"
-                  className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-white focus:outline-none shadow-inset-screen"
-                />
-              </div>
-
               <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-[11px] font-extrabold text-slate-300 uppercase mb-1">
+                    Gaji Pokok (Rp)
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={itemEditForm.base_amount}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, base_amount: formatInputNominal(e.target.value) })}
+                    placeholder="1.000.000"
+                    className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-white focus:outline-none shadow-inset-screen"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-[11px] font-extrabold text-emerald-400 uppercase mb-1">
                     + Bonus / Tambahan (Rp)
@@ -3926,7 +4073,9 @@ const Finance = () => {
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-emerald-400 focus:outline-none shadow-inset-screen"
                   />
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-2.5">
                 <div>
                   <label className="block text-[11px] font-extrabold text-rose-400 uppercase mb-1">
                     - Potongan / Kasbon (Rp)
@@ -3940,6 +4089,20 @@ const Finance = () => {
                     className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-rose-400 focus:outline-none shadow-inset-screen"
                   />
                 </div>
+
+                <div>
+                  <label className="block text-[11px] font-extrabold text-amber-400 uppercase mb-1 flex items-center justify-between">
+                    <span>- Potongan Mess (Rp)</span>
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={itemEditForm.mess_deduction}
+                    onChange={(e) => setItemEditForm({ ...itemEditForm, mess_deduction: formatInputNominal(e.target.value) })}
+                    placeholder="0"
+                    className="w-full bg-dark-panel border-2 border-black rounded-xl p-2.5 text-xs font-mono font-bold text-amber-400 focus:outline-none shadow-inset-screen"
+                  />
+                </div>
               </div>
 
               <div className="p-3 bg-dark-panel border-2 border-black rounded-xl flex justify-between items-center">
@@ -3950,7 +4113,8 @@ const Finance = () => {
                       0,
                       parseCleanNumber(itemEditForm.base_amount) +
                       parseCleanNumber(itemEditForm.bonus_amount) -
-                      parseCleanNumber(itemEditForm.deduction_amount)
+                      parseCleanNumber(itemEditForm.deduction_amount) -
+                      parseCleanNumber(itemEditForm.mess_deduction)
                     )
                   )}
                 </span>
@@ -4031,7 +4195,7 @@ const Finance = () => {
       {/* MODAL AUDIT 1: DRILLDOWN RINCIAN HARIAN & DISPENSASI IZIN */}
       {drilldownStreamer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-4xl max-h-[92vh] bg-[#0c101d] border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-200">
+          <div className="w-full max-w-5xl max-h-[92vh] bg-[#0c101d] border border-slate-800 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-slate-200">
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-slate-800/80 flex justify-between items-center bg-slate-900/40">
               <div className="flex items-center gap-3">
@@ -4073,7 +4237,7 @@ const Finance = () => {
             </div>
 
             {/* Clean KPI Metrics Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 px-6 py-3.5 bg-slate-900/20 border-b border-slate-800/80 text-xs">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 px-6 py-3.5 bg-slate-900/20 border-b border-slate-800/80 text-xs">
               <div className="flex flex-col">
                 <span className="text-[11px] text-slate-400 mb-0.5">Gaji Jam Live</span>
                 <span className="text-sm font-bold text-white font-mono">{formatRupiah(drilldownStreamer.totalEarnedSalary || drilldownStreamer.baseSalary)}</span>
@@ -4085,8 +4249,14 @@ const Finance = () => {
                 </span>
               </div>
               <div className="flex flex-col">
-                <span className="text-[11px] text-amber-400 mb-0.5">Potongan ({drilldownStreamer.signalCutCount}x Sinyal)</span>
-                <span className="text-sm font-bold text-amber-400 font-mono">-{formatRupiah(drilldownStreamer.totalPenalties)}</span>
+                <span className="text-[11px] text-amber-400 mb-0.5">Potongan ({drilldownStreamer.signalCutCount || 0}x Sinyal)</span>
+                <span className="text-sm font-bold text-amber-400 font-mono">-{formatRupiah(drilldownStreamer.signalCutAmount || 0)}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[11px] text-rose-400 mb-0.5">Telat Rekap ({drilldownStreamer.lateRecapCount || 0}x)</span>
+                <span className="text-sm font-bold text-rose-400 font-mono">
+                  {(drilldownStreamer.lateRecapAmount || 0) > 0 ? `-${formatRupiah(drilldownStreamer.lateRecapAmount)}` : 'Rp 0'}
+                </span>
               </div>
               <div className="flex flex-col">
                 <span className="text-[11px] text-emerald-400 font-semibold mb-0.5">Gaji Bersih Diterima</span>
@@ -4101,6 +4271,7 @@ const Finance = () => {
                   <tr className="border-b border-slate-800 text-[11px] font-semibold text-slate-400 uppercase tracking-wider sticky top-0 bg-[#0c101d] z-10">
                     <th className="py-3 px-3 w-28">Tanggal</th>
                     <th className="py-3 px-3">Durasi Live Asli</th>
+                    <th className="py-3 px-3 text-center">Waktu Rekap</th>
                     <th className="py-3 px-3 text-center">Jam Valid (Max 4h)</th>
                     <th className="py-3 px-3 text-right w-32">Upah Harian</th>
                     <th className="py-3 px-3 text-center w-36">Status</th>
@@ -4112,18 +4283,18 @@ const Finance = () => {
                       <tr
                         key={day.dateStr}
                         className={`transition-colors ${
-                          day.isSunday
-                            ? 'bg-slate-900/10 text-slate-500'
-                            : day.liveDuration >= 4.0
+                          day.liveDuration >= 4.0
                             ? 'bg-emerald-950/10 hover:bg-emerald-950/20'
                             : day.liveDuration > 0
                             ? 'hover:bg-slate-800/20'
+                            : day.isSunday
+                            ? 'bg-slate-900/10 text-slate-500'
                             : 'hover:bg-slate-800/20 text-slate-500'
                         }`}
                       >
                         {/* 1. Tanggal */}
                         <td className="py-2.5 px-3 font-mono text-slate-300 whitespace-nowrap">
-                          <span className={`font-semibold ${day.isSunday ? 'text-slate-400' : 'text-white'}`}>
+                          <span className={`font-semibold ${day.isSunday && !(day.rawLiveDuration > 0) ? 'text-slate-400' : 'text-white'}`}>
                             {day.shortDate?.includes(',')
                               ? day.shortDate
                               : `${['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'][new Date(day.dateStr + 'T12:00:00').getDay()]}, ${day.shortDate}`}
@@ -4132,58 +4303,91 @@ const Finance = () => {
 
                         {/* 2. Aktivitas & Durasi Asli */}
                         <td className="py-2.5 px-3">
-                          {day.isSunday ? (
-                            <span className="text-slate-500 text-xs">Libur Rutin</span>
-                          ) : (
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {day.rawLiveDuration > 0 ? (
-                                <span className="inline-flex items-center gap-1 font-medium text-xs text-white">
-                                  <span>Live {day.rawLiveDuration} Jam</span>
-                                  {day.rawLiveDuration > 4.0 && (
-                                    <span className="text-[10px] text-amber-400">(Kelebihan {day.rawLiveDuration - 4.0}h)</span>
-                                  )}
-                                </span>
-                              ) : (
-                                <span className="text-slate-400 text-xs">Tidak Live</span>
-                              )}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {day.rawLiveDuration > 0 ? (
+                              <span className="inline-flex items-center gap-1 font-medium text-xs text-white">
+                                <span>Live {day.rawLiveDuration} Jam</span>
+                                {day.rawLiveDuration > 4.0 && (
+                                  <span className="text-[10px] text-amber-400">(Kelebihan {day.rawLiveDuration - 4.0}h)</span>
+                                )}
+                              </span>
+                            ) : day.isSunday ? (
+                              <span className="text-slate-500 text-xs">Libur Rutin</span>
+                            ) : (
+                              <span className="text-slate-400 text-xs">Tidak Live</span>
+                            )}
 
-                              {/* Quick Edit Durasi Link */}
+                            {/* Quick Edit Durasi Link */}
+                            <button
+                              onClick={() => handleUpdateDailyLiveDuration(day)}
+                              className="text-[10px] text-slate-500 hover:text-indigo-400 hover:underline flex items-center gap-0.5 ml-1 transition-colors"
+                              title="Ubah durasi live"
+                            >
+                              <Edit3 className="h-2.5 w-2.5" />
+                              <span>Edit</span>
+                            </button>
+
+                            {/* Timestamp / Bot Chat button */}
+                            {day.rawMessage && day.rawMessage !== '[Manual Input]' && (
                               <button
-                                onClick={() => handleUpdateDailyLiveDuration(day)}
-                                className="text-[10px] text-slate-500 hover:text-indigo-400 hover:underline flex items-center gap-0.5 ml-1 transition-colors"
-                                title="Ubah durasi live"
+                                onClick={() =>
+                                  setViewingRawMessage({
+                                    date: day.shortDate,
+                                    streamer: drilldownStreamer.nama,
+                                    message: day.rawMessage,
+                                    time: formatSubmittedAt(day.submittedAt),
+                                  })
+                                }
+                                className="text-[10px] text-indigo-400/80 hover:text-indigo-300 underline font-mono ml-auto"
+                                title="Lihat pesan bot asli"
                               >
-                                <Edit3 className="h-2.5 w-2.5" />
-                                <span>Edit</span>
+                                [Chat Bot]
                               </button>
+                            )}
+                          </div>
+                        </td>
 
-                              {/* Timestamp / Bot Chat button */}
-                              {day.rawMessage && day.rawMessage !== '[Manual Input]' && (
-                                <button
-                                  onClick={() =>
-                                    setViewingRawMessage({
-                                      date: day.shortDate,
-                                      streamer: drilldownStreamer.nama,
-                                      message: day.rawMessage,
-                                      time: formatSubmittedAt(day.submittedAt),
-                                    })
-                                  }
-                                  className="text-[10px] text-indigo-400/80 hover:text-indigo-300 underline font-mono ml-auto"
-                                  title="Lihat pesan bot asli"
-                                >
-                                  [Chat Bot]
-                                </button>
-                              )}
-                            </div>
+                        {/* 2b. Waktu Rekap */}
+                        <td className="py-2.5 px-3 text-center font-mono">
+                          {day.isLateRecap ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-rose-950/40 text-rose-300 text-[11px] font-semibold border border-rose-500/30"
+                              title={`Telat ${day.lateMinutesText} (Disubmit: ${day.submittedTimeWib} | Batas: ${day.recapDeadlineWib || '08:00 WIB'})`}
+                            >
+                              <span>⚠️ {day.submittedTimeOnly || day.submittedTimeWib}</span>
+                              <span className="text-[9.5px] text-rose-400 font-normal">
+                                (+{day.lateMinutesText})
+                              </span>
+                            </span>
+                          ) : day.submittedAt && day.rawMessage !== '[Manual Input]' ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/30 text-emerald-300 text-[11px] font-medium border border-emerald-500/20"
+                              title={`Tepat Waktu (Disubmit: ${day.submittedTimeWib})`}
+                            >
+                              <span>✅ {day.submittedTimeOnly || day.submittedTimeWib}</span>
+                            </span>
+                          ) : day.rawMessage === '[Manual Input]' ? (
+                            <span className="text-slate-500 text-[11px]" title="Diinput manual oleh admin">✏️ Manual</span>
+                          ) : day.isSunday ? (
+                            <span className="text-slate-600 text-xs">-</span>
+                          ) : day.isNoReport ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-rose-950/30 text-rose-400 text-[10px] font-bold border border-rose-500/20"
+                              title={`Belum kirim rekap hingga melewati batas ${day.recapDeadlineWib || '08:00 WIB'}`}
+                            >
+                              ❌ Belum Rekap
+                            </span>
+                          ) : (
+                            <span className="text-slate-600 text-xs">-</span>
                           )}
                         </td>
 
                         {/* 3. Jam Valid */}
                         <td className="py-2.5 px-3 text-center font-mono font-bold">
-                          {day.isSunday ? (
-                            <span className="text-slate-600">-</span>
-                          ) : day.liveDuration > 0 ? (
+                          {day.liveDuration > 0 ? (
                             <span className="text-emerald-400">{day.liveDuration}h</span>
+                          ) : day.isSunday ? (
+                            <span className="text-slate-600">-</span>
                           ) : (
                             <span className="text-slate-500">0h</span>
                           )}
@@ -4200,9 +4404,7 @@ const Finance = () => {
 
                         {/* 5. Status */}
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                          {day.isSunday ? (
-                            <span className="text-slate-600 text-xs">Libur Minggu</span>
-                          ) : day.liveDuration >= 4.0 ? (
+                          {day.liveDuration >= 4.0 ? (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950/40 text-emerald-300 text-[11px] font-medium border border-emerald-500/20">
                               <span>✅ Penuh 4 Jam</span>
                             </span>
@@ -4210,6 +4412,8 @@ const Finance = () => {
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-950/40 text-amber-300 text-[11px] font-medium border border-amber-500/20">
                               <span>⏱️ {day.liveDuration} Jam</span>
                             </span>
+                          ) : day.isSunday ? (
+                            <span className="text-slate-600 text-xs">Libur Minggu</span>
                           ) : (
                             <span className="text-slate-500 text-xs">Tidak Ada Sesi</span>
                           )}
@@ -4518,22 +4722,22 @@ const Finance = () => {
                       onChange={(e) => setEditingRules({ ...editingRules, recapDeadlineTime: e.target.value })}
                       className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
                     />
-                    <div className="text-[10px] text-slate-400 mt-1">Format: 08:00 (Pagi WIB)</div>
+                    <div className="text-[10px] text-slate-400 mt-1">Format: 08:00 (Pagi WIB H+1)</div>
                   </div>
                   <div>
                     <label className="block text-[10.5px] font-bold text-slate-300 mb-1">
-                      Denda Tidak Rekap / Telat Rekap per Hari (Rp)
+                      Denda Telat Rekap per Kejadian (Rp)
                     </label>
                     <input
                       type="number"
                       min="0"
-                      step="10000"
+                      step="5000"
                       required
-                      value={editingRules.noReportPenaltyPerDay}
-                      onChange={(e) => setEditingRules({ ...editingRules, noReportPenaltyPerDay: parseFloat(e.target.value) || 0 })}
+                      value={editingRules.lateRecapPenaltyPerEvent !== undefined ? editingRules.lateRecapPenaltyPerEvent : 20000}
+                      onChange={(e) => setEditingRules({ ...editingRules, lateRecapPenaltyPerEvent: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-dark-card border-2 border-black rounded-xl p-2 text-xs font-mono text-white focus:outline-none"
                     />
-                    <div className="text-[10px] text-slate-400 mt-1">Denda: {formatRupiah(editingRules.noReportPenaltyPerDay)} / hari</div>
+                    <div className="text-[10px] text-slate-400 mt-1">Denda: {formatRupiah(editingRules.lateRecapPenaltyPerEvent !== undefined ? editingRules.lateRecapPenaltyPerEvent : 20000)} / telat</div>
                   </div>
                 </div>
               </div>
