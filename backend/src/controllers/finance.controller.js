@@ -424,6 +424,16 @@ export const bulkUpdateStatus = async (req, res) => {
   }
 };
 
+const formatShortDateIndo = (dateStr) => {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const day = parseInt(parts[2], 10);
+  const monthIdx = parseInt(parts[1], 10) - 1;
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  return `${day} ${months[monthIdx] || parts[1]}`;
+};
+
 export const syncAuditToPeriod = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -573,6 +583,7 @@ export const syncAuditToPeriod = async (req, res) => {
       let totalRawLiveDuration = 0;
       let totalValidLiveHours = 0;
       let liveDaysCount = 0;
+      const under4hDates = [];
 
       for (const d of allDates) {
         const key = `${sId}_${d.dateStr}`;
@@ -587,6 +598,15 @@ export const syncAuditToPeriod = async (req, res) => {
         totalRawLiveDuration += rawDuration;
         totalValidLiveHours += validHours;
         if (rawDuration > 0) liveDaysCount++;
+
+        const isSunday = d.dayOfWeek === 0;
+        const targetHours = rules.maxDailyValidHours || 4.0;
+        if (!isSunday && validHours < targetHours) {
+          const dateFmt = formatShortDateIndo(d.dateStr);
+          const durStr = rawDuration > 0 ? `${parseFloat(rawDuration.toFixed(1))}h` : '0h';
+          const izinStr = rep?.status_izin && rep.status_izin !== 'Normal' ? ` - ${rep.status_izin}` : '';
+          under4hDates.push(`${dateFmt} (${durStr}${izinStr})`);
+        }
       }
 
       const earnedFromHours = Math.min(baseSalary, Math.round(totalValidLiveHours * hourlyRate));
@@ -608,6 +628,9 @@ export const syncAuditToPeriod = async (req, res) => {
       // Build readable notes
       const noteParts = [];
       noteParts.push(`Live: ${totalValidLiveHours.toFixed(1)}h × Rp ${hourlyRate.toLocaleString('id-ID')}/h = Rp ${totalEarnedSalary.toLocaleString('id-ID')}`);
+      if (under4hDates.length > 0) {
+        noteParts.push(`Kurang Jam (<4h): ${under4hDates.join(', ')}`);
+      }
       if (signalCutAmount > 0) noteParts.push(`Potong Sinyal: -Rp ${signalCutAmount.toLocaleString('id-ID')} (${signalCutCount}x)`);
       if (customDeduction > 0) noteParts.push(`Kasbon/Potongan: -Rp ${customDeduction.toLocaleString('id-ID')}`);
       if (customBonus > 0) noteParts.push(`Bonus: +Rp ${customBonus.toLocaleString('id-ID')}`);
@@ -1088,6 +1111,7 @@ export const getPenaltyAudit = async (req, res) => {
       let autoNoReportCount = 0;
 
       const dailyBreakdown = [];
+      const under4hDates = [];
 
       for (const d of allDates) {
         const key = `${sId}_${d.dateStr}`;
@@ -1109,6 +1133,14 @@ export const getPenaltyAudit = async (req, res) => {
         totalRawLiveDuration += rawDuration;
         totalValidLiveHours += validHours;
         if (rawDuration > 0) liveDaysCount++;
+
+        const targetHours = rules.maxDailyValidHours || 4.0;
+        if (!isSunday && validHours < targetHours) {
+          const dateFmt = formatShortDateIndo(d.dateStr);
+          const durStr = rawDuration > 0 ? `${parseFloat(rawDuration.toFixed(1))}h` : '0h';
+          const izinStr = rep?.status_izin && rep.status_izin !== 'Normal' ? ` - ${rep.status_izin}` : '';
+          under4hDates.push(`${dateFmt} (${durStr}${izinStr})`);
+        }
 
         // Deadline calculation: H+1 at rules.recapDeadlineTime (default '08:00') WIB
         const [deadlineH, deadlineM] = (rules.recapDeadlineTime || '08:00').split(':').map(n => parseInt(n, 10) || 0);
@@ -1249,7 +1281,8 @@ export const getPenaltyAudit = async (req, res) => {
         totalLiveDuration: parseFloat(totalValidLiveHours.toFixed(2)),
         totalEarnedSalary,
         liveDaysCount,
-        under4hCount: 0,
+        under4hCount: under4hDates.length,
+        under4hDates,
         totalShortageHours: 0,
         shortagePenalty: 0,
         noReportDaysCount: autoNoReportCount,

@@ -762,6 +762,20 @@ const Finance = () => {
     text += `💵 *Tarif per Jam:* ${formatRupiah(rate)} / Jam (Maks. Plafon Rp 3.000.000)\n`;
     text += `💰 *Gaji Jam Live:* ${formatRupiah(s.totalEarnedSalary || s.baseSalary)}\n`;
     
+    // Rincian tanggal kurang jam jika ada
+    const under4h = s.under4hDates || s.dailyBreakdown
+      ?.filter((d) => !d.isSunday && (d.rawLiveDuration !== undefined ? d.rawLiveDuration : (d.liveDuration || 0)) < 4.0)
+      ?.map((d) => {
+        const shortDate = d.shortDate?.split(',').pop()?.trim() || d.shortDate || d.dateStr;
+        const dur = d.rawLiveDuration !== undefined ? d.rawLiveDuration : (d.liveDuration || 0);
+        const izin = d.statusIzin && d.statusIzin !== 'Normal' ? ` - ${d.statusIzin}` : '';
+        return `${shortDate} (${dur}h${izin})`;
+      });
+
+    if (under4h && under4h.length > 0) {
+      text += `⚠️ *Kurang Jam (<4h):* ${under4h.join(', ')}\n`;
+    }
+
     if (s.signalCutAmount > 0) {
       text += `• Potongan Sinyal (${s.signalCutCount}x): -${formatRupiah(s.signalCutAmount)}\n`;
     }
@@ -1791,9 +1805,47 @@ const Finance = () => {
     if (parseFloat(item.mess_deduction) > 0) {
       text += `• Potongan Mess: -${formatRupiah(item.mess_deduction)}\n`;
     }
+
+    let hasKurangJamInNotes = false;
     if (item.notes) {
-      text += `• Keterangan: ${item.notes}\n`;
+      const parts = item.notes.split(/\s*•\s*/).filter(Boolean);
+      if (parts.length > 1) {
+        parts.forEach((part) => {
+          if (part.includes('Kurang Jam')) hasKurangJamInNotes = true;
+          if (part.startsWith('Live:')) {
+            text += `• Keterangan: ${part}\n`;
+          } else {
+            text += `• ${part}\n`;
+          }
+        });
+      } else {
+        if (item.notes.includes('Kurang Jam')) hasKurangJamInNotes = true;
+        text += `• Keterangan: ${item.notes}\n`;
+      }
     }
+
+    // Fallback: If item.notes does not contain 'Kurang Jam', check auditData if available
+    if (!hasKurangJamInNotes && auditData && auditData.auditResults) {
+      const auditStreamer = auditData.auditResults.find((s) => {
+        const sName = s.nama.toLowerCase();
+        const rName = item.recipient_name.toLowerCase();
+        return sName === rName || (rName.includes('key team') && sName.includes('teizza'));
+      });
+      if (auditStreamer) {
+        const under4h = auditStreamer.under4hDates || auditStreamer.dailyBreakdown
+          ?.filter((d) => !d.isSunday && (d.rawLiveDuration !== undefined ? d.rawLiveDuration : (d.liveDuration || 0)) < 4.0)
+          ?.map((d) => {
+            const shortDate = d.shortDate?.split(',').pop()?.trim() || d.shortDate || d.dateStr;
+            const dur = d.rawLiveDuration !== undefined ? d.rawLiveDuration : (d.liveDuration || 0);
+            const izin = d.statusIzin && d.statusIzin !== 'Normal' ? ` - ${d.statusIzin}` : '';
+            return `${shortDate} (${dur}h${izin})`;
+          });
+        if (under4h && under4h.length > 0) {
+          text += `• Kurang Jam (<4h): ${under4h.join(', ')}\n`;
+        }
+      }
+    }
+
     text += `\nTerima kasih atas kerja keras & kerjasamanya! 🙏🚀`;
 
     copyToClipboard(text, `wa-${item.id}`);
