@@ -625,12 +625,9 @@ export const syncAuditToPeriod = async (req, res) => {
       const totalDeductions = signalCutAmount + customDeduction;
       const netSalary = Math.max(0, totalEarnedSalary + customBonus - totalDeductions);
 
-      // Build readable notes
+      // Build readable notes (Clean summary only, no clutter in table)
       const noteParts = [];
       noteParts.push(`Live: ${totalValidLiveHours.toFixed(1)}h × Rp ${hourlyRate.toLocaleString('id-ID')}/h = Rp ${totalEarnedSalary.toLocaleString('id-ID')}`);
-      if (under4hDates.length > 0) {
-        noteParts.push(`Kurang Jam (<4h): ${under4hDates.join(', ')}`);
-      }
       if (signalCutAmount > 0) noteParts.push(`Potong Sinyal: -Rp ${signalCutAmount.toLocaleString('id-ID')} (${signalCutCount}x)`);
       if (customDeduction > 0) noteParts.push(`Kasbon/Potongan: -Rp ${customDeduction.toLocaleString('id-ID')}`);
       if (customBonus > 0) noteParts.push(`Bonus: +Rp ${customBonus.toLocaleString('id-ID')}`);
@@ -646,7 +643,8 @@ export const syncAuditToPeriod = async (req, res) => {
         totalPenalties: totalDeductions,
         customBonus,
         netSalary,
-        notes: noteParts.join(' • ')
+        notes: noteParts.join(' • '),
+        under4hNotes: under4hDates.length > 0 ? under4hDates.join(', ') : null
       };
     }
 
@@ -669,15 +667,17 @@ export const syncAuditToPeriod = async (req, res) => {
         const mess = parseFloat(item.mess_deduction || 0);
         const finalAmt = Math.max(0, base + bonus - deduction - mess);
         const notes = audit.notes || item.notes || '';
+        const under4h = audit.under4hNotes !== undefined ? audit.under4hNotes : (item.under4h_notes || null);
 
         await client.query(`
           UPDATE payroll_items
           SET bonus_amount = $1,
               deduction_amount = $2,
               final_amount = $3,
-              notes = $4
-          WHERE id = $5
-        `, [bonus, deduction, finalAmt, notes, item.id]);
+              notes = $4,
+              under4h_notes = $5
+          WHERE id = $6
+        `, [bonus, deduction, finalAmt, notes, under4h, item.id]);
         updatedCount++;
       }
     }

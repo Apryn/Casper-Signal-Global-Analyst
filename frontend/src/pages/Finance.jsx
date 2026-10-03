@@ -1806,26 +1806,28 @@ const Finance = () => {
       text += `• Potongan Mess: -${formatRupiah(item.mess_deduction)}\n`;
     }
 
-    let hasKurangJamInNotes = false;
     if (item.notes) {
-      const parts = item.notes.split(/\s*•\s*/).filter(Boolean);
+      const parts = item.notes.split(/\s*•\s*/).filter((p) => !p.includes('Kurang Jam')).filter(Boolean);
       if (parts.length > 1) {
         parts.forEach((part) => {
-          if (part.includes('Kurang Jam')) hasKurangJamInNotes = true;
           if (part.startsWith('Live:')) {
             text += `• Keterangan: ${part}\n`;
           } else {
             text += `• ${part}\n`;
           }
         });
-      } else {
-        if (item.notes.includes('Kurang Jam')) hasKurangJamInNotes = true;
-        text += `• Keterangan: ${item.notes}\n`;
+      } else if (parts.length === 1) {
+        text += `• Keterangan: ${parts[0]}\n`;
       }
     }
 
-    // Fallback: If item.notes does not contain 'Kurang Jam', check auditData if available
-    if (!hasKurangJamInNotes && auditData && auditData.auditResults) {
+    // Tanggal kurang jam khusus dicantumkan di slip gaji saja agar tabel utama tetap ringkas
+    let under4hText = item.under4h_notes;
+    if (!under4hText && item.notes && item.notes.includes('Kurang Jam (<4h):')) {
+      const match = item.notes.match(/Kurang Jam \(<4h\):\s*([^•\n]+)/);
+      if (match) under4hText = match[1].trim();
+    }
+    if (!under4hText && auditData && auditData.auditResults) {
       const auditStreamer = auditData.auditResults.find((s) => {
         const sName = s.nama.toLowerCase();
         const rName = item.recipient_name.toLowerCase();
@@ -1841,9 +1843,13 @@ const Finance = () => {
             return `${shortDate} (${dur}h${izin})`;
           });
         if (under4h && under4h.length > 0) {
-          text += `• Kurang Jam (<4h): ${under4h.join(', ')}\n`;
+          under4hText = under4h.join(', ');
         }
       }
+    }
+
+    if (under4hText) {
+      text += `• Kurang Jam (<4h): ${under4hText}\n`;
     }
 
     text += `\nTerima kasih atas kerja keras & kerjasamanya! 🙏🚀`;
@@ -2887,7 +2893,7 @@ const Finance = () => {
                                 </span>
                                 {item.notes && (
                                   <div className="text-[10px] text-amber-400 mt-0.5 italic">
-                                    📝 {item.notes}
+                                    📝 {item.notes.split(/\s*•\s*/).filter((p) => !p.includes('Kurang Jam')).join(' • ')}
                                   </div>
                                 )}
                               </td>
